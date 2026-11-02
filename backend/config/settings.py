@@ -10,8 +10,14 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 import os
+
+
+def env_list(name, default=""):
+    return [item.strip() for item in os.environ.get(name, default).split(",") if item.strip()]
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,9 +30,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DJANGO_DEBUG", 0) == "1"
+DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost").split(",")
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost")
 
 
 # Application definition
@@ -38,10 +44,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
+    'drf_spectacular',
+    'accounts',
+    'shops',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -80,11 +92,15 @@ DATABASES = {
         'NAME': os.environ["POSTGRES_DB"],
         'USER': os.environ["POSTGRES_USER"],
         'PASSWORD': os.environ["POSTGRES_PASSWORD"],
-        'HOST': "db",
-        'PORT': "5432",
+        'HOST': os.environ.get("POSTGRES_HOST", "db"),
+        'PORT': os.environ.get("POSTGRES_PORT", "5432"),
     }
 }
 
+
+# Auth
+
+AUTH_USER_MODEL = 'accounts.User'
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -104,13 +120,17 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+EMAIL_VERIFICATION_CODE_TTL = timedelta(minutes=15)
+EMAIL_VERIFICATION_MAX_ATTEMPTS = 5
+EMAIL_VERIFICATION_RESEND_COOLDOWN = timedelta(seconds=60)
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'pl'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Europe/Warsaw'
 
 USE_I18N = True
 
@@ -126,3 +146,68 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Email
+
+EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@localhost")
+
+
+# REST API
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_RATES': {
+        'auth': '10/min',
+        'email_verification': '10/hour',
+    },
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'MobileApp API',
+    'VERSION': '0.1.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'ENUM_NAME_OVERRIDES': {
+        'ShopStatusEnum': 'shops.models.Shop.Status',
+        'ProvisioningJobStatusEnum': 'shops.models.ProvisioningJob.Status',
+        'ProvisioningStepStatusEnum': 'shops.models.ProvisioningStep.Status',
+    },
+}
+
+# Expo Web dev server; native apps don't send Origin, so they don't need CORS.
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "http://localhost:8081")
+
+
+# Celery
+
+CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+
+# Shops
+
+# Fernet key used to encrypt shop credentials at rest.
+FIELD_ENCRYPTION_KEY = os.environ["FIELD_ENCRYPTION_KEY"]
+
+SHOPS_BASE_DOMAIN = os.environ.get("SHOPS_BASE_DOMAIN", "localhost")
+SHOPS_MAX_PER_USER = int(os.environ.get("SHOPS_MAX_PER_USER", "3"))
+SHOP_PROVISIONER = os.environ.get("SHOP_PROVISIONER", "shops.provisioning.fake.FakeProvisioner")
+# Seconds each fake provisioning step takes, so the app can show real progress.
+FAKE_PROVISIONER_STEP_DELAY = float(os.environ.get("FAKE_PROVISIONER_STEP_DELAY", "2"))
+# Step key at which the fake provisioner fails, to exercise error handling in the app.
+FAKE_PROVISIONER_FAIL_AT_STEP = os.environ.get("FAKE_PROVISIONER_FAIL_AT_STEP", "")

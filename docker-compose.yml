@@ -9,8 +9,18 @@ services:
       interval: 5s
       retries: 10
 
+  redis:
+    image: redis:8-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        DEV: "1"
     env_file: .env
     volumes:
       - ./backend:/app:Z
@@ -18,6 +28,23 @@ services:
       - "8000:8000"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      args:
+        DEV: "1"
+    command: celery -A config worker -l info
+    env_file: .env
+    volumes:
+      - ./backend:/app:Z
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 volumes:

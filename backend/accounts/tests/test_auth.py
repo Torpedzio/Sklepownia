@@ -1,0 +1,116 @@
+import re
+from datetime import timedelta
+
+import pytest
+from django.utils import timezone
+
+from accounts.models import EmailVerificationCode, User
+
+pytestmark = pytest.mark.django_db
+
+PASSWORD = "Sekretne-haslo-123"
+
+
+def register(api_client, django_capture_on_commit_callbacks, email="Nowy@Example.com"):
+    with django_capture_on_commit_callbacks(execute=True):
+        return api_client.post("/api/auth/register/", {"email": email, "password": PASSWORD}, format="json")
+
+
+def code_from(mail):
+    return re.search(r"\b(\d{6})\b", mail.body).group(1)
+
+
+def test_register_creates_unverified_user_returns_tokens_and_sends_code(
+    api_client, django_capture_on_commit_callbacks, mailoutbox,
+):
+    response = register(api_client, django_capture_on_commit_callbacks)
+
+    assert response.status_code == 201
+    assert response.data["user"]["email"] == "nowy@example.com"
+    assert response.data["user"]["is_email_verified"] is False
+    assert set(response.data["tokens"]) == {"access", "refresh"}
+    assert len(mailoutbox) == 1
+    assert mailoutbox[0].to == ["nowy@example.com"]
+
+
+def test_register_rejects_existing_email_case_insensitively(api_client, user, django_capture_on_commit_callbacks):
+    response = register(api_client, django_capture_on_commit_callbacks, email="JAN@example.com")
+
+    assert response.status_code == 400
+    assert "email" in response.data
+
+
+def test_register_rejects_weak_password(api_client):
+    response = api_client.post("/api/auth/register/", {"email": "a@example.com", "password": "123"}, format="json")
+
+    assert response.status_code == 400
+    assert "password" in response.data
+
+
+def test_login_ignores_email_case(api_client, user):
+    response = api_client.post("/api/auth/login/", {"email": "Jan@Example.com", "password": PASSWORD}, format="json")
+
+    assert response.status_code == 200
+    assert "access" in response.data
+
+
+def test_me_requires_authentication(api_client):
+    assert api_client.get("/api/auth/me/").status_code == 401
+
+
+def test_verify_email_with_correct_code(api_client, django_capture_on_commit_callbacks, mailoutbox):
+    tokens = register(api_client, django_capture_on_commit_callbacks).data["tokens"]
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+
+    response = api_client.post("/api/auth/verify-email/", {"code": code_from(mailoutbox[0])}, format="json")
+
+    assert response.status_code == 200
+    assert response.data["is_email_verified"] is True
+    assert not EmailVerificationCode.objects.exists()
+
+
+def test_verify_email_locks_after_too_many_wrong_codes(
+    api_client, django_capture_on_commit_callbacks, mailoutbox, settings,
+):
+    tokens = register(api_client, django_capture_on_commit_callbacks).data["tokens"]
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+    good_code = code_from(mailoutbox[0])
+    wrong_code = "000000" if good_code != "000000" else "111111"
+
+    for _ in range(settings.EMAIL_VERIFICATION_MAX_ATTEMPTS):
+        assert api_client.post("/api/auth/verify-email/", {"code": wrong_code}, format="json").status_code == 400
+    response = api_client.post("/api/auth/verify-email/", {"code": good_code}, format="json")
+
+    assert response.status_code == 400
+    assert "prób" in response.data["detail"]
+
+
+def test_verify_email_rejects_expired_code(api_client, django_capture_on_commit_callbacks, mailoutbox):
+    tokens = register(api_client, django_capture_on_commit_callbacks).data["tokens"]
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+    EmailVerificationCode.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
+
+    response = api_client.post("/api/auth/verify-email/", {"code": code_from(mailoutbox[0])}, format="json")
+
+    assert response.status_code == 400
+    assert User.objects.get().is_email_verified is False
+
+
+def test_resend_verification_respects_cooldown(api_client, user, django_capture_on_commit_callbacks, mailoutbox):
+    api_client.force_authenticate(user)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        first = api_client.post("/api/auth/resend-verification/")
+        second = api_client.post("/api/auth/resend-verification/")
+
+    assert first.status_code == 204
+    assert second.status_code == 429
+    assert len(mailoutbox) == 1
+
+
+def test_logout_blacklists_refresh_token(api_client, user):
+    tokens = api_client.post("/api/auth/login/", {"email": user.email, "password": PASSWORD}, format="json").data
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+
+    assert api_client.post("/api/auth/logout/", {"refresh": tokens["refresh"]}, format="json").status_code == 205
+    assert api_client.post("/api/auth/refresh/", {"refresh": tokens["refresh"]}, format="json").status_code == 401
