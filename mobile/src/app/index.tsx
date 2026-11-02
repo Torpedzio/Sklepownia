@@ -1,98 +1,115 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { Link, Stack } from 'expo-router';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
+import { StatusBadge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Button } from '@/components/ui/button';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth';
+import { useApiQuery } from '@/hooks/use-api-query';
+import { useTheme } from '@/hooks/use-theme';
+import type { Shop } from '@/lib/types';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+const IN_PROGRESS = ['pending', 'provisioning'];
+
+export default function ShopsScreen() {
+  const { signOut } = useAuth();
+  const theme = useTheme();
+  const { data: shops, error, isLoading, isRefreshing, refresh } = useApiQuery<Shop[]>('/shops/', {
+    refetchInterval: (data) => (data?.some((shop) => IN_PROGRESS.includes(shop.status)) ? 3000 : false),
+  });
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
+    <ThemedView style={styles.flex}>
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <Pressable onPress={signOut} hitSlop={8}>
+              <ThemedText type="small" themeColor="primary">
+                Wyloguj
+              </ThemedText>
+            </Pressable>
+          ),
+        }}
+      />
+      {isLoading ? (
+        <ActivityIndicator style={styles.flex} />
+      ) : (
+        <FlatList
+          data={shops}
+          keyExtractor={(shop) => String(shop.id)}
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={styles.list}
+          onRefresh={refresh}
+          refreshing={isRefreshing}
+          ListHeaderComponent={error ? <ThemedText themeColor="danger">{error.message}</ThemedText> : undefined}
+          ListEmptyComponent={
+            error ? undefined : (
+              <View style={styles.empty}>
+                <ThemedText type="smallBold">Nie masz jeszcze żadnego sklepu</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Załóż pierwszy. Zajmie to tylko kilka minut.
+                </ThemedText>
+              </View>
+            )
+          }
+          renderItem={({ item }) => (
+            <Link href={{ pathname: '/shops/[id]', params: { id: item.id } }} asChild>
+              <Pressable style={StyleSheet.flatten([styles.card, { backgroundColor: theme.backgroundElement }])}>
+                <View style={styles.cardText}>
+                  <ThemedText type="smallBold">{item.name}</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                    {item.url.replace('https://', '')}
+                  </ThemedText>
+                </View>
+                <StatusBadge status={item.status} label={item.status_display} />
+              </Pressable>
+            </Link>
+          )}
+        />
+      )}
+      <SafeAreaView edges={['bottom']} style={styles.footer}>
+        <Link href="/shops/new" asChild>
+          <Button title="+ Nowy sklep" />
+        </Link>
       </SafeAreaView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  flex: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
+  list: {
+    gap: Spacing.two,
+    padding: Spacing.three,
+    width: '100%',
     maxWidth: MaxContentWidth,
+    alignSelf: 'center',
   },
-  heroSection: {
+  empty: {
     alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    gap: Spacing.one,
+    paddingVertical: Spacing.six,
   },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+  },
+  cardText: {
+    flex: 1,
+    gap: Spacing.half,
+  },
+  footer: {
+    padding: Spacing.three,
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
   },
 });
