@@ -1,0 +1,49 @@
+# Shop node: reverse proxy + shared database for all shop containers.
+# Shop containers themselves are created by provision-shop.sh (later: the backend).
+name: shops
+
+services:
+  proxy:
+    image: traefik:v3.7
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=shops
+      - --entrypoints.web.address=:80
+    ports:
+      - "${SHOPS_HTTP_PORT:-8080}:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # SELinux (Fedora) blocks access to the Docker socket otherwise.
+    security_opt:
+      - label=disable
+    networks:
+      - shops
+
+  db:
+    image: mariadb:11.8
+    environment:
+      MARIADB_ROOT_PASSWORD: ${SHOPS_DB_ROOT_PASSWORD:?set SHOPS_DB_ROOT_PASSWORD in infra/shops/.env}
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 10
+    networks:
+      shops:
+        aliases:
+          - shops-db
+
+  # Not a running service: `docker compose build wordpress` builds the shop image.
+  wordpress:
+    image: shops/wordpress:7.1
+    build: ./wordpress
+    profiles: ["build"]
+
+volumes:
+  dbdata:
+
+networks:
+  shops:
+    name: shops
