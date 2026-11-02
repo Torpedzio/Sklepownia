@@ -5,7 +5,7 @@ from accounts.models import User
 
 from .models import ProvisioningJob, ProvisioningStep, Shop, ShopConfig
 from .provisioning import get_provisioner
-from .tasks import provision_shop
+from .tasks import provision_shop, teardown_shop
 
 
 class ShopLimitReached(Exception):
@@ -43,10 +43,10 @@ def retry_shop(shop):
 
 
 def delete_shop(shop):
-    # Tearing down real infrastructure comes with the Docker provisioner.
     with transaction.atomic():
         shop = Shop.objects.select_for_update().get(pk=shop.pk)
         shop.transition_to(Shop.Status.DELETED)
+        transaction.on_commit(lambda: teardown_shop.delay(shop.pk))
 
 
 def _enqueue_provisioning(shop):

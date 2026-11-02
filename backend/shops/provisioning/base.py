@@ -20,6 +20,7 @@ class BaseProvisioner:
         ("configure_woocommerce", "Konfiguracja WooCommerce"),
         ("install_theme", "Instalacja motywu"),
         ("create_categories", "Tworzenie kategorii"),
+        ("configure_navigation", "Wyszukiwarka, kategorie i filtry"),
         ("generate_api_keys", "Generowanie kluczy API"),
         ("health_check", "Sprawdzanie działania sklepu"),
     ]
@@ -28,4 +29,7 @@ class BaseProvisioner:
         getattr(self, f"step_{key}")(shop)
 
     def cleanup(self, shop):
-        """Remove resources left behind by a failed run. Must be safe to call anytime."""
+        """Called after a failed run. Must be safe to call anytime."""
+
+    def teardown(self, shop):
+        """Remove everything the shop uses. Must be safe to call more than once."""

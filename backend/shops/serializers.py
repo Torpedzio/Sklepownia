@@ -98,6 +98,12 @@ class ShopDetailSerializer(ShopSerializer):
         return ProvisioningJobSerializer(job).data if job else None
 
 
+class ShopAdminAccessSerializer(serializers.Serializer):
+    admin_url = serializers.URLField()
+    username = serializers.CharField()
+    password = serializers.CharField()
+
+
 class SlugCheckSerializer(serializers.Serializer):
     slug = serializers.CharField()
     available = serializers.BooleanField()

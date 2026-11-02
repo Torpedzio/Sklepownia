@@ -205,9 +205,21 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 FIELD_ENCRYPTION_KEY = os.environ["FIELD_ENCRYPTION_KEY"]
 
 SHOPS_BASE_DOMAIN = os.environ.get("SHOPS_BASE_DOMAIN", "localhost")
+SHOPS_URL_SCHEME = os.environ.get("SHOPS_URL_SCHEME", "https")
+SHOPS_HTTP_PORT = int(os.environ.get("SHOPS_HTTP_PORT", "443"))
 SHOPS_MAX_PER_USER = int(os.environ.get("SHOPS_MAX_PER_USER", "3"))
 SHOP_PROVISIONER = os.environ.get("SHOP_PROVISIONER", "shops.provisioning.fake.FakeProvisioner")
 # Seconds each fake provisioning step takes, so the app can show real progress.
 FAKE_PROVISIONER_STEP_DELAY = float(os.environ.get("FAKE_PROVISIONER_STEP_DELAY", "2"))
 # Step key at which the fake provisioner fails, to exercise error handling in the app.
 FAKE_PROVISIONER_FAIL_AT_STEP = os.environ.get("FAKE_PROVISIONER_FAIL_AT_STEP", "")
+
+# Docker provisioner: talks to the shop node from infra/shops through the Docker socket.
+SHOPS_WORDPRESS_IMAGE = os.environ.get("SHOPS_WORDPRESS_IMAGE", "shops/wordpress:7.1")
+SHOPS_NETWORK = os.environ.get("SHOPS_NETWORK", "shops")
+SHOPS_DB_CONTAINER = os.environ.get("SHOPS_DB_CONTAINER", "shops-db")
+SHOPS_PROXY_CONTAINER = os.environ.get("SHOPS_PROXY_CONTAINER", "shops-proxy")
+SHOPS_DB_ROOT_PASSWORD = os.environ.get("SHOPS_DB_ROOT_PASSWORD", "")
+SHOPS_CONTAINER_MEMORY = os.environ.get("SHOPS_CONTAINER_MEMORY", "512m")
+# "local" lets WordPress accept application passwords over plain HTTP; use "production" with HTTPS.
+SHOPS_WP_ENVIRONMENT = os.environ.get("SHOPS_WP_ENVIRONMENT", "production")

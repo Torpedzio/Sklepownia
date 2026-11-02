@@ -1,8 +1,12 @@
-# Serwer sklepów (etap 2: ręczny prototyp)
+# Serwer sklepów
 
 Tu działają sklepy WordPress + WooCommerce, każdy we własnym kontenerze.
-Na razie sklepy zakłada się skryptem. W etapie 3 te same kroki wykona backend
-(`DockerProvisioner` zamiast `FakeProvisioner`).
+Sklepy zakłada backend: worker Celery wykonuje kroki z
+[docker_provisioner.py](../../backend/shops/provisioning/docker_provisioner.py) przez socket Dockera.
+Skrypt `provision-shop.sh` robi to samo ręcznie i przydaje się do eksperymentów.
+
+Sklepy z backendu mają kontener i wolumen `shop-<id>` oraz bazę `shop_<id>`.
+Sklepy ze skryptu nazywają się według sluga, więc obie pule się nie mieszają.
 
 ```
 przeglądarka ──▶ Traefik :8080 ──Host: <slug>.localhost──▶ kontener shop-<slug> (WordPress + WooCommerce)
@@ -43,20 +47,22 @@ Kroki odpowiadają `BaseProvisioner.STEPS` w backendzie. Czasy pochodzą z czyst
 |---|---|---|
 | Tworzenie bazy danych | `CREATE DATABASE/USER` w MariaDB, osobne hasło na sklep | ~0 s |
 | Uruchamianie WordPressa | `docker run` z etykietami Traefika i limitami 512 MB / 1 CPU; czekanie na `wp-config.php` | ~5 s |
-| Instalacja WordPressa | `wp core install`, usunięcie domyślnych wpisów, stron i widgetów | ~4 s |
+| Instalacja WordPressa | `wp core install`, usunięcie domyślnych wpisów i stron | ~4 s |
 | Ustawienia języka i regionu | pakiet językowy, strefa czasowa z kraju, permalinki `/%postname%/` | ~8 s |
 | Konfiguracja WooCommerce | tłumaczenie → aktywacja → waluta, format cen, jednostki, e-mail; wyłączenie trybu „coming soon” i kreatora; strony sklepu; sklep jako strona główna | ~30 s |
-| Instalacja motywu | aktywacja motywu z obrazu i jego tłumaczenie | ~5 s |
-| Tworzenie kategorii | kategorie i opcjonalnie 6 przykładowych produktów | ~25 s |
+| Instalacja motywu | aktywacja motywu z obrazu, usunięcie domyślnych widgetów, tłumaczenie | ~5 s |
+| Tworzenie kategorii | kategorie (pierwsza zastępuje domyślne „Bez kategorii”) i opcjonalnie 6 przykładowych produktów | ~25 s |
+| Wyszukiwarka, kategorie i filtry | lewy pasek boczny sklepu: wyszukiwarka, menu kategorii, aktywne filtry, filtr ceny i ocen; ustawienia zależne od motywu | ~15 s |
 | Generowanie kluczy API | Application Password `platform` dla admina | ~3 s |
 | Sprawdzanie działania sklepu | strona główna 200 i `wc/v3/system_status` z hasłem API | ~4 s |
-| **Razem** | | **~90 s** |
+| **Razem** | | **~105 s** |
 
-## Wnioski do etapu 3
+## Wnioski z automatyzacji
 
-- **Każdy krok jest idempotentny.** Ponowne uruchomienie dla tego samego sluga dokańcza sklep.
-  Hasło admina jest jednak generowane tylko przy pierwszej instalacji, więc backend musi je zapisać
-  w `ShopCredentials` **zanim** wykona dalsze kroki.
+- **Każdy krok jest idempotentny.** Ponowne uruchomienie dokańcza sklep (w aplikacji: „Spróbuj ponownie”).
+  Backend zapisuje hasła (bazy, admina, API) w `ShopCredentials` **zanim** ich użyje.
+- **Widgety:** domyślny motyw WordPressa jest blokowy i nie ma pasków bocznych, więc `widget reset`
+  działa dopiero po aktywacji motywu z paskiem bocznym (Storefront).
 - **Kolejność ma znaczenie:** tłumaczenie WooCommerce trzeba zainstalować **przed** aktywacją wtyczki,
   bo aktywacja tworzy strony sklepu w aktywnym języku. W odwrotnej kolejności powstają „Cart” i „Checkout”.
 - **WooCommerce 11:** opcja `woocommerce_task_list_hidden` jest martwa (`wp option update` zwraca błąd).
@@ -65,7 +71,6 @@ Kroki odpowiadają `BaseProvisioner.STEPS` w backendzie. Czasy pochodzą z czyst
 - **Klucze API:** zamiast kluczy WooCommerce (`ck_`/`cs_`, których nie da się wygenerować z WP-CLI)
   używamy Application Password. WooCommerce REST API przyjmuje go przez Basic Auth.
   Przez HTTP działa tylko przy `WP_ENVIRONMENT_TYPE=local`; na produkcji potrzebny jest HTTPS.
-  Do zmiany w modelu: `wc_consumer_key/secret` w `ShopCredentials` są zbędne.
 - **Czas:** najwięcej kosztuje start WP-CLI przy każdym poleceniu (~1–2 s). Zgrupowanie konfiguracji
   WooCommerce i kategorii w jednym `wp eval-file` powinno skrócić całość do ~30 s.
   Pakiety językowe też można wbudować w obraz.

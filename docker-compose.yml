@@ -41,6 +41,11 @@ services:
     env_file: .env
     volumes:
       - ./backend:/app:Z
+      # Creates shop containers on the shop node (infra/shops).
+      - /var/run/docker.sock:/var/run/docker.sock
+    # SELinux (Fedora) blocks access to the Docker socket otherwise.
+    security_opt:
+      - label=disable
     depends_on:
       db:
         condition: service_healthy

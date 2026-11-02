@@ -29,7 +29,5 @@ class FakeProvisioner(BaseProvisioner):
                 "wp_admin_username": "admin",
                 "wp_admin_password": secrets.token_urlsafe(24),
                 "wp_application_password": secrets.token_urlsafe(24),
-                "wc_consumer_key": f"ck_{secrets.token_hex(20)}",
-                "wc_consumer_secret": f"cs_{secrets.token_hex(20)}",
             },
         )

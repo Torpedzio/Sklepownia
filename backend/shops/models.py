@@ -86,7 +86,13 @@ class Shop(models.Model):
 
     @property
     def url(self) -> str:
-        return f"https://{self.domain}"
+        scheme, port = settings.SHOPS_URL_SCHEME, settings.SHOPS_HTTP_PORT
+        default_port = {"http": 80, "https": 443}.get(scheme)
+        return f"{scheme}://{self.domain}" + ("" if port == default_port else f":{port}")
+
+    @property
+    def admin_url(self) -> str:
+        return f"{self.url}/wp-admin/"
 
     def can_transition_to(self, new_status):
         return new_status in self.ALLOWED_TRANSITIONS[self.status]
@@ -116,12 +122,14 @@ class ShopConfig(models.Model):
 
 
 class ShopCredentials(models.Model):
+    """Secrets of one shop. Each is saved before it's used, so a retried provisioning reuses it."""
+
     shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="credentials")
+    db_password = EncryptedTextField(blank=True)
     wp_admin_username = models.CharField(max_length=60)
-    wp_admin_password = EncryptedTextField()
+    wp_admin_password = EncryptedTextField(blank=True)
+    # Used by the platform for the WordPress/WooCommerce REST API (Basic Auth).
     wp_application_password = EncryptedTextField(blank=True)
-    wc_consumer_key = EncryptedTextField(blank=True)
-    wc_consumer_secret = EncryptedTextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

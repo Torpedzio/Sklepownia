@@ -5,6 +5,7 @@ name: shops
 services:
   proxy:
     image: traefik:v3.7
+    container_name: shops-proxy
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
@@ -22,6 +23,7 @@ services:
 
   db:
     image: mariadb:11.8
+    container_name: shops-db
     environment:
       MARIADB_ROOT_PASSWORD: ${SHOPS_DB_ROOT_PASSWORD:?set SHOPS_DB_ROOT_PASSWORD in infra/shops/.env}
     volumes:

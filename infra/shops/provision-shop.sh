@@ -100,7 +100,6 @@ install_wordpress() {
       --admin_password="$ADMIN_PASSWORD" --admin_email="$EMAIL" --skip-email
     # Drop "Hello world", "Sample Page" etc. Only right after install, never on re-runs.
     wpc post delete $(wpc post list --post_type=post,page --post_status=any --format=ids) --force
-    wpc widget reset --all
   fi
   wpc option update blogname "$NAME"
   wpc option update blogdescription ""
@@ -152,7 +151,11 @@ configure_woocommerce() {
 }
 
 install_theme() {
-  wpc theme activate "$THEME"
+  if [[ "$(wpc option get stylesheet)" != "$THEME" ]]; then
+    wpc theme activate "$THEME"
+    # Drop the default blog widgets the theme picked up. Block themes have no sidebars.
+    wpc widget reset --all || true
+  fi
   [[ "$LANGUAGE" == "en_US" ]] || wpc language theme install "$THEME" "$LANGUAGE" || true
 }
 
@@ -165,6 +168,13 @@ create_categories() {
     [[ -n "$id" ]] || id=$(wpc wc product_cat create --name="$name" --user="$ADMIN_USER" --porcelain)
     ids+=("$id")
   done
+  # Make our first category the default one, so "Uncategorized" doesn't show up in the menu.
+  local default_category
+  default_category=$(wpc option get default_product_cat)
+  if [[ " ${ids[*]} " != *" $default_category "* ]]; then
+    wpc option update default_product_cat "${ids[0]}"
+    wpc term delete product_cat "$default_category" || true
+  fi
 
   if [[ $SAMPLE_PRODUCTS == 1 && $(wpc wc product list --user="$ADMIN_USER" --format=count) == 0 ]]; then
     local i=1
@@ -178,6 +188,32 @@ create_categories() {
       done
     done
   fi
+}
+
+configure_navigation() {
+  # Search, category menu and filters in the shop sidebar, on the left.
+  local sidebar search=1
+  case "$THEME" in
+    storefront)
+      sidebar=sidebar-1 search=0  # the header already has a search box
+      wpc eval "set_theme_mod('storefront_layout', 'left');" ;;
+    astra)
+      sidebar=astra-woo-shop-sidebar
+      wpc eval '$s = get_option("astra-settings", array()); $s["archive-product-sidebar-layout"] = "left-sidebar"; update_option("astra-settings", $s);' ;;
+    kadence)
+      sidebar=sidebar-primary
+      wpc eval "set_theme_mod('product_archive_layout', 'left'); update_post_meta(wc_get_page_id('shop'), '_kad_post_layout', 'left');" ;;
+    *) return 0 ;;
+  esac
+  wpc widget reset "$sidebar" || true
+  local position=1
+  if [[ $search == 1 ]]; then
+    wpc widget add woocommerce_product_search "$sidebar" $((position++)) --title="Szukaj produktów"
+  fi
+  wpc widget add woocommerce_product_categories "$sidebar" $((position++)) --title="Kategorie" --count=1 --hierarchical=1 --orderby=name
+  wpc widget add woocommerce_layered_nav_filters "$sidebar" $((position++)) --title="Aktywne filtry"
+  wpc widget add woocommerce_price_filter "$sidebar" $((position++)) --title="Cena"
+  wpc widget add woocommerce_rating_filter "$sidebar" $((position++)) --title="Ocena"
 }
 
 generate_api_keys() {
@@ -203,6 +239,7 @@ step "Ustawienia języka i regionu" configure_locale
 step "Konfiguracja WooCommerce" configure_woocommerce
 step "Instalacja motywu" install_theme
 step "Tworzenie kategorii" create_categories
+step "Wyszukiwarka, kategorie i filtry" configure_navigation
 step "Generowanie kluczy API" generate_api_keys
 step "Sprawdzanie działania sklepu" health_check
 

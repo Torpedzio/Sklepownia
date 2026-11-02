@@ -2,6 +2,7 @@ import pytest
 from django.db import connection
 
 from accounts.models import User
+from shops.categories import category_names
 from shops.models import InvalidTransition, ProvisioningStep, Shop
 from shops.provisioning.base import BaseProvisioner
 
@@ -188,3 +189,46 @@ def test_openapi_schema_generates(api_client, user):
     api_client.force_authenticate(user)
 
     assert api_client.get("/api/schema/").status_code == 200
+
+
+def test_shop_url_includes_non_default_port(verified_user, settings):
+    settings.SHOPS_URL_SCHEME = "http"
+    settings.SHOPS_HTTP_PORT = 8080
+    shop = Shop(owner=verified_user, name="X", slug="ceramika")
+
+    assert shop.url == "http://ceramika.localhost:8080"
+    assert shop.admin_url == "http://ceramika.localhost:8080/wp-admin/"
+
+
+def test_category_names_follow_industry_then_fill_up():
+    assert category_names("handmade", 2) == ["Biżuteria", "Ceramika"]
+    assert category_names("handmade", 12)[-2:] == ["Kategoria 11", "Kategoria 12"]
+    assert category_names("other", 2) == ["Kategoria 1", "Kategoria 2"]
+
+
+def test_admin_access_for_active_shop(auth_client, django_capture_on_commit_callbacks):
+    shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
+
+    data = auth_client.get(f"/api/shops/{shop_id}/admin-access/").data
+
+    assert data["admin_url"] == "https://moj-sklep.localhost/wp-admin/"
+    assert data["username"] == "admin"
+    assert data["password"] == Shop.objects.get(pk=shop_id).credentials.wp_admin_password
+
+
+def test_admin_access_unavailable_until_shop_is_active(auth_client, django_capture_on_commit_callbacks, settings):
+    settings.FAKE_PROVISIONER_FAIL_AT_STEP = "install_wordpress"
+    shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
+
+    assert auth_client.get(f"/api/shops/{shop_id}/admin-access/").status_code == 409
+
+
+def test_deleting_shop_tears_down_its_infrastructure(auth_client, django_capture_on_commit_callbacks, monkeypatch):
+    torn_down = []
+    monkeypatch.setattr("shops.provisioning.fake.FakeProvisioner.teardown", lambda self, shop: torn_down.append(shop.pk))
+    shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
+
+    with django_capture_on_commit_callbacks(execute=True):
+        auth_client.delete(f"/api/shops/{shop_id}/")
+
+    assert torn_down == [shop_id]

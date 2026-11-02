@@ -9,11 +9,12 @@ from accounts.permissions import IsEmailVerified
 
 from . import services
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
-from .models import InvalidTransition, Shop, ShopTemplate
+from .models import InvalidTransition, Shop, ShopCredentials, ShopTemplate
 from .serializers import (
     DEFAULT_CATEGORY_COUNT,
     FormOptionsSerializer,
     ShopCreateSerializer,
+    ShopAdminAccessSerializer,
     ShopDetailSerializer,
     ShopSerializer,
     ShopTemplateSerializer,
@@ -90,6 +91,22 @@ class ShopViewSet(
                 status=status.HTTP_409_CONFLICT,
             )
         return Response(ShopDetailSerializer(self.get_queryset().get(pk=pk)).data, status=status.HTTP_202_ACCEPTED)
+
+    @extend_schema(responses={200: ShopAdminAccessSerializer})
+    @action(detail=True, methods=["get"], url_path="admin-access")
+    def admin_access(self, request, pk=None):
+        shop = self.get_object()
+        credentials = ShopCredentials.objects.filter(shop=shop).first()
+        if shop.status != Shop.Status.ACTIVE or credentials is None:
+            return Response(
+                {"detail": "Panel będzie dostępny, gdy sklep zostanie założony."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response({
+            "admin_url": shop.admin_url,
+            "username": credentials.wp_admin_username,
+            "password": credentials.wp_admin_password,
+        })
 
     @extend_schema(
         parameters=[OpenApiParameter("slug", str, required=True)],
