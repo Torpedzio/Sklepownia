@@ -57,6 +57,12 @@ export type ShopDetail = Shop & {
   } | null;
 };
 
+export type ShopAdminAccess = {
+  admin_url: string;
+  username: string;
+  password: string;
+};
+
 export type Choice = { value: string; label: string };
 
 export type FormOptions = {

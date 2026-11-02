@@ -1,6 +1,6 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, View } from 'react-native';
 
 import { StatusBadge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
@@ -11,7 +11,7 @@ import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
-import type { ProvisioningStep, ShopDetail } from '@/lib/types';
+import type { ProvisioningStep, ShopAdminAccess, ShopDetail } from '@/lib/types';
 
 const STEP_ICON: Record<ProvisioningStep['status'], string> = {
   pending: '○',
@@ -28,6 +28,7 @@ export default function ShopScreen() {
   });
   const [actionError, setActionError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [adminAccess, setAdminAccess] = useState<ShopAdminAccess>();
 
   if (!shop) {
     return error ? (
@@ -61,6 +62,14 @@ export default function ShopScreen() {
     }
   }
 
+  async function openAdmin() {
+    await runAction(async () => {
+      const access = adminAccess ?? (await api<ShopAdminAccess>(`/shops/${id}/admin-access/`));
+      setAdminAccess(access);
+      await Linking.openURL(access.admin_url);
+    });
+  }
+
   const job = shop.provisioning;
   const progress = job && job.total_steps ? job.completed_steps / job.total_steps : 0;
   const inProgress = shop.status === 'pending' || shop.status === 'provisioning';
@@ -78,6 +87,20 @@ export default function ShopScreen() {
           {shop.url}
         </ThemedText>
       </View>
+
+      {shop.status === 'active' ? (
+        <View style={styles.actions}>
+          <Button title="Otwórz sklep" onPress={() => Linking.openURL(shop.url)} />
+          <Button title="Panel sklepu" variant="secondary" onPress={openAdmin} loading={busy} />
+          {adminAccess ? (
+            <ThemedView type="backgroundElement" style={styles.card}>
+              <ThemedText type="smallBold">Dane logowania do panelu</ThemedText>
+              <ConfigRow label="Login" value={adminAccess.username} />
+              <ConfigRow label="Hasło" value={adminAccess.password} />
+            </ThemedView>
+          ) : null}
+        </View>
+      ) : null}
 
       {job ? (
         <ThemedView type="backgroundElement" style={styles.card}>
@@ -149,7 +172,9 @@ function ConfigRow({ label, value }: { label: string; value: string }) {
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
-      <ThemedText type="small">{value}</ThemedText>
+      <ThemedText type="small" selectable>
+        {value}
+      </ThemedText>
     </View>
   );
 }
@@ -170,6 +195,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   header: {
+    gap: Spacing.two,
+  },
+  actions: {
     gap: Spacing.two,
   },
   card: {
