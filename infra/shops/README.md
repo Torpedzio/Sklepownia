@@ -25,7 +25,24 @@ docker compose up -d               # Traefik + MariaDB
 
 Porty 80/443 zajmuje u nas `ddev-router`, dlatego sklepy są na **8080**.
 Przeglądarki i curl same rozwiązują `*.localhost` na 127.0.0.1, więc nie trzeba konfigurować DNS.
-Telefon tak nie potrafi; do testów z telefonu wystarczy później `SHOPS_DOMAIN=<ip-z-myślnikami>.sslip.io`.
+
+## Sklepy na telefonie
+
+Na telefonie `localhost` to sam telefon, więc sklepy potrzebują domeny wskazującej na komputer.
+Wystarczy publiczny DNS sslip.io: `<slug>.192-168-33-10.sslip.io` rozwiązuje się na `192.168.33.10`.
+
+```bash
+# w głównym .env
+SHOPS_BASE_DOMAIN=192-168-33-10.sslip.io
+docker compose up -d backend worker
+docker compose exec worker python manage.py update_shop_addresses
+```
+
+Polecenie odtwarza kontener każdego działającego sklepu z nową regułą Traefika (pliki zostają w wolumenie)
+i podmienia adres w bazie WordPressa (`wp search-replace`). Trzeba je powtórzyć, gdy komputer dostanie
+inny adres IP, np. w innej sieci Wi-Fi. Niektóre routery blokują domeny wskazujące na adresy prywatne
+(ochrona przed DNS rebinding); wtedy sslip.io nie zadziała w tej sieci.
+Sklepy ze skryptu `provision-shop.sh` mają adres ustalony przy zakładaniu i polecenie ich nie obejmuje.
 
 ## Zakładanie i usuwanie sklepu
 

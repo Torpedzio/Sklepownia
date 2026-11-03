@@ -33,3 +33,10 @@ class BaseProvisioner:
 
     def teardown(self, shop):
         """Remove everything the shop uses. Must be safe to call more than once."""
+
+    def update_address(self, shop):
+        """
+        Move a running shop to its current `shop.url`, e.g. after SHOPS_BASE_DOMAIN changed.
+        Returns the previous address, or None when there is nothing to move.
+        """
+        return None

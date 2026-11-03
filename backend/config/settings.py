@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'accounts',
     'shops',
+    'support',
 ]
 
 MIDDLEWARE = [
@@ -152,6 +153,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@localhost")
+# Where messages from the contact form go.
+CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "kontakt@localhost")
 
 
 # REST API
@@ -167,6 +170,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'auth': '10/min',
         'email_verification': '10/hour',
+        'contact': '5/hour',
     },
 }
 

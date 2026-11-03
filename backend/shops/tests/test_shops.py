@@ -1,4 +1,7 @@
+from io import StringIO
+
 import pytest
+from django.core.management import call_command
 from django.db import connection
 
 from accounts.models import User
@@ -232,3 +235,13 @@ def test_deleting_shop_tears_down_its_infrastructure(auth_client, django_capture
         auth_client.delete(f"/api/shops/{shop_id}/")
 
     assert torn_down == [shop_id]
+
+
+def test_update_shop_addresses_skips_shops_without_infrastructure(verified_user, settings):
+    settings.SHOP_PROVISIONER = "shops.provisioning.fake.FakeProvisioner"
+    Shop.objects.create(owner=verified_user, name="Sklep", slug="sklep", status=Shop.Status.ACTIVE)
+    out = StringIO()
+
+    call_command("update_shop_addresses", stdout=out)
+
+    assert "sklep: pominięty" in out.getvalue()

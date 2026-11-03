@@ -127,10 +127,18 @@ class DockerProvisioner(BaseProvisioner):
                 "define('DISALLOW_FILE_EDIT', true);"
             ),
         }
+        labels = {
+            "traefik.enable": "true",
+            f"traefik.http.routers.{name}.rule": f"Host(`{shop.domain}`)",
+            f"traefik.http.routers.{name}.entrypoints": "web",
+            f"traefik.http.services.{name}.loadbalancer.server.port": "80",
+            "shops.id": str(shop.pk),
+            "shops.slug": shop.slug,
+        }
         container = self._find_container(shop)
-        # The official image reads DB settings from env at runtime, so a container
-        # with outdated env can be replaced without touching the files in the volume.
-        if container is not None and _env(container) != environment:
+        # The official image reads DB settings from env at runtime, so a container with outdated
+        # env or Traefik labels (a new domain) can be replaced without touching the files in the volume.
+        if container is not None and (_env(container) != environment or not labels.items() <= container.labels.items()):
             container.remove(force=True)
             container = None
         if container is None:
@@ -144,14 +152,7 @@ class DockerProvisioner(BaseProvisioner):
                 nano_cpus=1_000_000_000,
                 volumes={name: {"bind": WP_PATH, "mode": "rw"}},
                 environment=environment,
-                labels={
-                    "traefik.enable": "true",
-                    f"traefik.http.routers.{name}.rule": f"Host(`{shop.domain}`)",
-                    f"traefik.http.routers.{name}.entrypoints": "web",
-                    f"traefik.http.services.{name}.loadbalancer.server.port": "80",
-                    "shops.id": str(shop.pk),
-                    "shops.slug": shop.slug,
-                },
+                labels=labels,
             )
         container.start()
         # The entrypoint copies WordPress into the volume and writes wp-config.php.
@@ -347,6 +348,17 @@ class DockerProvisioner(BaseProvisioner):
             pass
         db = _db_name(shop)
         self._sql(f"DROP DATABASE IF EXISTS `{db}`; DROP USER IF EXISTS '{db}'@'%';")
+
+    def update_address(self, shop):
+        if self._find_container(shop) is None:
+            return None
+        self.step_start_container(shop)
+        previous = self._wp(shop, "option", "get", "home")
+        if previous != shop.url:
+            # WordPress stores absolute URLs in options and content. GUIDs must stay as they were.
+            self._wp(shop, "search-replace", previous, shop.url, "--all-tables-with-prefix", "--skip-columns=guid")
+            self._wp(shop, "cache", "flush")
+        return previous
 
     # --- helpers ---
 

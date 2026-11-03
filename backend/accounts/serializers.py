@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
@@ -7,10 +8,15 @@ from .models import User
 
 
 class UserSerializer(serializers.ModelSerializer):
+    shop_limit = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ["id", "email", "first_name", "last_name", "is_email_verified", "date_joined"]
+        fields = ["id", "email", "first_name", "last_name", "is_email_verified", "date_joined", "shop_limit"]
         read_only_fields = ["id", "email", "is_email_verified", "date_joined"]
+
+    def get_shop_limit(self, user) -> int:
+        return settings.SHOPS_MAX_PER_USER
 
 
 class RegisterSerializer(serializers.ModelSerializer):

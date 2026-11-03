@@ -58,6 +58,15 @@ def test_me_requires_authentication(api_client):
     assert api_client.get("/api/auth/me/").status_code == 401
 
 
+def test_me_reports_shop_limit(auth_client, settings):
+    settings.SHOPS_MAX_PER_USER = 3
+
+    response = auth_client.get("/api/auth/me/")
+
+    assert response.status_code == 200
+    assert response.data["shop_limit"] == 3
+
+
 def test_verify_email_with_correct_code(api_client, django_capture_on_commit_callbacks, mailoutbox):
     tokens = register(api_client, django_capture_on_commit_callbacks).data["tokens"]
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
