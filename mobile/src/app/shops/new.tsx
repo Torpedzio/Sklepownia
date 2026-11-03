@@ -1,35 +1,64 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Switch, View } from 'react-native';
 
+import { isShopLimitReached, shopLimitMessage } from '@/components/new-shop-button';
+import { Page } from '@/components/page';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { ChipSelect } from '@/components/ui/chip-select';
 import { TextField } from '@/components/ui/text-field';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Themes } from '@/constants/content';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth';
+import { useNotify } from '@/context/notifications';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
 import { api, ApiError } from '@/lib/api';
+import { plural } from '@/lib/plural';
 import { slugify } from '@/lib/slugify';
-import type { FormOptions, NewShop, ShopDetail } from '@/lib/types';
+import type { FormOptions, NewShop, Shop, ShopDetail } from '@/lib/types';
 
 type SlugCheck = { slug: string; available: boolean; reason: string | null };
 
 export default function NewShopScreen() {
+  const { user } = useAuth();
   const { data: options, error } = useApiQuery<FormOptions>('/shops/form-options/');
+  const { data: shops, error: shopsError } = useApiQuery<Shop[]>('/shops/');
 
-  if (options) return <NewShopForm options={options} />;
-  return error ? (
-    <ThemedText themeColor="danger" style={styles.content}>
-      {error.message}
-    </ThemedText>
-  ) : (
-    <ActivityIndicator style={styles.loader} />
+  // The form is also reachable by URL, so check the limit here and not only on the buttons.
+  if (user && isShopLimitReached(user.shop_limit, shops?.length)) return <LimitReached limit={user.shop_limit} />;
+  if (options && (shops || shopsError)) return <NewShopForm options={options} />;
+  return (
+    <Page>
+      {error ? <ThemedText themeColor="danger">{error.message}</ThemedText> : <ActivityIndicator style={styles.loader} />}
+    </Page>
+  );
+}
+
+function LimitReached({ limit }: { limit: number }) {
+  const theme = useTheme();
+  return (
+    <Page maxWidth={760}>
+      <View style={[styles.limit, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <ThemedText type="title">
+          Masz już {limit} {plural(limit, ['sklep', 'sklepy', 'sklepów'])}
+        </ThemedText>
+        <ThemedText themeColor="textSecondary">{shopLimitMessage(limit)}</ThemedText>
+        <Button
+          title="Wróć do sklepów"
+          variant="secondary"
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/shops'))}
+          style={styles.limitButton}
+        />
+      </View>
+    </Page>
   );
 }
 
 function NewShopForm({ options }: { options: FormOptions }) {
   const theme = useTheme();
+  const notify = useNotify();
   const [form, setForm] = useState<NewShop>(() => ({
     name: '',
     slug: '',
@@ -44,7 +73,6 @@ function NewShopForm({ options }: { options: FormOptions }) {
   const [slugEdited, setSlugEdited] = useState(false);
   const [lastSlugCheck, setLastSlugCheck] = useState<SlugCheck | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
 
   const slug = form.slug;
@@ -69,106 +97,163 @@ function NewShopForm({ options }: { options: FormOptions }) {
 
   async function handleSubmit() {
     setSubmitting(true);
-    setError(undefined);
     try {
       const shop = await api<ShopDetail>('/shops/', { method: 'POST', body: form });
+      notify.success(`Zakładamy sklep „${shop.name}”. To potrwa około dwóch minut.`);
       router.back();
       router.push({ pathname: '/shops/[id]', params: { id: shop.id } });
     } catch (e) {
-      if (e instanceof ApiError && Object.keys(e.fieldErrors).length) setFieldErrors(e.fieldErrors);
-      else setError((e as Error).message);
+      // Field messages sit under the fields; the bar also covers fields scrolled out of view.
+      if (e instanceof ApiError) setFieldErrors(e.fieldErrors);
+      notify.error((e as Error).message);
       setSubmitting(false);
     }
   }
 
   const { min, max } = options.category_count;
   const slugError = fieldErrors.slug ?? (slugCheck && !slugCheck.available ? slugCheck.reason ?? undefined : undefined);
-  const selectedTemplate = options.templates.find((t) => t.slug === form.template);
+  const address = `${form.slug || 'twoj-sklep'}.${options.base_domain}`;
 
   return (
-    <ScrollView
-      style={{ backgroundColor: theme.background }}
-      contentContainerStyle={styles.content}
-      contentInsetAdjustmentBehavior="automatic"
-      keyboardShouldPersistTaps="handled"
-      automaticallyAdjustKeyboardInsets>
-      <TextField
-        label="Nazwa sklepu"
-        value={form.name}
-        onChangeText={(name) => {
-          update('name', name);
-          if (!slugEdited) update('slug', slugify(name));
-        }}
-        error={fieldErrors.name}
-        placeholder="np. Pracownia Ceramiki"
-      />
-      <TextField
-        label="Adres sklepu"
-        value={form.slug}
-        onChangeText={(text) => {
-          setSlugEdited(true);
-          update('slug', text.toLowerCase());
-        }}
-        error={slugError}
-        hint={slugCheck?.available ? `✓ ${form.slug}.${options.base_domain} jest wolny` : `${form.slug || 'adres'}.${options.base_domain}`}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-
-      <ChipSelect
-        label="Branża"
-        options={options.industries}
-        value={form.industry}
-        onChange={(value) => update('industry', value)}
-        error={fieldErrors.industry}
-      />
-
-      <ChipSelect
-        label="Szablon"
-        options={options.templates.map((t) => ({ value: t.slug, label: t.name }))}
-        value={form.template}
-        onChange={(value) => update('template', value)}
-        error={fieldErrors.template}
-      />
-      {selectedTemplate ? (
-        <ThemedText type="small" themeColor="textSecondary">
-          {selectedTemplate.description}
-        </ThemedText>
-      ) : null}
-
-      <View style={styles.field}>
-        <ThemedText type="smallBold">Liczba kategorii produktów</ThemedText>
-        <View style={styles.stepper}>
-          <StepperButton label="−" disabled={form.category_count <= min} onPress={() => update('category_count', form.category_count - 1)} />
-          <ThemedText type="subtitle" style={styles.stepperValue}>
-            {form.category_count}
-          </ThemedText>
-          <StepperButton label="+" disabled={form.category_count >= max} onPress={() => update('category_count', form.category_count + 1)} />
-        </View>
+    <Page maxWidth={760}>
+      <View style={styles.intro}>
+        <ThemedText type="title">Opisz swój sklep</ThemedText>
+        <ThemedText themeColor="textSecondary">Wszystko poza nazwą i adresem zmienisz później w panelu sklepu.</ThemedText>
       </View>
 
-      <ChipSelect label="Język sklepu" options={options.languages} value={form.language} onChange={(v) => update('language', v)} />
-      <ChipSelect label="Waluta" options={options.currencies} value={form.currency} onChange={(v) => update('currency', v)} />
-      <ChipSelect label="Kraj" options={options.countries} value={form.country} onChange={(v) => update('country', v)} />
-
-      <View style={styles.switchRow}>
-        <View style={styles.flex}>
-          <ThemedText type="smallBold">Przykładowe produkty</ThemedText>
+      <Section title="Nazwa i adres">
+        <TextField
+          label="Nazwa sklepu"
+          value={form.name}
+          onChangeText={(name) => {
+            update('name', name);
+            if (!slugEdited) update('slug', slugify(name));
+          }}
+          error={fieldErrors.name}
+          placeholder="np. Pracownia Ceramiki"
+        />
+        <TextField
+          label="Adres sklepu"
+          value={form.slug}
+          onChangeText={(text) => {
+            setSlugEdited(true);
+            update('slug', text.toLowerCase());
+          }}
+          error={slugError}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <View style={[styles.address, { backgroundColor: theme.surfaceMuted }]}>
           <ThemedText type="small" themeColor="textSecondary">
-            Dodamy kilka produktów, żeby sklep nie był pusty.
+            Klienci wejdą do sklepu pod adresem
           </ThemedText>
+          <ThemedText style={styles.addressText}>{address}</ThemedText>
+          {slugCheck?.available ? (
+            <ThemedText type="smallBold" themeColor="success">
+              ✓ Adres jest wolny
+            </ThemedText>
+          ) : null}
         </View>
-        <Switch value={form.include_sample_products} onValueChange={(v) => update('include_sample_products', v)} />
-      </View>
+      </Section>
 
-      {error ? <ThemedText themeColor="danger">{error}</ThemedText> : null}
+      <Section title="Branża" text="Na jej podstawie przygotujemy nazwy kategorii.">
+        <ChipSelect
+          label="Czym handlujesz?"
+          options={options.industries}
+          value={form.industry}
+          onChange={(value) => update('industry', value)}
+          error={fieldErrors.industry}
+        />
+      </Section>
+
+      <Section title="Wygląd">
+        <View style={styles.templates} accessibilityRole="radiogroup">
+          {options.templates.map((template) => {
+            const selected = template.slug === form.template;
+            const colors = Themes.find((t) => t.name === template.name)?.colors ?? [];
+            return (
+              <Pressable
+                key={template.slug}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                onPress={() => update('template', template.slug)}
+                style={[
+                  styles.template,
+                  { backgroundColor: selected ? theme.primaryMuted : theme.surface, borderColor: selected ? theme.primary : theme.border },
+                ]}>
+                <View style={styles.swatches}>
+                  {colors.map((color) => (
+                    <View key={color} style={[styles.swatch, { backgroundColor: color }]} />
+                  ))}
+                </View>
+                <ThemedText type="heading">{template.name}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {template.description}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Section>
+
+      <Section title="Asortyment">
+        <View style={styles.row}>
+          <View style={styles.flex}>
+            <ThemedText type="smallBold">Liczba kategorii produktów</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Od {min} do {max}. Dodasz i usuniesz je później.
+            </ThemedText>
+          </View>
+          <View style={styles.stepper}>
+            <StepperButton label="−" disabled={form.category_count <= min} onPress={() => update('category_count', form.category_count - 1)} />
+            <ThemedText type="subtitle" style={styles.stepperValue}>
+              {form.category_count}
+            </ThemedText>
+            <StepperButton label="+" disabled={form.category_count >= max} onPress={() => update('category_count', form.category_count + 1)} />
+          </View>
+        </View>
+        <View style={styles.row}>
+          <View style={styles.flex}>
+            <ThemedText type="smallBold">Przykładowe produkty</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Sześć produktów, żeby sklep nie był pusty. Usuniesz je jednym kliknięciem.
+            </ThemedText>
+          </View>
+          <Switch
+            value={form.include_sample_products}
+            onValueChange={(v) => update('include_sample_products', v)}
+            trackColor={{ true: theme.primary, false: theme.border }}
+          />
+        </View>
+      </Section>
+
+      <Section title="Region">
+        <ChipSelect label="Język sklepu" options={options.languages} value={form.language} onChange={(v) => update('language', v)} />
+        <ChipSelect label="Waluta" options={options.currencies} value={form.currency} onChange={(v) => update('currency', v)} />
+        <ChipSelect label="Kraj" options={options.countries} value={form.country} onChange={(v) => update('country', v)} />
+      </Section>
+
       <Button
         title="Załóż sklep"
+        size="large"
         onPress={handleSubmit}
         loading={submitting}
         disabled={!form.name || !form.slug || !form.industry || !form.template}
       />
-    </ScrollView>
+    </Page>
+  );
+}
+
+function Section({ title, text, children }: { title: string; text?: string; children: ReactNode }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.section, { borderTopColor: theme.border }]}>
+      <View style={styles.sectionHead}>
+        <ThemedText type="subtitle">{title}</ThemedText>
+        {text ? <ThemedText type="small" themeColor="textSecondary">{text}</ThemedText> : null}
+      </View>
+      {children}
+    </View>
   );
 }
 
@@ -176,9 +261,11 @@ function StepperButton({ label, disabled, onPress }: { label: string; disabled: 
   const theme = useTheme();
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label === '+' ? 'Więcej kategorii' : 'Mniej kategorii'}
       onPress={onPress}
       disabled={disabled}
-      style={[styles.stepperButton, { backgroundColor: theme.backgroundElement, opacity: disabled ? 0.4 : 1 }]}>
+      style={[styles.stepperButton, { borderColor: theme.border, backgroundColor: theme.surface, opacity: disabled ? 0.4 : 1 }]}>
       <ThemedText type="subtitle">{label}</ThemedText>
     </Pressable>
   );
@@ -189,38 +276,80 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   loader: {
-    flex: 1,
+    marginVertical: Spacing.six,
   },
-  content: {
-    gap: Spacing.four,
+  limit: {
+    gap: Spacing.three,
     padding: Spacing.four,
-    paddingBottom: Spacing.six,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-    alignSelf: 'center',
+    borderRadius: Radius.large,
+    borderWidth: 1,
   },
-  field: {
-    gap: Spacing.two,
+  limitButton: {
+    alignSelf: 'flex-start',
+  },
+  intro: {
+    gap: Spacing.one,
+  },
+  section: {
+    gap: Spacing.three,
+    paddingTop: Spacing.four,
+    borderTopWidth: 1,
+  },
+  sectionHead: {
+    gap: Spacing.half,
+  },
+  address: {
+    gap: Spacing.half,
+    padding: Spacing.three,
+    borderRadius: Radius.medium,
+  },
+  addressText: {
+    fontFamily: Fonts.mono,
+    fontSize: 15,
+  },
+  templates: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.three,
+  },
+  template: {
+    flexBasis: 200,
+    flexGrow: 1,
+    gap: Spacing.one + Spacing.half,
+    padding: Spacing.three,
+    borderRadius: Radius.medium,
+    borderWidth: 1.5,
+  },
+  swatches: {
+    flexDirection: 'row',
+    gap: Spacing.one,
+    marginBottom: Spacing.one,
+  },
+  swatch: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
   },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    gap: Spacing.two,
   },
   stepperButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: Radius.pill,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperValue: {
-    minWidth: 48,
+    minWidth: 40,
     textAlign: 'center',
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
   },
 });

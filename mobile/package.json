@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo-google-fonts/bricolage-grotesque": "^0.4.1",
+    "@expo-google-fonts/figtree": "^0.4.1",
     "@expo/ui": "~58.0.25",
     "expo": "~58.0.21",
+    "expo-clipboard": "~58.0.4",
     "expo-constants": "~58.0.14",
     "expo-device": "~58.0.5",
     "expo-font": "~58.0.11",

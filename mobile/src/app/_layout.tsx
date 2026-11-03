@@ -1,46 +1,92 @@
+import {
+  BricolageGrotesque_600SemiBold,
+  BricolageGrotesque_700Bold,
+} from '@expo-google-fonts/bricolage-grotesque';
+import { Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold } from '@expo-google-fonts/figtree';
+import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 
+import { Colors, Fonts } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/context/auth';
+import { NotificationsProvider } from '@/context/notifications';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const [fontsLoaded] = useFonts({
+    BricolageGrotesque_600SemiBold,
+    BricolageGrotesque_700Bold,
+    Figtree_400Regular,
+    Figtree_500Medium,
+    Figtree_600SemiBold,
+    Figtree_700Bold,
+  });
+  const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+  const colors = Colors[scheme];
+  const navigationTheme = {
+    ...base,
+    colors: {
+      ...base.colors,
+      primary: colors.primary,
+      background: colors.background,
+      card: colors.background,
+      text: colors.text,
+      border: colors.border,
+    },
+  };
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
+    <ThemeProvider value={navigationTheme}>
+      <NotificationsProvider>
+        <AuthProvider>
+          <RootNavigator fontsLoaded={fontsLoaded} />
+        </AuthProvider>
+      </NotificationsProvider>
     </ThemeProvider>
   );
 }
 
-function RootNavigator() {
+function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { isLoading, user } = useAuth();
+  const ready = fontsLoaded && !isLoading;
 
   useEffect(() => {
-    if (!isLoading) SplashScreen.hideAsync();
-  }, [isLoading]);
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
 
-  if (isLoading) return null;
+  if (!ready) return null;
+
+  // The web uses the site header instead of native navigation bars on public pages.
+  const nativeHeader = Platform.OS !== 'web';
+  const afterSignIn = user?.is_email_verified ? '/shops' : '/verify-email';
 
   return (
-    <Stack screenOptions={{ headerBackButtonDisplayMode: 'minimal' }}>
-      <Stack.Protected guard={!user}>
-        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-        <Stack.Screen name="sign-up" options={{ title: 'Załóż konto' }} />
+    <Stack
+      screenOptions={{
+        headerBackButtonDisplayMode: 'minimal',
+        headerShadowVisible: false,
+        headerTitleStyle: { fontFamily: Fonts.displayMedium },
+      }}>
+      {/* The landing page is the home page for everyone; signed-in users reach their shops from its menu. */}
+      <Stack.Screen name="index" options={{ headerShown: false, title: 'Sklep internetowy w dwie minuty' }} />
+      <Stack.Protected guard={!user} redirectTo={afterSignIn}>
+        <Stack.Screen name="sign-in" options={{ headerShown: false, title: 'Logowanie' }} />
+        <Stack.Screen name="sign-up" options={{ headerShown: false, title: 'Załóż konto' }} />
       </Stack.Protected>
-      <Stack.Protected guard={!!user && !user.is_email_verified}>
-        <Stack.Screen name="verify-email" options={{ title: 'Potwierdź e-mail' }} />
+      <Stack.Protected guard={!!user && !user.is_email_verified} redirectTo={user ? '/shops' : '/'}>
+        <Stack.Screen name="verify-email" options={{ headerShown: false, title: 'Potwierdź e-mail' }} />
       </Stack.Protected>
-      <Stack.Protected guard={!!user?.is_email_verified}>
-        <Stack.Screen name="index" options={{ title: 'Moje sklepy' }} />
+      <Stack.Protected guard={!!user?.is_email_verified} redirectTo={user ? '/verify-email' : '/'}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="shops/new" options={{ title: 'Nowy sklep', presentation: 'modal' }} />
         <Stack.Screen name="shops/[id]" options={{ title: 'Sklep' }} />
       </Stack.Protected>
+      <Stack.Screen name="about" options={{ title: 'Jak to działa', headerShown: nativeHeader }} />
+      <Stack.Screen name="contact" options={{ title: 'Kontakt', headerShown: nativeHeader }} />
     </Stack>
   );
 }

@@ -5,6 +5,7 @@ export type User = {
   last_name: string;
   is_email_verified: boolean;
   date_joined: string;
+  shop_limit: number;
 };
 
 export type Tokens = { access: string; refresh: string };

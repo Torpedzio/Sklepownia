@@ -1,42 +1,36 @@
+import { Link } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
+import { AuthLayout } from '@/components/auth-layout';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
+import { useNotify } from '@/context/notifications';
 import { ApiError } from '@/lib/api';
-import { useTheme } from '@/hooks/use-theme';
 
 export default function SignUpScreen() {
   const { signUp } = useAuth();
-  const theme = useTheme();
+  const notify = useNotify();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit() {
     setSubmitting(true);
-    setError(undefined);
     setFieldErrors({});
     try {
       await signUp(email.trim(), password);
+      notify.success(`Konto założone. Kod potwierdzający wysłaliśmy na ${email.trim().toLowerCase()}.`);
     } catch (e) {
-      if (e instanceof ApiError && Object.keys(e.fieldErrors).length) setFieldErrors(e.fieldErrors);
-      else setError((e as Error).message);
+      if (e instanceof ApiError) setFieldErrors(e.fieldErrors);
+      notify.error((e as Error).message);
       setSubmitting(false);
     }
   }
 
   return (
-    <ScrollView
-      style={{ backgroundColor: theme.background }}
-      contentContainerStyle={styles.content}
-      contentInsetAdjustmentBehavior="automatic"
-      keyboardShouldPersistTaps="handled">
+    <AuthLayout title="Załóż konto" subtitle="Potem opiszesz swój sklep, a my go postawimy.">
       <TextField
         label="E-mail"
         value={email}
@@ -58,18 +52,10 @@ export default function SignUpScreen() {
         textContentType="newPassword"
         onSubmitEditing={handleSubmit}
       />
-      {error ? <ThemedText themeColor="danger">{error}</ThemedText> : null}
-      <Button title="Załóż konto" onPress={handleSubmit} loading={submitting} disabled={!email || !password} />
-    </ScrollView>
+      <Button title="Załóż konto" size="large" onPress={handleSubmit} loading={submitting} disabled={!email || !password} />
+      <Link href="/sign-in" asChild>
+        <Button title="Masz już konto? Zaloguj się" variant="ghost" />
+      </Link>
+    </AuthLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  content: {
-    gap: Spacing.three,
-    padding: Spacing.four,
-    width: '100%',
-    maxWidth: MaxContentWidth / 2,
-    alignSelf: 'center',
-  },
-});

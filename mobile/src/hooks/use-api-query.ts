@@ -6,21 +6,24 @@ import { api, ApiError } from '@/lib/api';
 type Options<T> = {
   /** Milliseconds until the next refetch for the given data, or false to stop polling. */
   refetchInterval?: (data: T | undefined) => number | false;
+  /** Skip the request, e.g. until the user signs in. */
+  enabled?: boolean;
 };
 
-export function useApiQuery<T>(path: string, { refetchInterval }: Options<T> = {}) {
+export function useApiQuery<T>(path: string, { refetchInterval, enabled = true }: Options<T> = {}) {
   const [data, setData] = useState<T>();
   const [error, setError] = useState<ApiError | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchData = useCallback(async () => {
+    if (!enabled) return;
     try {
       setData(await api<T>(path));
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError(0, null));
     }
-  }, [path]);
+  }, [path, enabled]);
 
   useFocusEffect(
     useCallback(() => {

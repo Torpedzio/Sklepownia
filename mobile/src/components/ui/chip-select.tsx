@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Choice } from '@/lib/types';
 
@@ -19,7 +19,7 @@ export function ChipSelect({ label, options, value, onChange, error }: ChipSelec
   return (
     <View style={styles.container}>
       <ThemedText type="smallBold">{label}</ThemedText>
-      <View style={styles.chips}>
+      <View style={styles.chips} accessibilityRole="radiogroup">
         {options.map((option) => {
           const selected = option.value === value;
           return (
@@ -28,8 +28,14 @@ export function ChipSelect({ label, options, value, onChange, error }: ChipSelec
               accessibilityRole="radio"
               accessibilityState={{ selected }}
               onPress={() => onChange(option.value)}
-              style={[styles.chip, { backgroundColor: selected ? theme.primary : theme.backgroundElement }]}>
-              <ThemedText type="small" style={{ color: selected ? theme.onPrimary : theme.text }}>
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: selected ? theme.primaryMuted : theme.surface,
+                  borderColor: selected ? theme.primary : theme.border,
+                },
+              ]}>
+              <ThemedText type={selected ? 'smallBold' : 'small'} themeColor={selected ? 'primary' : 'text'}>
                 {option.label}
               </ThemedText>
             </Pressable>
@@ -57,6 +63,7 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
-    borderRadius: Spacing.four,
+    borderRadius: Radius.pill,
+    borderWidth: 1.5,
   },
 });

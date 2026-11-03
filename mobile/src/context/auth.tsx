@@ -1,5 +1,6 @@
 import { createContext, use, useEffect, useState, type PropsWithChildren } from 'react';
 
+import { useNotify } from '@/context/notifications';
 import { api, ApiError, loadTokens, setOnSessionExpired, setTokens } from '@/lib/api';
 import type { Tokens, User } from '@/lib/types';
 
@@ -11,6 +12,7 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   verifyEmail: (code: string) => Promise<void>;
   resendCode: () => Promise<void>;
+  updateProfile: (changes: Pick<User, 'first_name' | 'last_name'>) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -18,9 +20,13 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: PropsWithChildren) {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  const notify = useNotify();
 
   useEffect(() => {
-    setOnSessionExpired(() => setUser(null));
+    setOnSessionExpired(() => {
+      setUser(null);
+      notify.error('Sesja wygasła. Zaloguj się ponownie.');
+    });
     (async () => {
       try {
         if (await loadTokens()) setUser(await api<User>('/auth/me/'));
@@ -30,7 +36,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setIsLoading(false);
       }
     })();
-  }, []);
+  }, [notify]);
 
   const value: AuthContextValue = {
     isLoading,
@@ -62,6 +68,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     },
     async resendCode() {
       await api('/auth/resend-verification/', { method: 'POST' });
+    },
+    async updateProfile(changes) {
+      setUser(await api<User>('/auth/me/', { method: 'PATCH', body: changes }));
     },
   };
 

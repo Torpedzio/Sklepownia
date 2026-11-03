@@ -1,21 +1,19 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
+import { AuthLayout } from '@/components/auth-layout';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Fonts } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
-import { useTheme } from '@/hooks/use-theme';
+import { useNotify } from '@/context/notifications';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
 export default function VerifyEmailScreen() {
   const { user, verifyEmail, resendCode, signOut } = useAuth();
-  const theme = useTheme();
+  const notify = useNotify();
   const [code, setCode] = useState('');
-  const [error, setError] = useState<string>();
-  const [info, setInfo] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
 
@@ -27,37 +25,34 @@ export default function VerifyEmailScreen() {
 
   async function handleVerify() {
     setSubmitting(true);
-    setError(undefined);
     try {
       await verifyEmail(code);
+      notify.success('Adres e-mail potwierdzony. Możesz założyć pierwszy sklep.');
     } catch (e) {
-      setError((e as Error).message);
+      notify.error((e as Error).message);
       setSubmitting(false);
     }
   }
 
   async function handleResend() {
-    setError(undefined);
     try {
       await resendCode();
-      setInfo('Wysłaliśmy nowy kod.');
+      notify.success(`Wysłaliśmy nowy kod na ${user?.email}.`);
       setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (e) {
-      setError((e as Error).message);
+      notify.error((e as Error).message);
     }
   }
 
+  async function handleSignOut() {
+    await signOut();
+    notify.success('Wylogowano.');
+  }
+
   return (
-    <ScrollView
-      style={{ backgroundColor: theme.background }}
-      contentContainerStyle={styles.content}
-      contentInsetAdjustmentBehavior="automatic"
-      keyboardShouldPersistTaps="handled">
-      <ThemedText>
-        Wysłaliśmy 6-cyfrowy kod na <ThemedText type="smallBold">{user?.email}</ThemedText>. Wpisz go poniżej.
-      </ThemedText>
+    <AuthLayout title="Potwierdź e-mail" subtitle={`Wpisz 6-cyfrowy kod, który wysłaliśmy na ${user?.email}.`}>
       <TextField
-        label="Kod weryfikacyjny"
+        label="Kod z wiadomości"
         value={code}
         onChangeText={(text) => setCode(text.replace(/\D/g, '').slice(0, 6))}
         keyboardType="number-pad"
@@ -67,31 +62,24 @@ export default function VerifyEmailScreen() {
         style={styles.codeInput}
         onSubmitEditing={handleVerify}
       />
-      {error ? <ThemedText themeColor="danger">{error}</ThemedText> : null}
-      {info && !error ? <ThemedText themeColor="success">{info}</ThemedText> : null}
-      <Button title="Potwierdź" onPress={handleVerify} loading={submitting} disabled={code.length !== 6} />
+      <Button title="Potwierdź" size="large" onPress={handleVerify} loading={submitting} disabled={code.length !== 6} />
       <Button
-        title={cooldown > 0 ? `Wyślij kod ponownie (${cooldown} s)` : 'Wyślij kod ponownie'}
+        title={cooldown > 0 ? `Wyślij kod ponownie za ${cooldown} s` : 'Wyślij kod ponownie'}
         variant="secondary"
         onPress={handleResend}
         disabled={cooldown > 0}
       />
-      <Button title="Wyloguj się" variant="secondary" onPress={signOut} />
-    </ScrollView>
+      <Button title="Użyj innego konta" variant="ghost" onPress={handleSignOut} />
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    gap: Spacing.three,
-    padding: Spacing.four,
-    width: '100%',
-    maxWidth: MaxContentWidth / 2,
-    alignSelf: 'center',
-  },
   codeInput: {
-    fontSize: 28,
-    letterSpacing: 8,
+    fontFamily: Fonts.displayMedium,
+    fontSize: 30,
+    letterSpacing: 10,
     textAlign: 'center',
+    minHeight: 64,
   },
 });

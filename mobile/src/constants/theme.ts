@@ -1,67 +1,69 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://unistyl.es/), etc.
+ * Design tokens. The look borrows from a street-level shop: a striped awning (accent),
+ * a green "open" sign (primary) and receipt paper for anything that records progress.
  */
-
-import '@/global.css';
 
 import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-    border: '#D9D9E0',
-    primary: '#208AEF',
-    onPrimary: '#ffffff',
-    danger: '#DC3E42',
-    success: '#2B9A66',
-    warning: '#E2A336',
+    background: '#F4F6FA',
+    surface: '#FFFFFF',
+    surfaceMuted: '#EBEEF4',
+    text: '#14213D',
+    textSecondary: '#5B6478',
+    border: '#D9DEE8',
+    primary: '#0F7B5F',
+    primaryMuted: '#E2F1EB',
+    onPrimary: '#FFFFFF',
+    accent: '#F2C14E',
+    accentMuted: '#FBF0CF',
+    onAccent: '#14213D',
+    danger: '#B93A2B',
+    onDanger: '#FFFFFF',
+    dangerMuted: '#F8E4E1',
+    success: '#0F7B5F',
+    warning: '#A86B00',
+    // Receipts stay paper-white in dark mode too.
+    receipt: '#FFFFFF',
+    receiptInk: '#1D2433',
+    receiptMuted: '#7A8294',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-    border: '#363A3F',
-    primary: '#3B9EFF',
-    onPrimary: '#ffffff',
-    danger: '#FF6369',
-    success: '#3DD68C',
-    warning: '#FFCA16',
+    background: '#0E1526',
+    surface: '#16203A',
+    surfaceMuted: '#1F2B49',
+    text: '#EEF1F8',
+    textSecondary: '#A3ADC2',
+    border: '#2B3759',
+    primary: '#3CC59A',
+    primaryMuted: '#173D35',
+    onPrimary: '#0B1A15',
+    accent: '#F2C14E',
+    accentMuted: '#3B3220',
+    onAccent: '#14213D',
+    danger: '#F2887A',
+    onDanger: '#2A0E0A',
+    dangerMuted: '#402424',
+    success: '#3CC59A',
+    warning: '#F2C14E',
+    receipt: '#F7F7F2',
+    receiptInk: '#1D2433',
+    receiptMuted: '#6D7487',
   },
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
-});
+export const Fonts = {
+  display: 'BricolageGrotesque_700Bold',
+  displayMedium: 'BricolageGrotesque_600SemiBold',
+  body: 'Figtree_400Regular',
+  bodyMedium: 'Figtree_500Medium',
+  bodySemiBold: 'Figtree_600SemiBold',
+  bodyBold: 'Figtree_700Bold',
+  mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace, Menlo, Consolas, monospace' }),
+};
 
 export const Spacing = {
   half: 2,
@@ -73,4 +75,15 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const MaxContentWidth = 800;
+/** Small things are rounder than big ones: chips are pills, sections are nearly square. */
+export const Radius = {
+  small: 8,
+  medium: 14,
+  large: 20,
+  pill: 999,
+} as const;
+
+export const MaxContentWidth = 1080;
+export const ReadableWidth = 640;
+/** Screen width from which layouts switch to two columns. */
+export const WideBreakpoint = 900;
