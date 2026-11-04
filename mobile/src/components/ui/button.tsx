@@ -1,4 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, View, type PressableProps } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Icon, type IconName } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
@@ -13,8 +14,30 @@ export type ButtonProps = Omit<PressableProps, 'children'> & {
   loading?: boolean;
 };
 
-export function Button({ title, variant = 'primary', size = 'regular', icon, loading, disabled, style, ...rest }: ButtonProps) {
+// Grows a little under the pointer and gives way when pressed.
+const HOVER_SCALE = 1.03;
+const PRESS_SCALE = 0.96;
+
+export function Button({
+  title,
+  variant = 'primary',
+  size = 'regular',
+  icon,
+  loading,
+  disabled,
+  style,
+  onHoverIn,
+  onHoverOut,
+  onPressIn,
+  onPressOut,
+  ...rest
+}: ButtonProps) {
   const theme = useTheme();
+  const scale = useSharedValue(1);
+  const hovered = useSharedValue(false);
+  const scaleStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
+  const inactive = !!(disabled || loading);
+  const animateTo = (value: number) => scale.set(withTiming(inactive ? 1 : value, { duration: 140 }));
   const look = {
     primary: { background: theme.primary, color: theme.onPrimary, border: theme.primary },
     accent: { background: theme.accent, color: theme.onAccent, border: theme.accent },
@@ -26,23 +49,49 @@ export function Button({ title, variant = 'primary', size = 'regular', icon, loa
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
-      disabled={disabled || loading}
-      style={(state) => [
-        styles.button,
-        size === 'large' && styles.large,
-        { backgroundColor: look.background, borderColor: look.border },
-        { opacity: disabled ? 0.45 : state.pressed ? 0.85 : 1 },
-        typeof style === 'function' ? style(state) : style,
-      ]}
+      accessibilityState={{ disabled: inactive, busy: !!loading }}
+      disabled={inactive}
+      // The Pressable only takes the caller's layout; the visible button inside is what moves.
+      style={(state) => (typeof style === 'function' ? style(state) : style)}
+      onHoverIn={(event) => {
+        hovered.set(true);
+        animateTo(HOVER_SCALE);
+        onHoverIn?.(event);
+      }}
+      onHoverOut={(event) => {
+        hovered.set(false);
+        animateTo(1);
+        onHoverOut?.(event);
+      }}
+      onPressIn={(event) => {
+        animateTo(PRESS_SCALE);
+        onPressIn?.(event);
+      }}
+      onPressOut={(event) => {
+        animateTo(hovered.get() ? HOVER_SCALE : 1);
+        onPressOut?.(event);
+      }}
       {...rest}>
-      {loading ? (
-        <ActivityIndicator color={look.color} />
-      ) : (
-        <View style={styles.content}>
-          {icon ? <Icon name={icon} size={size === 'large' ? 20 : 17} tintColor={look.color} /> : null}
-          <ThemedText style={[styles.title, size === 'large' && styles.largeTitle, { color: look.color }]}>{title}</ThemedText>
-        </View>
+      {({ pressed }) => (
+        <Animated.View
+          style={[
+            styles.button,
+            size === 'large' && styles.large,
+            { backgroundColor: look.background, borderColor: look.border },
+            { opacity: disabled ? 0.45 : pressed ? 0.85 : 1 },
+            scaleStyle,
+          ]}>
+          {loading ? (
+            <ActivityIndicator color={look.color} />
+          ) : (
+            <View style={styles.content}>
+              {icon ? <Icon name={icon} size={size === 'large' ? 20 : 17} tintColor={look.color} /> : null}
+              <ThemedText style={[styles.title, size === 'large' && styles.largeTitle, { color: look.color }]}>
+                {title}
+              </ThemedText>
+            </View>
+          )}
+        </Animated.View>
       )}
     </Pressable>
   );

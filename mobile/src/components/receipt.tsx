@@ -1,5 +1,5 @@
-import { StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withSpring, ZoomIn } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { Fonts, Spacing } from '@/constants/theme';
@@ -24,63 +24,84 @@ type ReceiptProps = {
 
 const MARKS = { done: '✓', running: '…', pending: '·', failed: '✕' };
 const PRINT_DELAY = 140;
+// Picked up from the counter: a bit bigger and turned to the left.
+const LIFT_SCALE = 1.04;
+const LIFT_ROTATION = -3;
 
 /** Progress shown as till receipt: the one place the app uses a typewriter face. */
 export function Receipt({ title, subtitle, rows, total, stamp, animated = false }: ReceiptProps) {
   const theme = useTheme();
   const ink = { color: theme.receiptInk };
   const muted = { color: theme.receiptMuted };
+  const lift = useSharedValue(0);
+  const liftStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + (LIFT_SCALE - 1) * lift.get() }, { rotate: `${LIFT_ROTATION * lift.get()}deg` }],
+  }));
+  const raise = (up: boolean) => lift.set(withSpring(up ? 1 : 0, { damping: 14, stiffness: 180 }));
 
   return (
-    <View style={styles.wrapper}>
-      <View style={[styles.paper, { backgroundColor: theme.receipt }]}>
-        <ThemedText style={[styles.title, ink]}>{title}</ThemedText>
-        {subtitle ? <ThemedText style={[styles.mono, styles.center, muted]}>{subtitle}</ThemedText> : null}
-        <View style={[styles.rule, { borderColor: theme.receiptMuted }]} />
+    // Hover on the web, touch and hold on phones. Decoration only, so not a button for screen readers.
+    <Pressable
+      accessible={false}
+      focusable={false}
+      onHoverIn={() => raise(true)}
+      onHoverOut={() => raise(false)}
+      onPressIn={() => raise(true)}
+      onPressOut={() => raise(false)}>
+      <Animated.View style={[styles.wrapper, liftStyle]}>
+        <View style={[styles.paper, { backgroundColor: theme.receipt }]}>
+          <ThemedText style={[styles.title, ink]}>{title}</ThemedText>
+          {subtitle ? <ThemedText style={[styles.mono, styles.center, muted]}>{subtitle}</ThemedText> : null}
+          <View style={[styles.rule, { borderColor: theme.receiptMuted }]} />
 
-        {rows.map((row, index) => {
-          const content = (
-            <View style={styles.row}>
-              <ThemedText
-                style={[styles.mono, styles.mark, row.status === 'failed' ? { color: theme.danger } : row.status === 'pending' ? muted : ink]}>
-                {MARKS[row.status ?? 'done']}
-              </ThemedText>
-              <View style={styles.label}>
-                <ThemedText style={[styles.mono, row.status === 'pending' ? muted : ink]}>{row.label}</ThemedText>
-                {row.note ? <ThemedText style={[styles.mono, { color: theme.danger }]}>{row.note}</ThemedText> : null}
+          {rows.map((row, index) => {
+            const content = (
+              <View style={styles.row}>
+                <ThemedText
+                  style={[
+                    styles.mono,
+                    styles.mark,
+                    row.status === 'failed' ? { color: theme.danger } : row.status === 'pending' ? muted : ink,
+                  ]}>
+                  {MARKS[row.status ?? 'done']}
+                </ThemedText>
+                <View style={styles.label}>
+                  <ThemedText style={[styles.mono, row.status === 'pending' ? muted : ink]}>{row.label}</ThemedText>
+                  {row.note ? <ThemedText style={[styles.mono, { color: theme.danger }]}>{row.note}</ThemedText> : null}
+                </View>
+                {row.value ? <ThemedText style={[styles.mono, muted]}>{row.value}</ThemedText> : null}
               </View>
-              {row.value ? <ThemedText style={[styles.mono, muted]}>{row.value}</ThemedText> : null}
-            </View>
-          );
-          return animated ? (
-            <Animated.View key={row.label} entering={FadeIn.delay(400 + index * PRINT_DELAY).duration(180)}>
-              {content}
+            );
+            return animated ? (
+              <Animated.View key={row.label} entering={FadeIn.delay(400 + index * PRINT_DELAY).duration(180)}>
+                {content}
+              </Animated.View>
+            ) : (
+              <View key={row.label}>{content}</View>
+            );
+          })}
+
+          {total ? (
+            <>
+              <View style={[styles.rule, { borderColor: theme.receiptMuted }]} />
+              <View style={styles.row}>
+                <ThemedText style={[styles.monoBold, styles.label, ink]}>{total.label}</ThemedText>
+                <ThemedText style={[styles.monoBold, ink]}>{total.value}</ThemedText>
+              </View>
+            </>
+          ) : null}
+
+          {stamp ? (
+            <Animated.View
+              entering={animated ? ZoomIn.delay(500 + rows.length * PRINT_DELAY).springify() : undefined}
+              style={[styles.stamp, { borderColor: theme[stamp.tone] }]}>
+              <ThemedText style={[styles.stampText, { color: theme[stamp.tone] }]}>{stamp.text}</ThemedText>
             </Animated.View>
-          ) : (
-            <View key={row.label}>{content}</View>
-          );
-        })}
-
-        {total ? (
-          <>
-            <View style={[styles.rule, { borderColor: theme.receiptMuted }]} />
-            <View style={styles.row}>
-              <ThemedText style={[styles.monoBold, styles.label, ink]}>{total.label}</ThemedText>
-              <ThemedText style={[styles.monoBold, ink]}>{total.value}</ThemedText>
-            </View>
-          </>
-        ) : null}
-
-        {stamp ? (
-          <Animated.View
-            entering={animated ? ZoomIn.delay(500 + rows.length * PRINT_DELAY).springify() : undefined}
-            style={[styles.stamp, { borderColor: theme[stamp.tone] }]}>
-            <ThemedText style={[styles.stampText, { color: theme[stamp.tone] }]}>{stamp.text}</ThemedText>
-          </Animated.View>
-        ) : null}
-      </View>
-      <TornEdge color={theme.receipt} />
-    </View>
+          ) : null}
+        </View>
+        <TornEdge color={theme.receipt} />
+      </Animated.View>
+    </Pressable>
   );
 }
 
