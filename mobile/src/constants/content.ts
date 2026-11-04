@@ -3,17 +3,17 @@
 import type { IconName } from '@/components/icon';
 
 export const SetupSteps = [
-  { label: 'Przydzielanie serwera', time: '0:01' },
-  { label: 'Tworzenie bazy danych', time: '0:02' },
-  { label: 'Uruchamianie WordPressa', time: '0:06' },
-  { label: 'Instalacja WordPressa', time: '0:10' },
-  { label: 'Ustawienia języka i regionu', time: '0:18' },
-  { label: 'Konfiguracja WooCommerce', time: '0:52' },
-  { label: 'Instalacja motywu', time: '0:58' },
-  { label: 'Tworzenie kategorii', time: '1:21' },
-  { label: 'Wyszukiwarka, kategorie i filtry', time: '1:35' },
-  { label: 'Generowanie kluczy API', time: '1:39' },
-  { label: 'Sprawdzanie działania sklepu', time: '1:45' },
+  { label: 'Miejsce na serwerze', time: '0:01' },
+  { label: 'Baza produktów i zamówień', time: '0:02' },
+  { label: 'Uruchomienie sklepu', time: '0:06' },
+  { label: 'Strona i konto administratora', time: '0:10' },
+  { label: 'Język i strefa czasowa', time: '0:18' },
+  { label: 'Waluta, koszyk i zamówienia', time: '0:52' },
+  { label: 'Wygląd sklepu', time: '0:58' },
+  { label: 'Kategorie produktów', time: '1:21' },
+  { label: 'Wyszukiwarka i filtry', time: '1:35' },
+  { label: 'Połączenie z aplikacją', time: '1:39' },
+  { label: 'Końcowe sprawdzenie', time: '1:45' },
 ];
 
 export type Feature = {
@@ -35,9 +35,9 @@ export type Feature = {
 export const Features: Feature[] = [
   {
     icon: 'store',
-    title: 'Sklep po polsku od pierwszej minuty',
-    text: 'Złotówki, polska strefa czasowa, strony koszyka, zamówienia i konta klienta. Bez kreatora konfiguracji.',
-    image: { source: require('@/assets/images/features/store.jpg'), aspectRatio: 850 / 569 },
+    title: 'Twój sklep od pierwszej minuty',
+    text: 'Język, waluta i strefa czasowa z formularza, gotowy koszyk, zamówienia i konta klientów. Bez kreatora konfiguracji.',
+    image: { source: require('@/assets/images/features/store.jpg'), aspectRatio: 1264 / 846 },
   },
   {
     icon: 'category',
@@ -61,6 +61,7 @@ export const Features: Feature[] = [
     icon: 'admin',
     title: 'Pełny panel WooCommerce',
     text: 'Produkty, zamówienia, płatności i wysyłka w panelu, którego używają miliony sklepów.',
+    image: { source: require('@/assets/images/features/admin.jpg'), aspectRatio: 1385 / 880, focus: 'right' },
   },
   {
     icon: 'shield',
@@ -70,11 +71,30 @@ export const Features: Feature[] = [
   },
 ];
 
+// Previews are screenshots of shops set up by the app, so they show what a new shop really looks like.
 export const Themes = [
-  { name: 'Storefront', text: 'Klasyczny, czytelny, z wyszukiwarką w nagłówku.', colors: ['#333333', '#96588A', '#F8F8F8'] },
-  { name: 'Astra', text: 'Lekki i szybki, z wyraźnymi przyciskami.', colors: ['#0170B9', '#1E293B', '#F1F5F9'] },
-  { name: 'Kadence', text: 'Nowoczesny, z kartami produktów i dużymi nagłówkami.', colors: ['#2B6CB0', '#1A202C', '#EDF2F7'] },
+  {
+    name: 'Storefront',
+    text: 'Motyw od twórców WooCommerce. Klasyczny i czytelny: wyszukiwarka i koszyk w nagłówku, kategorie z boku.',
+    colors: ['#333333', '#96588A', '#F8F8F8'],
+    preview: require('@/assets/images/themes/storefront.jpg'),
+  },
+  {
+    name: 'Astra',
+    text: 'Lekki i szybki. Pod każdym produktem wyraźny przycisk „Dodaj do koszyka”, wyszukiwarka nad listą kategorii.',
+    colors: ['#0170B9', '#1E293B', '#F1F5F9'],
+    preview: require('@/assets/images/themes/astra.jpg'),
+  },
+  {
+    name: 'Kadence',
+    text: 'Nowoczesny, z kartami produktów i banerem nad listą. Klienci przełączają widok między siatką a listą.',
+    colors: ['#2B6CB0', '#1A202C', '#EDF2F7'],
+    preview: require('@/assets/images/themes/kadence.jpg'),
+  },
 ];
+
+/** Width divided by height of the theme preview screenshots. */
+export const ThemePreviewAspectRatio = 1200 / 750;
 
 export const Faq = [
   {

@@ -19,7 +19,7 @@ export function ShopSign({ shop }: { shop: Shop }) {
         accessibilityRole="link"
         accessibilityLabel={`${shop.name}, ${shop.status_display}`}
         style={StyleSheet.flatten([styles.sign, { backgroundColor: theme.surface, borderColor: theme.border }])}>
-        <Awning stripes={12} height={12} altColor={theme.primary} />
+        <Awning tone="card" />
         <View style={styles.body}>
           <View style={styles.text}>
             <ThemedText type="subtitle" numberOfLines={1}>

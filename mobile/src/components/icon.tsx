@@ -29,6 +29,7 @@ const ICONS = {
   pause: ['pause.fill', 'pause'],
   play: ['play.fill', 'play_arrow'],
   chevronDown: ['chevron.down', 'expand_more'],
+  arrowUp: ['arrow.up', 'arrow_upward'],
   logout: ['rectangle.portrait.and.arrow.right', 'logout'],
 } as const;
 

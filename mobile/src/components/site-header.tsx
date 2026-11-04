@@ -19,7 +19,7 @@ export function SiteHeader() {
 
   return (
     <View>
-      <Awning stripes={compact ? 14 : 32} />
+      <Awning />
       <View style={styles.bar}>
         <Link href="/" asChild>
           <Pressable accessibilityRole="link">

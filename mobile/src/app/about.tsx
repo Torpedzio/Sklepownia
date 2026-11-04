@@ -1,6 +1,7 @@
 import { Link } from 'expo-router';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 
+import { CtaBand } from '@/components/cta-band';
 import { FaqList } from '@/components/faq-list';
 import { FeatureList } from '@/components/feature-list';
 import { Page } from '@/components/page';
@@ -21,13 +22,30 @@ export default function AboutScreen() {
   const web = Platform.OS === 'web';
 
   return (
-    <Page top={web ? <SiteHeader /> : undefined} bottom={web ? <SiteFooter /> : undefined} contentContainerStyle={styles.page}>
+    <Page
+      top={web ? <SiteHeader /> : undefined}
+      bottom={
+        <>
+          <CtaBand title="Nie znalazłeś odpowiedzi?">
+            <Link href="/contact" asChild>
+              <Button title="Napisz do nas" variant={user ? 'accent' : 'secondary'} size="large" icon="mail" />
+            </Link>
+            {user ? null : (
+              <Link href="/sign-up" asChild>
+                <Button title="Załóż konto" variant="accent" size="large" />
+              </Link>
+            )}
+          </CtaBand>
+          {web ? <SiteFooter /> : null}
+        </>
+      }
+      contentContainerStyle={styles.page}>
       <View style={styles.intro}>
         <ThemedText type="title">Jak to działa</ThemedText>
         <ThemedText type="lead" themeColor="textSecondary">
           {Brand.name} zakłada sklepy internetowe dla osób, które chcą sprzedawać, a nie konfigurować serwery.
-          Wypełniasz krótki formularz w aplikacji, a my stawiamy sklep na WordPressie z WooCommerce:
-          gotowy do przyjmowania zamówień, po polsku, z kategoriami dopasowanymi do Twojej branży.
+          Wypełniasz krótki formularz w aplikacji, a my stawiamy sklep na WordPressie z WooCommerce: gotowy do
+          przyjmowania zamówień, w wybranym języku i walucie, z kategoriami dopasowanymi do Twojej branży.
         </ThemedText>
       </View>
 
@@ -35,13 +53,13 @@ export default function AboutScreen() {
         <View style={[styles.splitText, wide && styles.flex]}>
           <ThemedText type="subtitle">Co dzieje się po kliknięciu „Załóż sklep”</ThemedText>
           <ThemedText themeColor="textSecondary">
-            Twój sklep dostaje własną bazę danych i własne środowisko. Instalujemy WordPressa i WooCommerce,
-            ustawiamy język, walutę i strefę czasową, włączamy wybrany motyw, tworzymy kategorie i pasek
-            z wyszukiwarką oraz filtrami.
+            Twój sklep dostaje własną bazę danych i własne środowisko. Instalujemy WordPressa i WooCommerce, ustawiamy
+            język, walutę i strefę czasową, włączamy wybrany motyw, tworzymy kategorie i pasek z wyszukiwarką oraz
+            filtrami.
           </ThemedText>
           <ThemedText themeColor="textSecondary">
-            Na końcu sprawdzamy, czy sklep odpowiada. Każdy krok widzisz w aplikacji na bieżąco. Jeśli któryś
-            się nie uda, przycisk „Spróbuj ponownie” ruszy dokładnie od tego miejsca.
+            Na końcu sprawdzamy, czy sklep odpowiada. Każdy krok widzisz w aplikacji na bieżąco. Jeśli któryś się nie
+            uda, przycisk „Spróbuj ponownie” ruszy dokładnie od tego miejsca.
           </ThemedText>
         </View>
         <View style={[styles.receipt, wide && styles.receiptWide]}>
@@ -61,20 +79,6 @@ export default function AboutScreen() {
       <View style={styles.block}>
         <ThemedText type="subtitle">Pytania i odpowiedzi</ThemedText>
         <FaqList items={Faq} />
-      </View>
-
-      <View style={styles.cta}>
-        <ThemedText type="heading">Nie znalazłeś odpowiedzi?</ThemedText>
-        <View style={styles.actions}>
-          <Link href="/contact" asChild>
-            <Button title="Napisz do nas" variant="secondary" icon="mail" />
-          </Link>
-          {user ? null : (
-            <Link href="/sign-up" asChild>
-              <Button title="Załóż konto" />
-            </Link>
-          )}
-        </View>
       </View>
     </Page>
   );
@@ -110,14 +114,6 @@ const styles = StyleSheet.create({
     width: 360,
   },
   block: {
-    gap: Spacing.three,
-  },
-  cta: {
-    gap: Spacing.three,
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: Spacing.three,
   },
 });

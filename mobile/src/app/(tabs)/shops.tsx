@@ -39,8 +39,13 @@ export default function DashboardScreen() {
           </Link>
         )}
         <View style={styles.header}>
-          <View style={styles.flex}>
-            <ThemedText type="title">{user?.first_name ? `Dzień dobry, ${user.first_name}` : 'Twoje sklepy'}</ThemedText>
+          <View style={styles.headerText}>
+            {user?.first_name ? (
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                Dzień dobry, {user.first_name}
+              </ThemedText>
+            ) : null}
+            <ThemedText type="title">Twoje sklepy</ThemedText>
             {shops?.length ? (
               <ThemedText themeColor="textSecondary">
                 {shops.length} {plural(shops.length, ['sklep', 'sklepy', 'sklepów'])}, w tym {active}{' '}
@@ -58,7 +63,7 @@ export default function DashboardScreen() {
         {shops && shops.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={styles.emptyFront}>
-              <Awning stripes={10} height={22} />
+              <Awning tone="card" />
               <View style={[styles.emptyDoor, { backgroundColor: theme.primaryMuted }]}>
                 <Icon name="store" size={36} color="primary" />
               </View>
@@ -100,6 +105,11 @@ const styles = StyleSheet.create({
   },
   homeLink: {
     alignSelf: 'flex-start',
+  },
+  // The text takes the row while there is room; on narrow screens the button drops below it.
+  headerText: {
+    flexGrow: 1,
+    flexBasis: 280,
   },
   header: {
     zIndex: 1,

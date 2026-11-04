@@ -24,7 +24,7 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
     <View style={[styles.flex, styles.row, { backgroundColor: theme.background }]}>
       {wide ? (
         <View style={[styles.panel, { backgroundColor: theme.primary }]}>
-          <Awning stripes={16} />
+          <Awning tone="green" />
           <View style={styles.panelContent}>
             <Link href="/" asChild>
               <Pressable accessibilityRole="link">
@@ -46,7 +46,7 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
       ) : null}
 
       <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
-        {wide ? null : <Awning stripes={14} />}
+        {wide ? null : <Awning />}
         <KeyboardArea>
           <ScrollView
             contentContainerStyle={styles.scroll}

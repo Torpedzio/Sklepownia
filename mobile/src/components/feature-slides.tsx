@@ -1,14 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import {
-  Image,
-  PanResponder,
-  Platform,
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-  type LayoutChangeEvent,
-} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Image, PanResponder, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   FadeInLeft,
   FadeInRight,
@@ -17,33 +9,145 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Awning } from '@/components/awning';
+import { Awning, AWNING_HEIGHT } from '@/components/awning';
 import { Icon, type IconName } from '@/components/icon';
+import { usePageScroll, type PageScroll } from '@/components/page';
+import { PinnedSequence, SectionHeader, SwapLayer } from '@/components/pinned-sequence';
 import { ThemedText } from '@/components/themed-text';
 import type { Feature } from '@/constants/content';
 import { Radius, Spacing, WideBreakpoint } from '@/constants/theme';
+import { useFullBleed } from '@/hooks/use-full-bleed';
 import { useTheme } from '@/hooks/use-theme';
 
 const AUTOPLAY_MS = 7000;
 const SWIPE_DISTANCE = 50;
-const AWNING_HEIGHT = 22;
 // On narrow screens the card sits under the picture instead of on it, overlapping by this much.
 const NARROW_PICTURE_HEIGHT = 340;
 const CARD_OVERLAP = 48;
+// Used until the narrow slides have been measured.
+const NARROW_CARD_ESTIMATE = 300;
+// Share of the width over which a photo fades into the page at each side.
+const SIDE_FADE_WIDE = 0.2;
+const SIDE_FADE_NARROW = 0.12;
 
 /**
- * Features as a full-width shop window: one slide per feature under the awning, with a photo
- * or a drawn backdrop and a card describing it. Advances on its own until hovered or paused.
+ * Features as a full-width shop window under the awning: one slide per feature, with a photo or a drawn
+ * backdrop and a card describing it. While the page scrolls through the section, its header and the window
+ * stay pinned and a short scroll swaps to the next slide (PinnedSequence). With reduced motion, or outside
+ * a Page, it is a slideshow with arrows and dots instead.
  */
-export function FeatureSlides({ features }: { features: Feature[] }) {
+export function FeatureSlides({ features, title }: { features: Feature[]; title: string }) {
+  const reduceMotion = useReducedMotion();
+  const page = usePageScroll();
+  const header = <SectionHeader title={title} />;
+  if (page && !reduceMotion) return <PinnedSlides header={header} features={features} page={page} />;
+  return (
+    <View style={styles.section}>
+      {header}
+      <SlideShow features={features} />
+    </View>
+  );
+}
+
+function PinnedSlides({ header, features, page }: { header: ReactNode; features: Feature[]; page: PageScroll }) {
   const theme = useTheme();
-  const { width: windowWidth, height } = useWindowDimensions();
-  const column = useRef<ComponentRef<typeof View>>(null);
-  // The slides break out of the centered page column to the page edges. On the web the page is
-  // narrower than the window by its scrollbar, so the column's position is measured there.
-  const [columnBox, setColumnBox] = useState<{ left: number; width: number }>();
-  const inset = columnBox?.left ?? Spacing.four;
-  const width = columnBox ? columnBox.width + inset * 2 : windowWidth;
+  const { columnRef, onColumnLayout, inset, width } = useFullBleed();
+  const wide = width >= WideBreakpoint;
+  const [narrowHeight, setNarrowHeight] = useState(0);
+  const tone = drawnTones(features, theme);
+
+  return (
+    <View ref={columnRef} onLayout={onColumnLayout}>
+      <PinnedSequence
+        header={header}
+        count={features.length}
+        page={page}
+        stageHeight={(room) =>
+          wide
+            ? Math.round(Math.min(Math.max(room, 420), 760))
+            : narrowHeight || NARROW_PICTURE_HEIGHT - CARD_OVERLAP + NARROW_CARD_ESTIMATE
+        }>
+        {(active, height) => (
+          <View style={[styles.stage, { width, height, marginLeft: -inset }]}>
+            {features.map((feature, index) => (
+              <SwapLayer key={feature.title} index={index} active={active}>
+                <View
+                  style={wide ? StyleSheet.absoluteFill : undefined}
+                  onLayout={
+                    wide
+                      ? undefined
+                      : (event) => {
+                          const measured = Math.ceil(event.nativeEvent.layout.height);
+                          setNarrowHeight((current) => Math.max(current, measured));
+                        }
+                  }>
+                  <View style={wide ? StyleSheet.absoluteFill : { height: NARROW_PICTURE_HEIGHT }}>
+                    <Backdrop
+                      feature={feature}
+                      active
+                      tone={tone(index)}
+                      wide={wide}
+                      width={width}
+                      height={wide ? height : NARROW_PICTURE_HEIGHT}
+                      inset={inset}
+                    />
+                  </View>
+                  <View
+                    style={[
+                      styles.card,
+                      wide ? [styles.cardWide, { left: inset }] : { marginHorizontal: inset, marginTop: -CARD_OVERLAP },
+                      { backgroundColor: theme.surface, borderColor: theme.border },
+                    ]}>
+                    <SlideText feature={feature} index={index} count={features.length} wide={wide} />
+                  </View>
+                </View>
+              </SwapLayer>
+            ))}
+            {/* The awning stays put while the slides change under it. */}
+            <View style={styles.awning}>
+              <Awning />
+            </View>
+          </View>
+        )}
+      </PinnedSequence>
+    </View>
+  );
+}
+
+/** Drawn slides take turns through these backgrounds; photo slides get none. */
+function drawnTones(features: Feature[], theme: ReturnType<typeof useTheme>) {
+  const tones = [theme.primary, '#14213D', theme.primaryMuted];
+  return (index: number) =>
+    features[index].image
+      ? undefined
+      : tones[features.slice(0, index).filter((item) => !item.image).length % tones.length];
+}
+
+function SlideText({ feature, index, count, wide }: { feature: Feature; index: number; count: number; wide: boolean }) {
+  const theme = useTheme();
+  return (
+    <>
+      <View style={styles.cardHead}>
+        <View style={[styles.cardIcon, { backgroundColor: theme.primaryMuted }]}>
+          <Icon name={feature.icon} size={20} color="primary" />
+        </View>
+        <ThemedText type="small" themeColor="textSecondary">
+          {index + 1} z {count}
+        </ThemedText>
+      </View>
+      <ThemedText type={wide ? 'title' : 'subtitle'}>{feature.title}</ThemedText>
+      <ThemedText type={wide ? 'lead' : 'default'} themeColor="textSecondary">
+        {feature.text}
+      </ThemedText>
+    </>
+  );
+}
+
+/** The slideshow used with reduced motion: advances on its own until hovered or paused, plus arrows and dots. */
+function SlideShow({ features }: { features: Feature[] }) {
+  const theme = useTheme();
+  const { height } = useWindowDimensions();
+  const { columnRef, onColumnLayout, inset, width } = useFullBleed();
   const wide = width >= WideBreakpoint;
   const reduceMotion = useReducedMotion();
   const [index, setIndex] = useState(0);
@@ -62,15 +166,6 @@ export function FeatureSlides({ features }: { features: Feature[] }) {
     }, AUTOPLAY_MS);
     return () => clearTimeout(timer);
   }, [index, playing, count]);
-
-  function measureColumn(event: LayoutChangeEvent) {
-    const columnWidth = event.nativeEvent.layout.width;
-    if (Platform.OS === 'web') {
-      column.current?.measureInWindow((left) => setColumnBox({ left, width: columnWidth }));
-    } else {
-      setColumnBox({ left: (windowWidth - columnWidth) / 2, width: columnWidth });
-    }
-  }
 
   function go(to: number) {
     setDirection(to >= index ? 1 : -1);
@@ -92,13 +187,10 @@ export function FeatureSlides({ features }: { features: Feature[] }) {
   );
 
   const pictureHeight = wide ? Math.round(Math.min(Math.max(height * 0.72, 500), 680)) : NARROW_PICTURE_HEIGHT;
-  // Drawn slides take turns through these backgrounds.
-  const drawnTones = [theme.primary, '#14213D', theme.primaryMuted];
-  const drawnTone = (i: number) =>
-    drawnTones[features.slice(0, i).filter((item) => !item.image).length % drawnTones.length];
+  const tone = drawnTones(features, theme);
 
   return (
-    <View ref={column} onLayout={measureColumn}>
+    <View ref={columnRef} onLayout={onColumnLayout}>
       <Pressable
         accessible={false}
         focusable={false}
@@ -112,7 +204,7 @@ export function FeatureSlides({ features }: { features: Feature[] }) {
               key={item.title}
               feature={item}
               active={i === index}
-              tone={item.image ? undefined : drawnTone(i)}
+              tone={tone(i)}
               wide={wide}
               width={width}
               height={pictureHeight}
@@ -120,7 +212,7 @@ export function FeatureSlides({ features }: { features: Feature[] }) {
             />
           ))}
           <View style={styles.awning}>
-            <Awning stripes={Math.max(12, Math.round(width / 40))} height={AWNING_HEIGHT} />
+            <Awning />
           </View>
         </View>
 
@@ -135,18 +227,7 @@ export function FeatureSlides({ features }: { features: Feature[] }) {
             entering={(direction === 1 ? FadeInRight : FadeInLeft).duration(260)}
             style={styles.cardText}
             accessibilityLiveRegion={playing ? 'none' : 'polite'}>
-            <View style={styles.cardHead}>
-              <View style={[styles.cardIcon, { backgroundColor: theme.primaryMuted }]}>
-                <Icon name={feature.icon} size={20} color="primary" />
-              </View>
-              <ThemedText type="small" themeColor="textSecondary">
-                {index + 1} z {count}
-              </ThemedText>
-            </View>
-            <ThemedText type={wide ? 'title' : 'subtitle'}>{feature.title}</ThemedText>
-            <ThemedText type={wide ? 'lead' : 'default'} themeColor="textSecondary">
-              {feature.text}
-            </ThemedText>
+            <SlideText feature={feature} index={index} count={count} wide={wide} />
           </Animated.View>
 
           <View style={styles.controls}>
@@ -210,6 +291,8 @@ function Backdrop({ feature, active, tone, wide, width, height, inset }: Backdro
     const photoWidth = Math.max(width, height * aspectRatio);
     const photoHeight = photoWidth / aspectRatio;
     const spare = width - photoWidth;
+    const sideFade = Math.round(width * (wide ? SIDE_FADE_WIDE : SIDE_FADE_NARROW));
+    const clear = `${theme.background}00`;
     return (
       <Animated.View style={[StyleSheet.absoluteFill, fade]} pointerEvents="none">
         <Image
@@ -222,6 +305,19 @@ function Backdrop({ feature, active, tone, wide, width, height, inset }: Backdro
             width: photoWidth,
             height: photoHeight,
           }}
+        />
+        {/* Both sides fade into the page, so the photo blends in instead of ending at a hard edge. */}
+        <LinearGradient
+          colors={[theme.background, clear]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.sideFade, { left: 0, width: sideFade }]}
+        />
+        <LinearGradient
+          colors={[clear, theme.background]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.sideFade, { right: 0, width: sideFade }]}
         />
       </Animated.View>
     );
@@ -272,6 +368,9 @@ function RoundButton({ icon, label, onPress }: { icon: IconName; label: string; 
 }
 
 const styles = StyleSheet.create({
+  section: {
+    gap: Spacing.four,
+  },
   stage: {
     overflow: 'hidden',
   },
@@ -280,6 +379,11 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
+  },
+  sideFade: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
   },
   disc: {
     position: 'absolute',

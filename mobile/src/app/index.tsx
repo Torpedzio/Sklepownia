@@ -2,7 +2,7 @@ import { Link } from 'expo-router';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Awning } from '@/components/awning';
+import { CtaBand } from '@/components/cta-band';
 import { FaqList } from '@/components/faq-list';
 import { FeatureSlides } from '@/components/feature-slides';
 import { NewShopButton } from '@/components/new-shop-button';
@@ -10,11 +10,12 @@ import { Page } from '@/components/page';
 import { Receipt } from '@/components/receipt';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
+import { ThemeShowcase } from '@/components/theme-showcase';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { Faq, Features, SetupSteps, Themes } from '@/constants/content';
+import { Faq, Features, SetupSteps } from '@/constants/content';
 import { useAuth } from '@/context/auth';
-import { Radius, Spacing, WideBreakpoint } from '@/constants/theme';
+import { Spacing, WideBreakpoint } from '@/constants/theme';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
 import type { Shop } from '@/lib/types';
@@ -36,15 +37,23 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor: theme.background }]} edges={['top']}>
-      <Page top={<SiteHeader />} bottom={<><ClosingBand shopCount={shops?.length} /><SiteFooter /></>} contentContainerStyle={styles.page}>
+      <Page
+        top={<SiteHeader />}
+        bottom={
+          <>
+            <ClosingBand shopCount={shops?.length} />
+            <SiteFooter />
+          </>
+        }
+        contentContainerStyle={styles.page}>
         <View style={[styles.hero, wide && styles.heroWide]}>
           <View style={[styles.heroText, wide && styles.flex]}>
             <ThemedText type="display" style={!wide && styles.displayCompact}>
               Twój sklep internetowy, otwarty w dwie minuty.
             </ThemedText>
             <ThemedText type="lead" themeColor="textSecondary" style={styles.lead}>
-              Podajesz nazwę, branżę i wygląd. My stawiamy sklep WooCommerce z kategoriami, wyszukiwarką
-              i panelem administracyjnym. Ty dodajesz produkty.
+              Podajesz nazwę, branżę i wygląd. My stawiamy sklep WooCommerce z kategoriami, wyszukiwarką i panelem
+              administracyjnym. Ty dodajesz produkty.
             </ThemedText>
             <View style={styles.actions}>
               {user ? (
@@ -84,9 +93,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <Section title="Co dostajesz w każdym sklepie">
-          <FeatureSlides features={HOME_SLIDES} />
-        </Section>
+        <FeatureSlides features={HOME_SLIDES} title="Co dostajesz w każdym sklepie" />
 
         <Section title="Trzy kroki do otwarcia">
           <View style={[styles.steps, wide && styles.stepsWide]}>
@@ -102,23 +109,10 @@ export default function HomeScreen() {
           </View>
         </Section>
 
-        <Section title="Wybierz wygląd" text="Każdy motyw ma lewy pasek z wyszukiwarką, kategoriami i filtrem ceny.">
-          <View style={styles.themes}>
-            {Themes.map((item) => (
-              <View key={item.name} style={[styles.theme, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={styles.swatches}>
-                  {item.colors.map((color) => (
-                    <View key={color} style={[styles.swatch, { backgroundColor: color }]} />
-                  ))}
-                </View>
-                <ThemedText type="heading">{item.name}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {item.text}
-                </ThemedText>
-              </View>
-            ))}
-          </View>
-        </Section>
+        <ThemeShowcase
+          title="Wybierz wygląd"
+          text="Każdy motyw ma lewy pasek z wyszukiwarką, kategoriami i filtrem ceny."
+        />
 
         <Section title="Częste pytania">
           <FaqList items={Faq.slice(0, 4)} />
@@ -136,7 +130,11 @@ function Section({ title, text, children }: { title: string; text?: string; chil
     <View style={styles.section}>
       <View style={styles.sectionHead}>
         <ThemedText type="title">{title}</ThemedText>
-        {text ? <ThemedText type="lead" themeColor="textSecondary">{text}</ThemedText> : null}
+        {text ? (
+          <ThemedText type="lead" themeColor="textSecondary">
+            {text}
+          </ThemedText>
+        ) : null}
       </View>
       {children}
     </View>
@@ -145,29 +143,22 @@ function Section({ title, text, children }: { title: string; text?: string; chil
 
 function ClosingBand({ shopCount }: { shopCount: number | undefined }) {
   const { user } = useAuth();
-  const theme = useTheme();
   return (
-    <View style={{ backgroundColor: theme.primary }}>
-      <Awning stripes={32} height={14} />
-      <View style={styles.band}>
-        <ThemedText type="title" style={{ color: theme.onPrimary }}>
-          Zacznij od nazwy sklepu. Resztą zajmiemy się my.
-        </ThemedText>
-        {user ? (
-          <NewShopButton
-            title="Załóż nowy sklep"
-            variant="accent"
-            size="large"
-            shopCount={shopCount}
-            tooltipSide="above"
-          />
-        ) : (
-          <Link href="/sign-up" asChild>
-            <Button title="Załóż konto" variant="accent" size="large" />
-          </Link>
-        )}
-      </View>
-    </View>
+    <CtaBand title="Zacznij od nazwy sklepu. Resztą zajmiemy się my.">
+      {user ? (
+        <NewShopButton
+          title="Załóż nowy sklep"
+          variant="accent"
+          size="large"
+          shopCount={shopCount}
+          tooltipSide="above"
+        />
+      ) : (
+        <Link href="/sign-up" asChild>
+          <Button title="Załóż konto" variant="accent" size="large" />
+        </Link>
+      )}
+    </CtaBand>
   );
 }
 
@@ -229,37 +220,5 @@ const styles = StyleSheet.create({
   step: {
     flex: 1,
     gap: Spacing.two,
-  },
-  themes: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.three,
-  },
-  theme: {
-    flexBasis: 240,
-    flexGrow: 1,
-    gap: Spacing.two,
-    padding: Spacing.four,
-    borderRadius: Radius.large,
-    borderWidth: 1,
-  },
-  swatches: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-    marginBottom: Spacing.two,
-  },
-  swatch: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.small,
-  },
-  band: {
-    width: '100%',
-    maxWidth: 1080,
-    alignSelf: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
-    gap: Spacing.four,
-    alignItems: 'flex-start',
   },
 });

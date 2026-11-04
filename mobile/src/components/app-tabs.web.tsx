@@ -37,7 +37,7 @@ function NavBar({ children, ...props }: TabListProps) {
 
   return (
     <View {...props} style={{ backgroundColor: theme.background }}>
-      <Awning stripes={width < 640 ? 14 : 32} height={12} />
+      <Awning />
       <View style={[styles.bar, { borderBottomColor: theme.border }]}>
         <Link href="/" asChild>
           <Pressable accessibilityRole="link" accessibilityLabel="Strona główna">
