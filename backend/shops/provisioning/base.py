@@ -11,18 +11,19 @@ class BaseProvisioner:
     Implementations define a `step_<key>(shop)` method for each step.
     """
 
+    # Labels are shown to shop owners, so they say what the shop gets, not how it's done.
     STEPS = [
-        ("allocate_server", "Przydzielanie serwera"),
-        ("create_database", "Tworzenie bazy danych"),
-        ("start_container", "Uruchamianie WordPressa"),
-        ("install_wordpress", "Instalacja WordPressa"),
-        ("configure_locale", "Ustawienia języka i regionu"),
-        ("configure_woocommerce", "Konfiguracja WooCommerce"),
-        ("install_theme", "Instalacja motywu"),
-        ("create_categories", "Tworzenie kategorii"),
-        ("configure_navigation", "Wyszukiwarka, kategorie i filtry"),
-        ("generate_api_keys", "Generowanie kluczy API"),
-        ("health_check", "Sprawdzanie działania sklepu"),
+        ("allocate_server", "Miejsce na serwerze"),
+        ("create_database", "Baza produktów i zamówień"),
+        ("start_container", "Uruchomienie sklepu"),
+        ("install_wordpress", "Strona i konto administratora"),
+        ("configure_locale", "Język i strefa czasowa"),
+        ("configure_woocommerce", "Waluta, koszyk i zamówienia"),
+        ("install_theme", "Wygląd sklepu"),
+        ("create_categories", "Kategorie produktów"),
+        ("configure_navigation", "Wyszukiwarka i filtry"),
+        ("generate_api_keys", "Połączenie z aplikacją"),
+        ("health_check", "Końcowe sprawdzenie"),
     ]
 
     def run_step(self, key, shop):

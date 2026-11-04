@@ -10,6 +10,7 @@ from config.celery import app as celery_app
 def _test_settings(settings):
     celery_app.conf.task_always_eager = True
     settings.SHOP_PROVISIONER = "shops.provisioning.fake.FakeProvisioner"
+    settings.SHOPS_BASE_DOMAIN = "localhost"
     settings.SHOPS_URL_SCHEME = "https"
     settings.SHOPS_HTTP_PORT = 443
     settings.FAKE_PROVISIONER_STEP_DELAY = 0
