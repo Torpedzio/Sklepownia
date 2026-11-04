@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'accounts',
     'shops',
     'support',
+    'handbook',
 ]
 
 MIDDLEWARE = [
@@ -202,6 +203,9 @@ CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 
+
+# Project documentation shown under /docs/: the repository root as mounted into the container.
+HANDBOOK_ROOT = os.environ.get("HANDBOOK_ROOT", "/project")
 
 # Shops
 

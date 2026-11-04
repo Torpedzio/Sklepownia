@@ -1,0 +1,155 @@
+# Backend
+
+Django 5.2 + Django REST Framework, Celery z Redisem, PostgreSQL. Kod w [backend/](../backend/).
+
+## Struktura
+
+```
+backend/
+├── config/            ustawienia, główne URL-e, konfiguracja Celery
+├── accounts/          użytkownicy, rejestracja, logowanie JWT, potwierdzanie e-maila
+├── shops/             sklepy: modele, API, zakładanie (provisioning), polecenia
+│   ├── provisioning/  base.py (kroki), runner.py (wykonanie), fake.py, docker_provisioner.py
+│   ├── management/    polecenie update_shop_addresses
+│   ├── categories.py  nazwy kategorii według branży
+│   ├── choices.py     branże, języki, waluty, kraje, zakres liczby kategorii
+│   ├── fields.py      EncryptedTextField (szyfrowanie Fernet)
+│   ├── services.py    create_shop, retry_shop, delete_shop
+│   └── slugs.py       zasady adresów sklepów i lista zarezerwowanych
+├── support/           formularz kontaktowy
+├── handbook/          dokumentacja projektu (pliki Markdown) jako strony pod /docs/
+└── conftest.py        wspólne fixtures testów
+```
+
+Zasada podziału: widoki (`views.py`) tylko sprawdzają dane i wołają funkcje z `services.py`.
+Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
+
+## Aplikacja `accounts`
+
+- **`User`** loguje się e-mailem (bez nazwy użytkownika). Pole `is_email_verified` mówi, czy e-mail jest potwierdzony.
+- **`EmailVerificationCode`** to jeden aktywny kod na użytkownika, przechowywany jako hash.
+  - Kod jest ważny 15 minut (`EMAIL_VERIFICATION_CODE_TTL`) i ma limit 5 prób (`EMAIL_VERIFICATION_MAX_ATTEMPTS`).
+  - Nowy kod można wysłać najwcześniej po 60 s (`EMAIL_VERIFICATION_RESEND_COOLDOWN`).
+- **Logowanie:** JWT (simplejwt). Token dostępu jest ważny 30 minut, token odświeżania 30 dni.
+  - Przy każdym odświeżeniu backend wydaje nowy token odświeżania, a stary trafia na czarną listę (`token_blacklist`).
+  - Wylogowanie dopisuje token odświeżania do czarnej listy.
+- **Potwierdzony e-mail** jest wymagany do zakładania i ponawiania sklepów (`IsEmailVerified`).
+- **`GET /api/auth/me/`** zwraca dane konta razem z `shop_limit`, żeby aplikacja mogła zablokować przycisk nowego sklepu.
+
+## Aplikacja `shops`
+
+### Modele
+
+| Model | Opis |
+|---|---|
+| `Server` | Serwer, na którym działają kontenery sklepów, z limitem `max_shops`. Migracja tworzy serwer `local`. |
+| `ShopTemplate` | Motyw do wyboru w formularzu (`wp_theme` to nazwa motywu WordPressa). Migracja dodaje Storefront, Astrę i Kadence. |
+| `Shop` | Sklep: właściciel, nazwa, `slug` (część adresu), status z maszyną stanów, serwer. `url` i `admin_url` są liczone z ustawień. |
+| `ShopConfig` | Wybory z formularza: branża, motyw, liczba kategorii, język, waluta, kraj, e-mail, produkty przykładowe. |
+| `ShopCredentials` | Hasła sklepu: bazy, administratora WordPressa, hasło API. Wszystkie zaszyfrowane. |
+| `ProvisioningJob` | Jedna próba założenia sklepu (status, błąd, czasy). Ponowienie tworzy nowe zadanie. |
+| `ProvisioningStep` | Krok zadania: klucz, etykieta dla użytkownika, status, błąd, czasy. |
+
+`slug` musi być unikalny tylko wśród sklepów, które nie są usunięte (ograniczenie `unique_slug_for_live_shops`).
+Zasady adresu: 3–30 znaków, małe litery, cyfry i pojedyncze myślniki, nie na początku ani na końcu,
+bez adresów zarezerwowanych dla platformy ([slugs.py](../backend/shops/slugs.py)).
+
+### Zakładanie sklepu
+
+Przebieg i stany: [architektura.md](architektura.md#przebieg-zakładania-sklepu).
+
+- `BaseProvisioner.STEPS` ([base.py](../backend/shops/provisioning/base.py)) to lista par `(klucz, etykieta)`.
+  Etykiety widzi właściciel sklepu na paragonie, więc mówią, co sklep dostaje, a nie jak to jest robione.
+- Provisioner implementuje metodę `step_<klucz>(shop)` dla każdego kroku. **Każdy krok musi być idempotentny**:
+  ponowienie uruchamia wszystkie kroki od nowa.
+- `runner.run_job` wykonuje kroki i zapisuje ich stan. Użytkownik widzi treść tylko wyjątków `ProvisioningError`.
+  Pozostałe wyjątki zastępuje ogólny komunikat, a pełny opis ląduje w logach workera.
+- `DockerProvisioner` tworzy kontener `shop-<id>`, wolumen `shop-<id>` i bazę `shop_<id>`.
+  WordPressa konfiguruje przez WP-CLI w kontenerze. Ustawienia zależne od motywu (pasek boczny) są w `THEME_NAVIGATION`.
+
+Jak dodać nowy krok:
+
+1. Dopisz `("klucz", "Etykieta dla użytkownika")` do `BaseProvisioner.STEPS` we właściwym miejscu.
+2. Dodaj `step_klucz(self, shop)` w `DockerProvisioner`. Krok ma działać także przy ponownym uruchomieniu.
+3. Opisz krok w tabeli w [infra/shops/README.md](../infra/shops/README.md#kroki-i-czasy).
+4. Jeśli etykieta ma się pokazać na paragonie na stronie głównej, dopisz ją też do `SetupSteps`
+   w [mobile/src/constants/content.ts](../mobile/src/constants/content.ts).
+
+Istniejące sklepy mają kroki zapisane w bazie. Nowy krok pojawi się u nich dopiero przy ponowieniu.
+Zmianę etykiet istniejących kroków trzeba przenieść migracją danych (przykład: `0005_plain_step_labels`).
+
+### Kategorie
+
+[categories.py](../backend/shops/categories.py) zwraca nazwy kategorii dla branży i liczby kategorii (1–20).
+Pierwsza kategoria zastępuje domyślne „Bez kategorii” WooCommerce. Przy włączonych produktach przykładowych
+powstaje 6 produktów w pierwszych trzech kategoriach.
+
+## Aplikacja `support`
+
+`ContactMessage` zapisuje wiadomości z formularza kontaktowego (imię, e-mail, temat, treść, ewentualny użytkownik).
+Zadanie `notify_about_contact_message` wysyła je na `CONTACT_EMAIL` z adresem nadawcy w `Reply-To`.
+W panelu admina wiadomości można oznaczać jako obsłużone.
+
+## Aplikacja `handbook`
+
+Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
+- Lista stron i ich kolejność w menu: `PAGES` w [pages.py](../backend/handbook/pages.py).
+- Pliki są czytane przy każdym wejściu na stronę z katalogu `HANDBOOK_ROOT`. W `docker-compose.yml` całe repozytorium
+  jest podmontowane do kontenera backendu tylko do odczytu pod `/project`.
+- Odnośniki między dokumentami prowadzą do ich stron, a odnośniki do plików z kodem są pokazywane jako zwykłe ścieżki.
+- Kotwice nagłówków są takie jak na GitHubie, z polskimi znakami.
+- Przy `DJANGO_DEBUG=0` strony czytają tylko administratorzy (`is_staff`); pozostali trafiają na logowanie do panelu.
+
+## Zadania Celery
+
+| Zadanie | Kiedy | Co robi |
+|---|---|---|
+| `accounts.tasks.send_verification_email` | Rejestracja, ponowne wysłanie kodu | Wysyła kod potwierdzający |
+| `shops.tasks.provision_shop` | Założenie i ponowienie sklepu | Wykonuje kroki zadania (`run_job`) |
+| `shops.tasks.teardown_shop` | Usunięcie sklepu | Usuwa kontener, wolumen i bazę |
+| `support.tasks.notify_about_contact_message` | Wysłanie formularza kontaktowego | Przekazuje wiadomość e-mailem |
+
+Zadania są kolejkowane przez `transaction.on_commit`, więc worker nigdy nie widzi niezatwierdzonych danych.
+Worker potwierdza zadanie dopiero po jego wykonaniu (`CELERY_TASK_ACKS_LATE`) i bierze naraz jedno
+(`CELERY_WORKER_PREFETCH_MULTIPLIER = 1`).
+
+## Polecenia
+
+```bash
+docker compose exec backend python manage.py migrate
+docker compose exec backend python manage.py createsuperuser
+docker compose exec worker  python manage.py update_shop_addresses   # po zmianie SHOPS_BASE_DOMAIN
+docker compose exec backend python manage.py spectacular --file schema.yml   # schemat OpenAPI do pliku
+```
+
+`update_shop_addresses` uruchamia się w workerze, bo tylko on ma dostęp do Dockera.
+Dla każdego działającego sklepu odtwarza kontener z nową regułą Traefika i podmienia adres w bazie WordPressa.
+
+## Panel admina
+
+http://localhost:8000/admin/ (konto z `createsuperuser`). Zawiera:
+
+- **Użytkowników:** potwierdzenie e-maila, uprawnienia.
+- **Serwery i szablony:** motywy można wyłączać i ustawiać ich kolejność w formularzu.
+- **Sklepy z konfiguracją:** status jest tylko do odczytu. Zmienia się go przez serwisy, nie przez formularz.
+- **Zadania zakładania:** podgląd kroków i błędów.
+- **Wiadomości kontaktowe.**
+
+## Testy
+
+```bash
+docker compose exec backend pytest
+```
+
+Testy (pytest-django) używają symulowanego provisionera i wykonują zadania Celery od razu (`task_always_eager`).
+Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od lokalnego `.env`
+(np. domena sklepów to zawsze `localhost`).
+
+| Plik | Co sprawdza |
+|---|---|
+| `accounts/tests/test_auth.py` | Rejestracja, logowanie, potwierdzanie e-maila, limity prób, `/me` |
+| `shops/tests/test_shops.py` | Zakładanie, limit sklepów, adresy, ponawianie, usuwanie, dostęp do panelu, opcje formularza, polecenia |
+| `support/tests/test_contact.py` | Formularz kontaktowy i powiadomienie |
+| `handbook/tests/test_handbook.py` | Strony dokumentacji, odnośniki, kotwice, dostęp, kompletność menu |
+
+Zmiany w API sprawdzaj też walidacją schematu: `python manage.py spectacular --validate --fail-on-warn`.

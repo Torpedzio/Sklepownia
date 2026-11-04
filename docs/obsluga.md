@@ -1,0 +1,82 @@
+# Obsługa na co dzień
+
+## Zmiana sieci lub adresu IP
+
+Sklepy otwierane z telefonu mają w adresie IP komputera (`<slug>.192-168-33-10.sslip.io`).
+Po zmianie sieci Wi-Fi albo adresu IP:
+
+```bash
+ip route get 1.1.1.1 | grep -oP 'src \K[\d.]+'          # bieżące IP, np. 10.201.84.26
+# w .env: SHOPS_BASE_DOMAIN=10-201-84-26.sslip.io
+docker compose up -d backend worker                      # wczytanie nowego .env
+docker compose exec worker python manage.py update_shop_addresses
+```
+
+Polecenie wypisuje każdy sklep ze starym i nowym adresem. Sklep bez kontenera
+(np. założony symulatorem) jest pomijany.
+
+W aplikacji: zeskanuj nowy kod QR (pojawia się po ponownym uruchomieniu `npx expo start`)
+albo wpisz w Expo Go `exp://<nowe-IP>:8081`, a potem odśwież listę sklepów.
+
+Bez telefonu można wrócić do `SHOPS_BASE_DOMAIN=localhost` i uruchomić to samo polecenie.
+
+## Po restarcie komputera
+
+Kontenery sklepów, Traefik i baza sklepów mają `restart: unless-stopped` i wstają same.
+Backend aplikacji trzeba uruchomić:
+
+```bash
+docker compose up -d                       # w katalogu głównym
+cd infra/shops && docker compose up -d     # na wszelki wypadek, jeśli serwer sklepów nie wstał
+cd mobile && npx expo start
+```
+
+Objaw niedziałającego serwera sklepów: sklepy nie odpowiadają, a `update_shop_addresses` zgłasza
+„Error establishing a database connection”.
+
+## Logi
+
+```bash
+docker compose logs -f backend      # zapytania do API
+docker compose logs -f worker       # zakładanie sklepów, e-maile (lokalnie z kodami potwierdzającymi)
+docker logs -f shop-<id>            # serwer WWW konkretnego sklepu
+docker logs -f shops-proxy          # Traefik
+```
+
+Pełny opis błędu kroku zakładania (z wyjątkiem i poleceniem) jest tylko w logach workera.
+Użytkownik i panel admina widzą komunikat skrócony.
+
+## Typowe problemy
+
+| Objaw | Przyczyna i rozwiązanie |
+|---|---|
+| Telefon nie łączy się z Metro | Inna sieć albo sieć izolująca urządzenia (często gościnna lub firmowa). Test: `http://<IP>:8081/status` w przeglądarce telefonu. W ostateczności `npx expo start --tunnel` (wtedy API i sklepy nie są dostępne z telefonu). |
+| „Otwórz sklep” na telefonie nie działa | Domena sklepów to `localhost` albo stare IP. Patrz [zmiana sieci](#zmiana-sieci-lub-adresu-ip). |
+| Sklep przekierowuje na stary adres | WordPress ma zapisany stary adres. Uruchom `update_shop_addresses`. |
+| Brak kodu potwierdzającego e-mail | Lokalnie e-maile są tylko w logach workera: `docker compose logs worker`. |
+| Zmiana w provisioningu nie działa | Worker nie przeładowuje kodu sam: `docker compose restart worker`. |
+| Zakładanie stoi na „Oczekuje” | Worker nie działa albo nie widzi Redisa: `docker compose ps`, `docker compose logs worker`. |
+| Krok kończy się „Wystąpił nieoczekiwany błąd” | Szczegóły w logach workera. Po naprawie przyczyny użyj „Spróbuj ponownie” w aplikacji. |
+| Aplikacja w przeglądarce pokazuje stary kod | Pamięć podręczna Metro: `npx expo start -c`. |
+| Storefront bez paska bocznego (kategorie, filtry) | Widżety zniknęły z paska; przyczyna nieznana ([ograniczenia](ograniczenia-i-plan.md)). Doraźnie: ponowne uruchomienie kroku `configure_navigation` dla sklepu w powłoce workera. |
+
+## Ręczne operacje na sklepie
+
+WP-CLI w kontenerze sklepu (zawsze jako `www-data`):
+
+```bash
+docker exec -u www-data shop-<id> wp --path=/var/www/html option get home
+docker exec -u www-data shop-<id> wp --path=/var/www/html plugin list
+```
+
+Ponowne wykonanie jednego kroku zakładania (kroki są idempotentne):
+
+```bash
+docker compose exec worker python manage.py shell -c "
+from shops.models import Shop
+from shops.provisioning.docker_provisioner import DockerProvisioner
+DockerProvisioner().step_configure_navigation(Shop.objects.get(slug='nazwa-sklepu'))"
+```
+
+Sklepy założone ręcznie skryptem `infra/shops/provision-shop.sh` nie są widoczne w aplikacji.
+Usuwa się je skryptem `destroy-shop.sh`.

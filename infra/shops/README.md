@@ -6,12 +6,13 @@ Sklepy zakłada backend: worker Celery wykonuje kroki z
 Skrypt `provision-shop.sh` robi to samo ręcznie i przydaje się do eksperymentów.
 
 Sklepy z backendu mają kontener i wolumen `shop-<id>` oraz bazę `shop_<id>`.
-Sklepy ze skryptu nazywają się według sluga, więc obie pule się nie mieszają.
+Sklepy ze skryptu nazywają się według sluga (`shop-<slug>`), więc obie pule się nie mieszają.
+Całość systemu: [docs/architektura.md](../../docs/architektura.md).
 
 ```
-przeglądarka ──▶ Traefik :8080 ──Host: <slug>.localhost──▶ kontener shop-<slug> (WordPress + WooCommerce)
-                                                                   │
-                                                         MariaDB (shops-db), osobna baza i użytkownik na sklep
+przeglądarka ──▶ Traefik :8080 ──Host: <slug>.<SHOPS_BASE_DOMAIN>──▶ kontener shop-<id> (WordPress + WooCommerce)
+                                                                         │
+                                                 MariaDB (shops-db), osobna baza i użytkownik na sklep
 ```
 
 ## Uruchomienie
@@ -62,16 +63,16 @@ Kroki odpowiadają `BaseProvisioner.STEPS` w backendzie. Czasy pochodzą z czyst
 
 | Krok | Co robi | Czas |
 |---|---|---|
-| Tworzenie bazy danych | `CREATE DATABASE/USER` w MariaDB, osobne hasło na sklep | ~0 s |
-| Uruchamianie WordPressa | `docker run` z etykietami Traefika i limitami 512 MB / 1 CPU; czekanie na `wp-config.php` | ~5 s |
-| Instalacja WordPressa | `wp core install`, usunięcie domyślnych wpisów i stron | ~4 s |
-| Ustawienia języka i regionu | pakiet językowy, strefa czasowa z kraju, permalinki `/%postname%/` | ~8 s |
-| Konfiguracja WooCommerce | tłumaczenie → aktywacja → waluta, format cen, jednostki, e-mail; wyłączenie trybu „coming soon” i kreatora; strony sklepu; sklep jako strona główna | ~30 s |
-| Instalacja motywu | aktywacja motywu z obrazu, usunięcie domyślnych widgetów, tłumaczenie | ~5 s |
-| Tworzenie kategorii | kategorie (pierwsza zastępuje domyślne „Bez kategorii”) i opcjonalnie 6 przykładowych produktów | ~25 s |
-| Wyszukiwarka, kategorie i filtry | lewy pasek boczny sklepu: wyszukiwarka, menu kategorii, aktywne filtry, filtr ceny i ocen; ustawienia zależne od motywu | ~15 s |
-| Generowanie kluczy API | Application Password `platform` dla admina | ~3 s |
-| Sprawdzanie działania sklepu | strona główna 200 i `wc/v3/system_status` z hasłem API | ~4 s |
+| Baza produktów i zamówień | `CREATE DATABASE/USER` w MariaDB, osobne hasło na sklep | ~0 s |
+| Uruchomienie sklepu | `docker run` z etykietami Traefika i limitami 512 MB / 1 CPU; czekanie na `wp-config.php` | ~5 s |
+| Strona i konto administratora | `wp core install`, usunięcie domyślnych wpisów i stron | ~4 s |
+| Język i strefa czasowa | pakiet językowy, strefa czasowa z kraju, permalinki `/%postname%/` | ~8 s |
+| Waluta, koszyk i zamówienia | tłumaczenie → aktywacja → waluta, format cen, jednostki, e-mail; wyłączenie trybu „coming soon” i kreatora; strony sklepu; sklep jako strona główna | ~30 s |
+| Wygląd sklepu | aktywacja motywu z obrazu, usunięcie domyślnych widgetów, tłumaczenie | ~5 s |
+| Kategorie produktów | kategorie (pierwsza zastępuje domyślne „Bez kategorii”) i opcjonalnie 6 przykładowych produktów | ~25 s |
+| Wyszukiwarka i filtry | lewy pasek boczny sklepu: wyszukiwarka, menu kategorii, aktywne filtry, filtr ceny i ocen; ustawienia zależne od motywu | ~15 s |
+| Połączenie z aplikacją | Application Password `platform` dla admina | ~3 s |
+| Końcowe sprawdzenie | strona główna 200 i `wc/v3/system_status` z hasłem API | ~4 s |
 | **Razem** | | **~105 s** |
 
 ## Wnioski z automatyzacji
@@ -91,7 +92,8 @@ Kroki odpowiadają `BaseProvisioner.STEPS` w backendzie. Czasy pochodzą z czyst
 - **Czas:** najwięcej kosztuje start WP-CLI przy każdym poleceniu (~1–2 s). Zgrupowanie konfiguracji
   WooCommerce i kategorii w jednym `wp eval-file` powinno skrócić całość do ~30 s.
   Pakiety językowe też można wbudować w obraz.
-- **Nazwy kategorii:** backend będzie musiał je wymyślić na podstawie branży i liczby kategorii.
-  Skrypt przyjmuje gotową listę.
-- **Dostęp do Dockera:** Traefik czyta `docker.sock` (na Fedorze z `label=disable` przez SELinux).
-  Worker backendu będzie potrzebował tego samego, dlatego w etapie 4 trzeba go odseparować.
+- **Nazwy kategorii:** backend dobiera je do branży i liczby kategorii
+  ([categories.py](../../backend/shops/categories.py)). Skrypt przyjmuje gotową listę.
+- **Dostęp do Dockera:** Traefik i worker backendu używają `docker.sock` (na Fedorze z `label=disable` przez SELinux).
+  Dla workera to w praktyce uprawnienia roota; przed produkcją trzeba go odseparować
+  ([docs/ograniczenia-i-plan.md](../../docs/ograniczenia-i-plan.md)).

@@ -24,6 +24,11 @@ services:
     env_file: .env
     volumes:
       - ./backend:/app:Z
+      # Read-only repository for the documentation pages under /docs/ (HANDBOOK_ROOT).
+      - .:/project:ro
+    # SELinux (Fedora) would otherwise need the whole repository relabelled for the mount above.
+    security_opt:
+      - label=disable
     ports:
       - "8000:8000"
     depends_on:

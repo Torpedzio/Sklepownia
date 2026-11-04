@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ current.title }} · Dokumentacja</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Colours follow mobile/src/constants/theme.ts. */
+    :root {
+      --background: #F4F6FA; --surface: #FFFFFF; --surface-muted: #EBEEF4; --text: #14213D;
+      --text-secondary: #5B6478; --border: #D9DEE8; --primary: #0F7B5F; --primary-muted: #E2F1EB;
+      --awning-second: #FFFFFF;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: #0E1526; --surface: #16203A; --surface-muted: #1F2B49; --text: #EEF1F8;
+        --text-secondary: #A3ADC2; --border: #2B3759; --primary: #3CC59A; --primary-muted: #173D35;
+        --awning-second: #F7F7F2;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--background); color: var(--text);
+      font: 16px/1.65 Figtree, system-ui, sans-serif;
+    }
+    /* The brand awning, same as mobile/src/components/awning.tsx: 40×16 stripes, green first. */
+    .awning { display: block; width: 100%; height: 16px; }
+    .awning .first { fill: var(--primary); }
+    .awning .second { fill: var(--awning-second); }
+    .layout { display: flex; gap: 48px; max-width: 1180px; margin: 0 auto; padding: 32px 24px 64px; }
+    nav { flex: 0 0 230px; position: sticky; top: 24px; align-self: flex-start; }
+    nav .brand { font: 700 20px/1.2 "Bricolage Grotesque", sans-serif; margin: 0 0 4px; }
+    nav .subtitle { color: var(--text-secondary); font-size: 14px; margin: 0 0 20px; }
+    nav ul { list-style: none; margin: 0; padding: 0; }
+    nav a {
+      display: block; padding: 7px 12px; border-radius: 8px; color: var(--text);
+      text-decoration: none; font-weight: 600; font-size: 15px;
+    }
+    nav a:hover { background: var(--surface-muted); }
+    nav a[aria-current="page"] { background: var(--primary-muted); color: var(--primary); }
+    nav .api { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 14px; }
+    nav .api a { font-weight: 400; color: var(--text-secondary); }
+    main {
+      flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 40px 48px;
+    }
+    main > :first-child { margin-top: 0; }
+    h1, h2, h3 { font-family: "Bricolage Grotesque", sans-serif; line-height: 1.2; }
+    h1 { font-size: 40px; margin-bottom: 16px; }
+    h2 { font-size: 26px; margin-top: 48px; padding-top: 8px; }
+    h3 { font-size: 20px; margin-top: 32px; }
+    p, li { max-width: 75ch; }
+    a { color: var(--primary); }
+    code, .path {
+      font: 0.88em/1.4 ui-monospace, Menlo, Consolas, monospace;
+      background: var(--surface-muted); border-radius: 5px; padding: 0.1em 0.35em;
+    }
+    pre {
+      background: var(--surface-muted); border-radius: 12px; padding: 16px 20px;
+      overflow-x: auto; line-height: 1.5;
+    }
+    pre code { background: none; padding: 0; font-size: 14px; }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 15px; display: block; overflow-x: auto; }
+    th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+    th { font-weight: 700; background: var(--surface-muted); }
+    blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--primary); color: var(--text-secondary); }
+    @media (max-width: 860px) {
+      .layout { flex-direction: column; gap: 20px; padding: 20px 16px 48px; }
+      nav { position: static; flex-basis: auto; }
+      nav ul { display: flex; flex-wrap: wrap; gap: 4px; }
+      nav .api { margin-top: 12px; }
+      main { padding: 24px 20px; }
+      h1 { font-size: 30px; }
+      h2 { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <svg class="awning" aria-hidden="true">
+    <defs>
+      <pattern id="awning" width="80" height="16" patternUnits="userSpaceOnUse">
+        <rect class="first" x="0" y="-16" width="40" height="32" rx="16" />
+        <rect class="second" x="40" y="-16" width="40" height="32" rx="16" />
+      </pattern>
+    </defs>
+    <rect width="100%" height="16" fill="url(#awning)" />
+  </svg>
+  <div class="layout">
+    <nav aria-label="Dokumentacja">
+      <p class="brand">Dokumentacja</p>
+      <p class="subtitle">Pliki z katalogu docs/ w repozytorium</p>
+      <ul>
+        {% for item, url in menu %}
+          <li><a href="{{ url }}"{% if item == current %} aria-current="page"{% endif %}>{{ item.title }}</a></li>
+        {% endfor %}
+      </ul>
+      <div class="api"><a href="{% url 'docs' %}">Dokumentacja API (Swagger)</a></div>
+    </nav>
+    <main>{{ content|safe }}</main>
+  </div>
+</body>
+</html>
