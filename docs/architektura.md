@@ -57,6 +57,22 @@ Kroki zakładania i ich techniczny opis: [infra/shops/README.md](../infra/shops/
 Usuwanie (`DELETE /api/shops/{id}/`) zmienia status na `deleted` od razu, a zadanie `teardown_shop`
 usuwa kontener, wolumen, bazę i użytkownika bazy w tle. Adres (slug) usuniętego sklepu znów jest wolny.
 
+## Ustawienia działającego sklepu
+
+Źródłem prawdy jest WordPress: właściciel może zmieniać ustawienia także w wp-admin.
+Backend trzyma ostatnio odczytany stan (`ShopSettings`), a pracę na sklepie wykonuje worker jako operacje (`ShopOperation`).
+
+1. Ekran ustawień pobiera `GET /api/shops/{id}/settings/`. Jeśli ostatni odczyt jest starszy niż minuta,
+   prosi o nowy (`settings/refresh/`): worker czyta wszystkie ustawienia ze sklepu jednym skryptem PHP.
+2. Zapis sekcji (`PATCH`) wysyła tylko zmienione pola. Backend sprawdza je, odrzuca te bez zmian
+   i tworzy operację `update_settings` z samymi zmianami ([services.update_settings](../backend/shops/services.py)).
+3. Worker ([operations.run_operation](../backend/shops/provisioning/operations.py)) stosuje zmiany
+   (`apply_settings`), zapisuje nowe wartości, aktualizuje `Shop.name` i `ShopConfig`, a na koniec znów czyta sklep.
+4. Aplikacja co 1,5 s odpytuje ustawienia, dopóki `busy` jest prawdą, i zgłasza wynik paskiem powiadomień.
+
+Na jednym sklepie trwa najwyżej jedna operacja. Operacja starsza niż 15 minut przestaje blokować kolejne
+(np. gdy worker padł w jej trakcie). Po błędzie worker i tak czyta sklep, bo część zmian mogła już wejść.
+
 ## Stany sklepu
 
 | Stan | Znaczenie | Może przejść do |
@@ -81,7 +97,10 @@ Sposób zakładania sklepów wybiera zmienna `SHOP_PROVISIONER`:
 | `shops.provisioning.fake.FakeProvisioner` | Symulacja bez infrastruktury: każdy krok czeka `FAKE_PROVISIONER_STEP_DELAY` sekund, opcjonalny błąd w kroku `FAKE_PROVISIONER_FAIL_AT_STEP`. Używany w testach. |
 | `shops.provisioning.docker_provisioner.DockerProvisioner` | Prawdziwe sklepy na serwerze z [infra/shops/](../infra/shops/), polecenia przez Docker API i WP-CLI w kontenerze sklepu. |
 
-Oba dziedziczą po `BaseProvisioner`, który definiuje listę kroków (`STEPS`) oraz `cleanup`, `teardown` i `update_address`.
+Oba dziedziczą po `BaseProvisioner`, który definiuje listę kroków (`STEPS`) oraz `cleanup`, `teardown` i `update_address`,
+a dla działających sklepów `read_settings`, `apply_settings`, `reset_admin_password` i `remove_sample_products`.
+`FakeProvisioner` trzyma ustawienia tylko w bazie platformy, a błąd można wywołać, podając w
+`FAKE_PROVISIONER_FAIL_AT_STEP` nazwę metody (np. `apply_settings`).
 
 ## Adresy sklepów
 

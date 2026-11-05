@@ -47,6 +47,38 @@ Limity zapytań: logowanie i rejestracja 10 na minutę, potwierdzanie e-maila 10
 | `GET shops/check-slug/?slug=` | `{slug, available, reason}`: czy adres jest wolny i dlaczego nie |
 | `GET shops/form-options/` | Wszystko do formularza: branże, języki, waluty, kraje, motywy, zakres liczby kategorii, domena |
 
+### Ustawienia i operacje na działającym sklepie
+
+Wszystkie wymagają potwierdzonego e-maila. Zmiany wprowadza worker w tle (operacja), na jednym sklepie
+jedna naraz. Gdy sklep nie działa albo wykonuje poprzednią operację, odpowiedź to `409` z `detail`.
+
+| Metoda i ścieżka | Opis |
+|---|---|
+| `GET shops/{id}/settings/` | `{values, synced_at, operation, busy, options}`: ustawienia w sekcjach, kiedy odczytano je ze sklepu, ostatnia operacja, czy sklep jest zajęty, wartości do wyboru (języki, waluty, kraje, strefy czasowe, motywy, typowe stawki VAT według kraju) |
+| `PATCH shops/{id}/settings/` | Dowolne sekcje i pola, np. `{"shipping": {"courier_enabled": true}}`. `202` z tym samym kształtem co `GET`, gdy coś się zmienia; `200`, gdy sklep już ma te wartości. `400` z błędami `{sekcja: {pole: [komunikat]}}`. |
+| `POST shops/{id}/settings/refresh/` | Ponowny odczyt ustawień ze sklepu (np. po zmianach w wp-admin), `202` |
+| `POST shops/{id}/reset-admin-password/` | Nowe hasło administratora, `202` z operacją. Hasło odczytasz z `admin-access` po zakończeniu. |
+| `POST shops/{id}/remove-sample-products/` | Usunięcie produktów przykładowych, `202` z operacją; `result.removed` to ich liczba |
+| `GET shops/{id}/operations/` | 20 ostatnich operacji, od najnowszej |
+| `GET shops/{id}/operations/{operation_id}/` | Jedna operacja: `kind`, `status`, `changes`, `changed_fields` (etykiety zmienionych pól), `result`, `error`, czasy |
+
+Sekcje i pola ustawień (pełny opis w `/api/docs/` i w [shop_settings.py](../backend/shops/shop_settings.py)):
+
+| Sekcja | Pola |
+|---|---|
+| `general` | `name`, `description`, `contact_email` |
+| `availability` | `is_open` (wyłączony: strona „wkrótce otwarcie”) |
+| `shopping` | `guest_checkout`, `signup_at_checkout`, `reviews`, `manage_stock`, `low_stock_threshold` |
+| `payments` | `bank_transfer_enabled`, `bank_account_name`, `bank_account_number` (sprawdzany jak IBAN), `bank_name`, `cash_on_delivery_enabled` |
+| `shipping` | `courier_enabled`, `courier_cost`, `free_shipping_enabled`, `free_shipping_min_amount`, `local_pickup_enabled` |
+| `taxes` | `enabled`, `prices_include_tax`, `standard_rate` |
+| `region` | `language`, `currency`, `country`, `timezone` |
+| `appearance` | `theme` (slug motywu) |
+
+Kwoty i stawki są tekstem z dwoma miejscami po przecinku (`"15.00"`). Zmiana kraju bez podania strefy czasowej
+i stawki VAT ustawia te typowe dla nowego kraju. Reguły obejmujące kilka pól: przelew wymaga odbiorcy i numeru konta,
+a klient musi móc kupić bez konta albo założyć je przy zamówieniu.
+
 Pola formularza `POST shops/`:
 
 | Pole | Wymagane | Opis |

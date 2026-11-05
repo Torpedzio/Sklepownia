@@ -41,3 +41,25 @@ class BaseProvisioner:
         Returns the previous address, or None when there is nothing to move.
         """
         return None
+
+    # --- running shops (see provisioning/operations.py) ---
+
+    def read_settings(self, shop):
+        """The shop's current settings, {section: {field: value}} as in shops/shop_settings.py."""
+        raise NotImplementedError
+
+    def apply_settings(self, shop, changes, values):
+        """
+        Make the shop match `changes` ({section: {field: new value}}, only what changed).
+        `values` are the complete settings after the change, for sections that need them all.
+        `shop` and `shop.config` already carry the new name, language, currency, country and theme.
+        """
+        raise NotImplementedError
+
+    def reset_admin_password(self, shop):
+        """Give the shop administrator a new password and store it in the shop's credentials."""
+        raise NotImplementedError
+
+    def remove_sample_products(self, shop):
+        """Delete the sample products added at provisioning. Returns how many were removed."""
+        raise NotImplementedError

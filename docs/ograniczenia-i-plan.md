@@ -11,7 +11,9 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   Pomysł: wtyczka „must-use” w WordPressie i jednorazowe linki logowania wydawane przez backend.
 - **Atrybuty produktów według branży** (rozmiar, kolor, materiał), żeby filtry w sklepie miały z czego filtrować.
 - **Zawieszanie sklepów:** stan `suspended` jest w modelu, ale nic go nie ustawia ani nie zdejmuje.
-- **Zmiana ustawień sklepu z aplikacji** (motyw, język, waluta). Dziś tylko przez panel WordPressa.
+- **Ustawienia sklepu w aplikacji** obejmują podstawy, zakupy, płatności przelewem i przy odbiorze, wysyłkę w kraju sklepu,
+  jedną stawkę VAT, region i motyw. Brakuje płatności internetowych (Przelewy24, PayU, karty), logo i kolorów motywu,
+  wysyłki za granicę oraz regulaminu i polityki prywatności.
 - **Płatności za platformę, plany i limity**: limit sklepów to jedna liczba dla wszystkich (`SHOPS_MAX_PER_USER`).
 - **Testy aplikacji mobilnej:** są tylko testy backendu.
 - **Zdjęcia w przykładowych produktach.** Produkty przykładowe nie mają zdjęć, więc nowy sklep pokazuje szare zaślepki.

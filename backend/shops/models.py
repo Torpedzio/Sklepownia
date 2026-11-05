@@ -105,7 +105,10 @@ class Shop(models.Model):
 
 
 class ShopConfig(models.Model):
-    """What the user chose in the creation form; input for provisioning."""
+    """
+    What the user chose in the creation form; input for provisioning. Settings changed in the app
+    (name, contact e-mail, language, currency, country, theme) are written back here.
+    """
 
     shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="config")
     industry = models.CharField(max_length=30, choices=Industry.choices)
@@ -176,3 +179,57 @@ class ProvisioningStep(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["job", "key"], name="unique_step_per_job"),
         ]
+
+
+class ShopSettings(models.Model):
+    """
+    The shop's settings as last read from the shop or saved by the app, grouped in sections
+    (see shops/shop_settings.py). WordPress is the source of truth: the owner can change things in wp-admin,
+    so the worker reads them back from the shop whenever the settings screen opens and after every change.
+    """
+
+    shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="store_settings")
+    values = models.JSONField(default=dict)
+    # When the values were last read from the shop; None until the first read.
+    synced_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "shop settings"
+
+
+class ShopOperation(models.Model):
+    """Work the worker does on a running shop at the owner's request, one at a time per shop."""
+
+    class Kind(models.TextChoices):
+        UPDATE_SETTINGS = "update_settings", "Zmiana ustawień"
+        SYNC_SETTINGS = "sync_settings", "Odczyt ustawień ze sklepu"
+        RESET_ADMIN_PASSWORD = "reset_admin_password", "Nowe hasło administratora"
+        REMOVE_SAMPLE_PRODUCTS = "remove_sample_products", "Usunięcie przykładowych produktów"
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "W kolejce"
+        RUNNING = "running", "W trakcie"
+        SUCCEEDED = "succeeded", "Zakończone"
+        FAILED = "failed", "Błąd"
+
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="operations")
+    kind = models.CharField(max_length=30, choices=Kind.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
+    # For settings changes: only the changed fields, {section: {field: new value}}.
+    changes = models.JSONField(default=dict, blank=True)
+    # What came out of it, e.g. {"removed": 6} for removed sample products.
+    result = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} – {self.shop}"

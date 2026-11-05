@@ -9,12 +9,14 @@ backend/
 ├── config/            ustawienia, główne URL-e, konfiguracja Celery
 ├── accounts/          użytkownicy, rejestracja, logowanie JWT, potwierdzanie e-maila
 ├── shops/             sklepy: modele, API, zakładanie (provisioning), polecenia
-│   ├── provisioning/  base.py (kroki), runner.py (wykonanie), fake.py, docker_provisioner.py
+│   ├── provisioning/  base.py (kroki), runner.py (zakładanie), operations.py (operacje na działającym sklepie),
+│   │                  fake.py, docker_provisioner.py
 │   ├── management/    polecenie update_shop_addresses
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── choices.py     branże, języki, waluty, kraje, zakres liczby kategorii
 │   ├── fields.py      EncryptedTextField (szyfrowanie Fernet)
-│   ├── services.py    create_shop, retry_shop, delete_shop
+│   ├── services.py    create_shop, retry_shop, delete_shop, get_settings, update_settings, start_operation
+│   ├── shop_settings.py  sekcje ustawień sklepu: pola, etykiety, walidacja, wartości domyślne
 │   └── slugs.py       zasady adresów sklepów i lista zarezerwowanych
 ├── support/           formularz kontaktowy
 ├── handbook/          dokumentacja projektu (pliki Markdown) jako strony pod /docs/
@@ -45,10 +47,12 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 | `Server` | Serwer, na którym działają kontenery sklepów, z limitem `max_shops`. Migracja tworzy serwer `local`. |
 | `ShopTemplate` | Motyw do wyboru w formularzu (`wp_theme` to nazwa motywu WordPressa). Migracja dodaje Storefront, Astrę i Kadence. |
 | `Shop` | Sklep: właściciel, nazwa, `slug` (część adresu), status z maszyną stanów, serwer. `url` i `admin_url` są liczone z ustawień. |
-| `ShopConfig` | Wybory z formularza: branża, motyw, liczba kategorii, język, waluta, kraj, e-mail, produkty przykładowe. |
+| `ShopConfig` | Wybory z formularza: branża, motyw, liczba kategorii, język, waluta, kraj, e-mail, produkty przykładowe. Zmiany z ustawień (opis, e-mail, język, waluta, kraj, motyw) są tu dopisywane. |
 | `ShopCredentials` | Hasła sklepu: bazy, administratora WordPressa, hasło API. Wszystkie zaszyfrowane. |
 | `ProvisioningJob` | Jedna próba założenia sklepu (status, błąd, czasy). Ponowienie tworzy nowe zadanie. |
 | `ProvisioningStep` | Krok zadania: klucz, etykieta dla użytkownika, status, błąd, czasy. |
+| `ShopSettings` | Ostatnio odczytane albo zapisane ustawienia sklepu (`values`, JSON w sekcjach) i czas odczytu ze sklepu. |
+| `ShopOperation` | Praca na działającym sklepie: zmiana ustawień, odczyt ustawień, nowe hasło, usunięcie produktów przykładowych. Zmienione pola, wynik, błąd, kto zlecił. Służy też jako historia zmian. |
 
 `slug` musi być unikalny tylko wśród sklepów, które nie są usunięte (ograniczenie `unique_slug_for_live_shops`).
 Zasady adresu: 3–30 znaków, małe litery, cyfry i pojedyncze myślniki, nie na początku ani na końcu,
@@ -74,6 +78,24 @@ Jak dodać nowy krok:
 3. Opisz krok w tabeli w [infra/shops/README.md](../infra/shops/README.md#kroki-i-czasy).
 4. Jeśli etykieta ma się pokazać na paragonie na stronie głównej, dopisz ją też do `SetupSteps`
    w [mobile/src/constants/content.ts](../mobile/src/constants/content.ts).
+
+### Ustawienia sklepu
+
+Przebieg: [architektura.md](architektura.md#ustawienia-działającego-sklepu). Sekcje i pola: [api.md](api.md#ustawienia-i-operacje-na-działającym-sklepie).
+
+- Schemat ustawień to serializery sekcji w [shop_settings.py](../backend/shops/shop_settings.py). Etykiety pól
+  trafiają do historii zmian, więc piszemy je językiem właściciela sklepu.
+- `DockerProvisioner.read_settings` czyta wszystko jednym `wp eval` (`READ_SETTINGS_PHP`) i zamienia na sekcje.
+  Zapis idzie sekcjami: opcje WordPressa, płatności (`woocommerce_bacs_*`, `woocommerce_cod_settings`),
+  stawka VAT i strefa wysyłki przez klasy WooCommerce. Dane do PHP trafiają jako base64 w `$d`, więc nic ich nie przerwie.
+- Platforma zapamiętuje w opcjach WordPressa identyfikatory swojej strefy wysyłki (`sklepownia_shipping_zone_id`)
+  i stawki VAT (`sklepownia_tax_rate_id`). Inne strefy i stawki dodane w wp-admin zostają nietknięte.
+- Zmiana języka i motywu korzysta z kodu kroków zakładania; pasek boczny jest przebudowywany raz, po zmianie języka,
+  motywu albo opinii (filtr ocen istnieje tylko przy włączonych opiniach).
+- Produkty przykładowe mają metadane `_sklepownia_sample`. Starsze sklepy rozpoznaje się po nazwie „Przykładowy produkt N”.
+
+Nowe ustawienie: pole w serializerze sekcji, wartość domyślna w `default_settings`, odczyt w `read_settings`,
+zapis w `apply_settings`, pole w `ShopSettingsValues` w aplikacji i kontrolka na ekranie ustawień.
 
 Istniejące sklepy mają kroki zapisane w bazie. Nowy krok pojawi się u nich dopiero przy ponowieniu.
 Zmianę etykiet istniejących kroków trzeba przenieść migracją danych (przykład: `0005_plain_step_labels`).
@@ -107,6 +129,7 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 | `accounts.tasks.send_verification_email` | Rejestracja, ponowne wysłanie kodu | Wysyła kod potwierdzający |
 | `shops.tasks.provision_shop` | Założenie i ponowienie sklepu | Wykonuje kroki zadania (`run_job`) |
 | `shops.tasks.teardown_shop` | Usunięcie sklepu | Usuwa kontener, wolumen i bazę |
+| `shops.tasks.run_shop_operation` | Zmiana i odczyt ustawień, nowe hasło, usunięcie produktów przykładowych | Wykonuje operację (`run_operation`) |
 | `support.tasks.notify_about_contact_message` | Wysłanie formularza kontaktowego | Przekazuje wiadomość e-mailem |
 
 Zadania są kolejkowane przez `transaction.on_commit`, więc worker nigdy nie widzi niezatwierdzonych danych.
@@ -133,6 +156,7 @@ http://localhost:8000/admin/ (konto z `createsuperuser`). Zawiera:
 - **Serwery i szablony:** motywy można wyłączać i ustawiać ich kolejność w formularzu.
 - **Sklepy z konfiguracją:** status jest tylko do odczytu. Zmienia się go przez serwisy, nie przez formularz.
 - **Zadania zakładania:** podgląd kroków i błędów.
+- **Operacje na sklepach:** historia zmian ustawień i innych operacji, ze zmienionymi polami i błędami.
 - **Wiadomości kontaktowe.**
 
 ## Testy

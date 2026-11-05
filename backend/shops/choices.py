@@ -41,3 +41,37 @@ class Country(models.TextChoices):
 
 MIN_CATEGORY_COUNT = 1
 MAX_CATEGORY_COUNT = 20
+
+
+# Time zone a new shop gets from its country; also the time zones the settings offer.
+COUNTRY_TIMEZONES = {
+    "PL": "Europe/Warsaw",
+    "DE": "Europe/Berlin",
+    "CZ": "Europe/Prague",
+    "SK": "Europe/Bratislava",
+    "GB": "Europe/London",
+    "US": "America/New_York",
+}
+
+
+class Timezone(models.TextChoices):
+    WARSAW = "Europe/Warsaw", "Warszawa"
+    BERLIN = "Europe/Berlin", "Berlin"
+    PRAGUE = "Europe/Prague", "Praga"
+    BRATISLAVA = "Europe/Bratislava", "Bratysława"
+    LONDON = "Europe/London", "Londyn"
+    NEW_YORK = "America/New_York", "Nowy Jork"
+    CHICAGO = "America/Chicago", "Chicago"
+    LOS_ANGELES = "America/Los_Angeles", "Los Angeles"
+    UTC = "UTC", "UTC"
+
+
+# Common VAT rates per country, standard rate first. The settings accept any rate; these are suggestions.
+VAT_RATES = {
+    "PL": ["23.00", "8.00", "5.00", "0.00"],
+    "DE": ["19.00", "7.00", "0.00"],
+    "CZ": ["21.00", "12.00", "0.00"],
+    "SK": ["23.00", "19.00", "5.00", "0.00"],
+    "GB": ["20.00", "5.00", "0.00"],
+    "US": ["0.00"],
+}

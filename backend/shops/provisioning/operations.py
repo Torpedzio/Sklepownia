@@ -1,0 +1,107 @@
+import logging
+
+from django.db import transaction
+from django.utils import timezone
+
+from .. import shop_settings
+from ..models import ShopOperation, ShopSettings, ShopTemplate
+from . import get_provisioner
+from .base import ProvisioningError
+
+logger = logging.getLogger(__name__)
+
+GENERIC_ERROR = "Nie udało się wprowadzić zmian w sklepie. Spróbuj ponownie za chwilę."
+
+Kind = ShopOperation.Kind
+
+
+def run_operation(operation_id):
+    with transaction.atomic():
+        operation = ShopOperation.objects.select_for_update(of=("self",)).select_related("shop__config__template").get(
+            pk=operation_id,
+        )
+        if operation.status != ShopOperation.Status.QUEUED:
+            logger.info("Shop operation %s already %s, skipping", operation_id, operation.status)
+            return
+        operation.status = ShopOperation.Status.RUNNING
+        operation.started_at = timezone.now()
+        operation.save(update_fields=["status", "started_at"])
+
+    shop = operation.shop
+    provisioner = get_provisioner()
+    try:
+        if operation.kind == Kind.UPDATE_SETTINGS:
+            _update_settings(provisioner, shop, operation.changes)
+        elif operation.kind == Kind.SYNC_SETTINGS:
+            _sync(provisioner, shop)
+        elif operation.kind == Kind.RESET_ADMIN_PASSWORD:
+            provisioner.reset_admin_password(shop)
+        elif operation.kind == Kind.REMOVE_SAMPLE_PRODUCTS:
+            operation.result = {"removed": provisioner.remove_sample_products(shop)}
+    except Exception as exc:
+        logger.exception("Shop operation %s (%s) on shop %s failed", operation.pk, operation.kind, shop.pk)
+        # Raw exception text may contain internals, so the owner only sees it for known errors.
+        operation.error = str(exc) if isinstance(exc, ProvisioningError) else GENERIC_ERROR
+        _finish(operation, ShopOperation.Status.FAILED)
+        if operation.kind == Kind.UPDATE_SETTINGS:
+            # Part of the change may have been applied; show what the shop really has now.
+            _sync_quietly(provisioner, shop)
+        return
+    _finish(operation, ShopOperation.Status.SUCCEEDED)
+
+
+def _update_settings(provisioner, shop, changes):
+    stored = _stored(shop)
+    values = shop_settings.merge(stored.values, changes)
+    # The provisioning steps reused for language and theme read the shop's config, so it gets the new values first.
+    _apply_to_shop(shop, changes)
+    provisioner.apply_settings(shop, changes, values)
+    with transaction.atomic():
+        shop.save(update_fields=["name", "updated_at"])
+        shop.config.save()
+        stored.values = values
+        stored.save(update_fields=["values", "updated_at"])
+    _sync_quietly(provisioner, shop)
+
+
+def _apply_to_shop(shop, changes):
+    general = changes.get("general", {})
+    region = changes.get("region", {})
+    config = shop.config
+    if "name" in general:
+        shop.name = general["name"]
+    if "description" in general:
+        config.description = general["description"]
+    if "contact_email" in general:
+        config.contact_email = general["contact_email"]
+    for field in ("language", "currency", "country"):
+        if field in region:
+            setattr(config, field, region[field])
+    if "theme" in changes.get("appearance", {}):
+        config.template = ShopTemplate.objects.get(slug=changes["appearance"]["theme"])
+
+
+def _sync(provisioner, shop):
+    stored = _stored(shop)
+    values = provisioner.read_settings(shop)
+    stored.values = shop_settings.complete(values, stored.values)
+    stored.synced_at = timezone.now()
+    stored.save(update_fields=["values", "synced_at", "updated_at"])
+
+
+def _sync_quietly(provisioner, shop):
+    try:
+        _sync(provisioner, shop)
+    except Exception:
+        logger.exception("Reading the settings of shop %s failed", shop.pk)
+
+
+def _stored(shop):
+    stored, _ = ShopSettings.objects.get_or_create(shop=shop, defaults={"values": shop_settings.default_settings(shop)})
+    return stored
+
+
+def _finish(operation, status):
+    operation.status = status
+    operation.finished_at = timezone.now()
+    operation.save(update_fields=["status", "error", "result", "finished_at"])

@@ -1,5 +1,5 @@
 from django.conf import settings
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -8,14 +8,17 @@ from rest_framework.response import Response
 from accounts.permissions import IsEmailVerified
 
 from . import services
-from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
-from .models import InvalidTransition, Shop, ShopCredentials, ShopTemplate
+from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
+from .models import InvalidTransition, Shop, ShopCredentials, ShopOperation, ShopTemplate
+from .shop_settings import SettingsUpdateSerializer
 from .serializers import (
     DEFAULT_CATEGORY_COUNT,
     FormOptionsSerializer,
     ShopCreateSerializer,
     ShopAdminAccessSerializer,
     ShopDetailSerializer,
+    ShopOperationSerializer,
+    ShopSettingsSerializer,
     ShopSerializer,
     ShopTemplateSerializer,
     SlugCheckSerializer,
@@ -23,8 +26,46 @@ from .serializers import (
 from .slugs import normalize_slug, slug_error
 
 
+# Settings and operations work on a running shop, so they share the creation's permissions.
+VERIFIED_ACTIONS = (
+    "create", "retry", "shop_settings", "refresh_settings", "reset_admin_password",
+    "remove_sample_products", "operations", "operation",
+)
+OPERATION_HISTORY_LENGTH = 20
+
+NOT_ACTIVE = "Ustawienia można zmieniać, gdy sklep działa."
+BUSY = "Sklep jeszcze zapisuje poprzednie zmiany. Spróbuj za chwilę."
+
+
 def _choices(choices_class):
     return [{"value": value, "label": label} for value, label in choices_class.choices]
+
+
+def _settings_payload(shop):
+    stored = services.get_settings(shop)
+    operation = shop.operations.first()
+    return {
+        "values": stored.values,
+        "synced_at": stored.synced_at,
+        "operation": ShopOperationSerializer(operation).data if operation else None,
+        "busy": services.current_operation(shop) is not None,
+        "options": {
+            "languages": _choices(Language),
+            "currencies": _choices(Currency),
+            "countries": _choices(Country),
+            "timezones": _choices(Timezone),
+            "themes": [
+                {"value": template.slug, "label": template.name}
+                for template in ShopTemplate.objects.filter(is_active=True)
+            ],
+            "vat_rates": VAT_RATES,
+        },
+    }
+
+
+def _operation_conflict(exc):
+    message = NOT_ACTIVE if isinstance(exc, services.ShopNotActive) else BUSY
+    return Response({"detail": message}, status=status.HTTP_409_CONFLICT)
 
 
 class ShopViewSet(
@@ -51,7 +92,7 @@ class ShopViewSet(
         return ShopDetailSerializer
 
     def get_permissions(self):
-        if self.action in ("create", "retry"):
+        if self.action in VERIFIED_ACTIONS:
             return [IsAuthenticated(), IsEmailVerified()]
         return super().get_permissions()
 
@@ -135,3 +176,92 @@ class ShopViewSet(
             },
             "base_domain": settings.SHOPS_BASE_DOMAIN,
         })
+
+    # --- settings and operations on a running shop ---
+
+    @extend_schema(methods=["GET"], responses={200: ShopSettingsSerializer})
+    @extend_schema(
+        methods=["PATCH"],
+        request=SettingsUpdateSerializer,
+        responses={
+            200: OpenApiResponse(ShopSettingsSerializer, description="Nic się nie zmieniło."),
+            202: OpenApiResponse(ShopSettingsSerializer, description="Zmiana czeka na zapisanie w sklepie."),
+            409: OpenApiResponse(description="Sklep nie działa albo zapisuje poprzednią zmianę."),
+        },
+    )
+    @action(detail=True, methods=["get", "patch"], url_path="settings")
+    def shop_settings(self, request, pk=None):
+        shop = self.get_object()
+        if request.method == "GET":
+            return Response(_settings_payload(shop))
+        serializer = SettingsUpdateSerializer(
+            data=request.data, partial=True, context={"current": services.get_settings(shop).values},
+        )
+        serializer.is_valid(raise_exception=True)
+        try:
+            operation = services.update_settings(shop, request.user, serializer.validated_data)
+        except (services.ShopNotActive, services.OperationInProgress) as exc:
+            return _operation_conflict(exc)
+        code = status.HTTP_200_OK if operation is None else status.HTTP_202_ACCEPTED
+        return Response(_settings_payload(shop), status=code)
+
+    @extend_schema(
+        request=None,
+        responses={202: ShopSettingsSerializer, 409: OpenApiResponse(description="Sklep nie działa albo jest zajęty.")},
+    )
+    @action(detail=True, methods=["post"], url_path="settings/refresh")
+    def refresh_settings(self, request, pk=None):
+        """Reads the settings from the shop again, e.g. after changes made in wp-admin."""
+        shop = self.get_object()
+        services.get_settings(shop)
+        try:
+            services.start_operation(shop, request.user, ShopOperation.Kind.SYNC_SETTINGS)
+        except (services.ShopNotActive, services.OperationInProgress) as exc:
+            return _operation_conflict(exc)
+        return Response(_settings_payload(shop), status=status.HTTP_202_ACCEPTED)
+
+    @extend_schema(
+        request=None,
+        responses={202: ShopOperationSerializer, 409: OpenApiResponse(description="Sklep nie działa albo jest zajęty.")},
+    )
+    @action(detail=True, methods=["post"], url_path="reset-admin-password")
+    def reset_admin_password(self, request, pk=None):
+        """New password for the shop administrator; read it from admin-access once the operation succeeds."""
+        return self._start(ShopOperation.Kind.RESET_ADMIN_PASSWORD)
+
+    @extend_schema(
+        request=None,
+        responses={202: ShopOperationSerializer, 409: OpenApiResponse(description="Sklep nie działa albo jest zajęty.")},
+    )
+    @action(detail=True, methods=["post"], url_path="remove-sample-products")
+    def remove_sample_products(self, request, pk=None):
+        """Deletes the sample products added when the shop was created; the result says how many."""
+        return self._start(ShopOperation.Kind.REMOVE_SAMPLE_PRODUCTS)
+
+    @extend_schema(responses={200: ShopOperationSerializer(many=True)})
+    @action(detail=True, methods=["get"])
+    def operations(self, request, pk=None):
+        """The most recent operations on the shop, newest first."""
+        shop = self.get_object()
+        operations = shop.operations.all()[:OPERATION_HISTORY_LENGTH]
+        return Response(ShopOperationSerializer(operations, many=True).data)
+
+    @extend_schema(
+        parameters=[OpenApiParameter("operation_id", int, OpenApiParameter.PATH)],
+        responses={200: ShopOperationSerializer},
+    )
+    @action(detail=True, methods=["get"], url_path=r"operations/(?P<operation_id>[0-9]+)")
+    def operation(self, request, pk=None, operation_id=None):
+        shop = self.get_object()
+        operation = shop.operations.filter(pk=operation_id).first()
+        if operation is None:
+            return Response({"detail": "Nie znaleziono operacji."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(ShopOperationSerializer(operation).data)
+
+    def _start(self, kind):
+        shop = self.get_object()
+        try:
+            operation = services.start_operation(shop, self.request.user, kind)
+        except (services.ShopNotActive, services.OperationInProgress) as exc:
+            return _operation_conflict(exc)
+        return Response(ShopOperationSerializer(operation).data, status=status.HTTP_202_ACCEPTED)

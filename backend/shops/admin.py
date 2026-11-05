@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ProvisioningJob, ProvisioningStep, Server, Shop, ShopConfig, ShopTemplate
+from .models import ProvisioningJob, ProvisioningStep, Server, Shop, ShopConfig, ShopOperation, ShopTemplate
 
 
 @admin.register(Server)
@@ -43,3 +43,13 @@ class ProvisioningJobAdmin(admin.ModelAdmin):
     list_filter = ["status"]
     inlines = [ProvisioningStepInline]
     readonly_fields = ["shop", "status", "error", "created_at", "started_at", "finished_at"]
+
+
+@admin.register(ShopOperation)
+class ShopOperationAdmin(admin.ModelAdmin):
+    list_display = ["id", "shop", "kind", "status", "requested_by", "created_at", "finished_at"]
+    list_filter = ["kind", "status"]
+    search_fields = ["shop__name", "shop__slug"]
+    readonly_fields = [
+        "shop", "kind", "status", "changes", "result", "error", "requested_by", "created_at", "started_at", "finished_at",
+    ]
