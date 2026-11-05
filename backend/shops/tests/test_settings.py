@@ -245,3 +245,72 @@ def test_other_owners_shop_settings_are_hidden(api_client, shop):
                                                ("", "0.00"), (None, "0.00"), ("10 * [qty]", "0.00")])
 def test_prices_read_from_woocommerce(raw, expected):
     assert _money(raw) == expected
+
+
+@pytest.mark.parametrize(("number", "stored"), [
+    ("DE89 3704 0044 0532 0130 00", "DE89 3704 0044 0532 0130 00"),
+    ("GB82-WEST-1234-5698-7654-32", "GB82 WEST 1234 5698 7654 32"),
+    ("  ", ""),
+])
+def test_bank_account_numbers_from_other_countries(auth_client, shop, django_capture_on_commit_callbacks, number, stored):
+    patch(auth_client, shop, django_capture_on_commit_callbacks, {"payments": {"bank_account_number": number}})
+
+    assert auth_client.get(settings_url(shop)).data["values"]["payments"]["bank_account_number"] == stored
+
+
+def test_bank_account_number_with_odd_characters_is_rejected(auth_client, shop):
+    response = auth_client.patch(settings_url(shop), {"payments": {"bank_account_number": "12/34/56/78"}}, format="json")
+
+    assert response.data["payments"]["bank_account_number"] == ["Numer konta może zawierać tylko litery i cyfry."]
+
+
+def test_description_and_contact_email_are_written_to_the_shop_config(
+    auth_client, shop, django_capture_on_commit_callbacks,
+):
+    patch(auth_client, shop, django_capture_on_commit_callbacks, {
+        "general": {"description": "Nowy opis", "contact_email": "nowy@example.com"},
+    })
+
+    shop.config.refresh_from_db()
+    assert shop.config.description == "Nowy opis"
+    assert shop.config.contact_email == "nowy@example.com"
+
+
+def test_failed_read_after_a_change_does_not_fail_the_change(
+    auth_client, shop, monkeypatch, django_capture_on_commit_callbacks,
+):
+    def unreachable(self, shop):
+        raise RuntimeError("sklep nie odpowiada")
+
+    monkeypatch.setattr("shops.provisioning.fake.FakeProvisioner.read_settings", unreachable)
+
+    patch(auth_client, shop, django_capture_on_commit_callbacks, {"general": {"name": "Inna"}})
+
+    operation = ShopOperation.objects.get(shop=shop)
+    assert operation.status == ShopOperation.Status.SUCCEEDED
+    assert auth_client.get(settings_url(shop)).data["values"]["general"]["name"] == "Inna"
+
+
+def test_an_operation_runs_only_once(shop, verified_user):
+    from shops.provisioning.operations import run_operation
+
+    operation = ShopOperation.objects.create(
+        shop=shop, kind=ShopOperation.Kind.SYNC_SETTINGS, status=ShopOperation.Status.SUCCEEDED,
+    )
+
+    run_operation(operation.pk)
+
+    operation.refresh_from_db()
+    assert operation.started_at is None
+    assert str(operation) == f"Odczyt ustawień ze sklepu – {shop}"
+
+
+def test_refresh_and_actions_wait_for_a_running_operation(auth_client, shop, verified_user):
+    ShopOperation.objects.create(shop=shop, kind=ShopOperation.Kind.SYNC_SETTINGS)
+
+    assert auth_client.post(settings_url(shop, "refresh/")).status_code == 409
+    assert auth_client.post(f"/api/shops/{shop.pk}/remove-sample-products/").status_code == 409
+
+
+def test_unknown_operation_is_not_found(auth_client, shop):
+    assert auth_client.get(f"/api/shops/{shop.pk}/operations/999999/").status_code == 404

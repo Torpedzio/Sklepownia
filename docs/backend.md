@@ -162,7 +162,8 @@ http://localhost:8000/admin/ (konto z `createsuperuser`). Zawiera:
 ## Testy
 
 ```bash
-docker compose exec backend pytest
+docker compose exec backend pytest          # wszystkie testy
+docker compose exec backend pytest --cov    # z pokryciem kodu (ustawienia w backend/.coveragerc)
 ```
 
 Testy (pytest-django) używają symulowanego provisionera i wykonują zadania Celery od razu (`task_always_eager`).
@@ -173,7 +174,14 @@ Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od
 |---|---|
 | `accounts/tests/test_auth.py` | Rejestracja, logowanie, potwierdzanie e-maila, limity prób, `/me` |
 | `shops/tests/test_shops.py` | Zakładanie, limit sklepów, adresy, ponawianie, usuwanie, dostęp do panelu, opcje formularza, polecenia |
+| `shops/tests/test_settings.py` | Ustawienia sklepu: odczyt, walidacja, zapis przez operacje, kolejka jednej operacji, błędy, nowe hasło, produkty przykładowe |
+| `shops/tests/test_docker_provisioner.py` | Polecenia, które `DockerProvisioner` wysyła do kontenerów (WP-CLI, MariaDB, curl), na podstawionej powłoce bez Dockera |
+| `shops/tests/test_commands.py` | Polecenie `update_shop_addresses` i domyślne zachowanie `BaseProvisioner` |
 | `support/tests/test_contact.py` | Formularz kontaktowy i powiadomienie |
 | `handbook/tests/test_handbook.py` | Strony dokumentacji, odnośniki, kotwice, dostęp, kompletność menu |
+
+`test_docker_provisioner.py` zastępuje `_exec` atrapą (`Shell`), która zapisuje polecenia i odpowiada
+przygotowanym wynikiem. Sprawdza więc, co provisioner wysyła i jak czyta odpowiedzi, ale nie to, czy WordPress
+się z nimi zgodzi. Zmiany w provisioningu trzeba dodatkowo sprawdzić na prawdziwym sklepie.
 
 Zmiany w API sprawdzaj też walidacją schematu: `python manage.py spectacular --validate --fail-on-warn`.

@@ -245,3 +245,33 @@ def test_update_shop_addresses_skips_shops_without_infrastructure(verified_user,
     call_command("update_shop_addresses", stdout=out)
 
     assert "sklep: pominięty" in out.getvalue()
+
+
+def test_job_delivered_twice_runs_once(auth_client, django_capture_on_commit_callbacks):
+    from shops.models import ProvisioningJob
+    from shops.provisioning.runner import run_job
+
+    shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
+    job = ProvisioningJob.objects.get(shop_id=shop_id)
+    finished_at = job.finished_at
+
+    run_job(job.pk)
+
+    job.refresh_from_db()
+    assert job.finished_at == finished_at
+    assert Shop.objects.get(pk=shop_id).status == Shop.Status.ACTIVE
+
+
+def test_failed_cleanup_still_marks_the_shop_failed(
+    auth_client, settings, monkeypatch, django_capture_on_commit_callbacks,
+):
+    settings.FAKE_PROVISIONER_FAIL_AT_STEP = "install_wordpress"
+
+    def broken_cleanup(self, shop):
+        raise RuntimeError("cleanup failed")
+
+    monkeypatch.setattr("shops.provisioning.fake.FakeProvisioner.cleanup", broken_cleanup)
+
+    shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
+
+    assert Shop.objects.get(pk=shop_id).status == Shop.Status.FAILED

@@ -123,3 +123,34 @@ def test_logout_blacklists_refresh_token(api_client, user):
 
     assert api_client.post("/api/auth/logout/", {"refresh": tokens["refresh"]}, format="json").status_code == 205
     assert api_client.post("/api/auth/refresh/", {"refresh": tokens["refresh"]}, format="json").status_code == 401
+
+
+def test_user_needs_an_email():
+    with pytest.raises(ValueError):
+        User.objects.create_user(email="", password="Sekretne-haslo-123")
+
+
+def test_superuser_is_staff_and_verified(db):
+    admin = User.objects.create_superuser(email="Admin@Example.com", password="Sekretne-haslo-123")
+
+    assert admin.is_staff and admin.is_superuser and admin.is_email_verified
+    assert str(admin) == "admin@example.com"
+
+
+def test_logout_with_an_invalid_token_still_succeeds(auth_client):
+    response = auth_client.post("/api/auth/logout/", {"refresh": "to-nie-token"}, format="json")
+
+    assert response.status_code == 205
+
+
+def test_verified_user_gets_no_new_code(auth_client):
+    response = auth_client.post("/api/auth/resend-verification/")
+
+    assert response.status_code == 400
+
+
+def test_verifying_an_already_verified_email_is_harmless(auth_client):
+    response = auth_client.post("/api/auth/verify-email/", {"code": "000000"}, format="json")
+
+    assert response.status_code == 200
+    assert response.data["is_email_verified"] is True

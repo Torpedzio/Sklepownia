@@ -1,0 +1,18 @@
+# Test coverage: docker compose exec backend pytest --cov
+[run]
+source = .
+branch = True
+# The container mounts the code read-write, but the data file stays out of the repository.
+data_file = /tmp/.coverage
+omit =
+    */migrations/*
+    */tests/*
+    conftest.py
+    manage.py
+    config/asgi.py
+    config/wsgi.py
+
+[report]
+skip_covered = False
+show_missing = True
+sort = Cover

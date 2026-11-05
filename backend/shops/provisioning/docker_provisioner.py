@@ -760,6 +760,9 @@ def _yes_no(value):
 
 
 def _int(value, fallback):
+    """A whole number from a WordPress option; a missing option comes back as False, which isn't 0."""
+    if isinstance(value, bool):
+        return fallback
     try:
         return int(value)
     except (TypeError, ValueError):
