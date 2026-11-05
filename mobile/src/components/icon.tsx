@@ -31,6 +31,13 @@ const ICONS = {
   chevronDown: ['chevron.down', 'expand_more'],
   arrowUp: ['arrow.up', 'arrow_upward'],
   logout: ['rectangle.portrait.and.arrow.right', 'logout'],
+  cart: ['cart', 'shopping_cart'],
+  card: ['creditcard', 'credit_card'],
+  truck: ['shippingbox', 'local_shipping'],
+  percent: ['percent', 'percent'],
+  globe: ['globe', 'language'],
+  power: ['power', 'power_settings_new'],
+  history: ['clock.arrow.circlepath', 'history'],
 } as const;
 
 export type IconName = keyof typeof ICONS;

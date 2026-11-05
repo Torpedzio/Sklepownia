@@ -2,7 +2,6 @@ import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
@@ -11,23 +10,13 @@ import { useTheme } from '@/hooks/use-theme';
 import type { ShopAdminAccess } from '@/lib/types';
 
 /** Step-by-step sign-in to the shop's WordPress panel, with the credentials to copy. */
-export function ShopLoginGuide({ shopId }: { shopId: number }) {
+export function ShopLoginSteps({ shopId }: { shopId: number }) {
   const theme = useTheme();
   const { data: access, error } = useApiQuery<ShopAdminAccess>(`/shops/${shopId}/admin-access/`);
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <View style={[styles.box, { backgroundColor: theme.accentMuted, borderColor: theme.accent }]}>
-      <View style={styles.title}>
-        <Icon name="admin" size={22} />
-        <ThemedText type="heading" style={styles.flex}>
-          Jak wejść do panelu sklepu
-        </ThemedText>
-      </View>
-      <ThemedText type="small" themeColor="textSecondary">
-        Produkty, zamówienia i płatności ustawiasz w panelu WordPressa. Logujesz się do niego osobno, tymi danymi:
-      </ThemedText>
-
+    <>
       {error ? <ThemedText themeColor="danger">{error.message}</ThemedText> : null}
       {!access && !error ? <ActivityIndicator /> : null}
 
@@ -53,13 +42,13 @@ export function ShopLoginGuide({ shopId }: { shopId: number }) {
         </View>
       ) : null}
 
-      <View style={[styles.note, { borderTopColor: theme.accent }]}>
+      <View style={[styles.note, { borderTopColor: theme.border }]}>
         <ThemedText type="small" themeColor="textSecondary">
           Zapisz hasło w przeglądarce albo menedżerze haseł. Jeśli zmienisz je w panelu, tutaj dalej zobaczysz to
           pierwotne.
         </ThemedText>
       </View>
-    </View>
+    </>
   );
 }
 
@@ -67,8 +56,8 @@ function Step({ number, title, children }: { number: number; title: string; chil
   const theme = useTheme();
   return (
     <View style={styles.step}>
-      <View style={[styles.number, { backgroundColor: theme.accent }]}>
-        <ThemedText style={[styles.numberText, { color: theme.onAccent }]}>{number}</ThemedText>
+      <View style={[styles.number, { backgroundColor: theme.primary }]}>
+        <ThemedText style={[styles.numberText, { color: theme.onPrimary }]}>{number}</ThemedText>
       </View>
       <View style={styles.stepBody}>
         <ThemedText type="smallBold">{title}</ThemedText>
@@ -110,20 +99,6 @@ function Secret({ value, hidden = false, onToggle }: { value: string; hidden?: b
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  box: {
-    gap: Spacing.three,
-    padding: Spacing.four,
-    borderRadius: Radius.large,
-    borderWidth: 1.5,
-  },
-  title: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
   steps: {
     flexDirection: 'row',
     flexWrap: 'wrap',

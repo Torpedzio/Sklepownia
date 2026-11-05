@@ -34,7 +34,8 @@ Zasada: w `app/` są tylko ekrany. Komponenty, hooki i narzędzia są poza tym k
 | `/help` | `app/(tabs)/help.tsx` | jw. Porady dotyczące prowadzenia sklepu. |
 | `/account` | `app/(tabs)/account.tsx` | jw. Profil i wylogowanie. |
 | `/shops/new` | `app/shops/new.tsx` | jw. Formularz nowego sklepu (na telefonie jako okno modalne). |
-| `/shops/[id]` | `app/shops/[id].tsx` | jw. Szczegóły: postęp, dostęp do panelu, porady, usuwanie. |
+| `/shops/[id]` | `app/shops/[id].tsx` | jw. Sklep: w trakcie zakładania postęp na paragonie; działający sklep ma kartę z przyciskami (sklep, ustawienia, panel WordPressa) na całą szerokość, pod nią „Ustawienia w skrócie” z kafelkami prowadzącymi do sekcji ustawień i paragon obok, dalej porady i usuwanie. W przeglądarce strzałka przy tytule cofa także po odświeżeniu strony (`backArrowOptions`). |
+| `/shops/[id]/settings` | `app/shops/[id]/settings.tsx` | jw. Ustawienia działającego sklepu: menu sekcji i jedna wybrana sekcja (`?section=platnosci`), nowe hasło, usunięcie produktów przykładowych, ustawienia ręczne (logowanie do wp-admin), ostatnie zmiany. |
 
 Dostęp do ekranów pilnuje `Stack.Protected` w [app/_layout.tsx](../mobile/src/app/_layout.tsx):
 - niezalogowany trafia na stronę główną, zalogowany bez potwierdzonego e-maila na `/verify-email`;
@@ -96,17 +97,20 @@ Ruch na ekranie (Reanimated) respektuje systemowe ograniczenie ruchu.
 | `KeyboardArea` | Na Androidzie zmniejsza obszar, gdy otwiera się klawiatura (aplikacja zajmuje cały ekran, więc system tego nie robi) |
 | `SiteHeader`, `SiteFooter` | Nagłówek i stopka stron publicznych w przeglądarce |
 | `AuthLayout` | Układ logowania, rejestracji i potwierdzania e-maila |
-| `ui/Button`, `ui/TextField`, `ui/ChipSelect`, `ui/Tooltip` | Podstawowe kontrolki. `Button` delikatnie powiększa się po najechaniu i zapada przy wciśnięciu. |
+| `ui/Button`, `ui/TextField`, `ui/ChipSelect`, `ui/SwitchRow`, `ui/Tooltip` | Podstawowe kontrolki. `SwitchRow` to ustawienie włącz/wyłącz z opisem; przełącza je cały wiersz. `Button` delikatnie powiększa się po najechaniu i zapada przy wciśnięciu. |
 | `Receipt` | Paragon z wierszami, sumą i pieczątką; po najechaniu unosi się i obraca |
 | `ShopSign`, `StatusBadge` | Karta sklepu na liście i znacznik statusu |
 | `NewShopButton` | Przycisk nowego sklepu; po osiągnięciu limitu wyszarzony, z dymkiem wyjaśnienia |
 | `FeatureSlides` | „Co dostajesz” na całą szerokość pod markizą. Przy przewijaniu przyklejona witryna, w której każde przewinięcie pokazuje następny slajd (`PinnedSequence`); przy ograniczonym ruchu pokaz slajdów ze strzałkami, kropkami i automatycznym przewijaniem. Zdjęcia przechodzą po bokach gradientem w kolor strony (`SIDE_FADE_WIDE`, `SIDE_FADE_NARROW`). |
 | `ThemeShowcase` | Motywy jako pasy na całą szerokość: zrzut sklepu przechodzący gradientem w tło. Przy przewijaniu działa jak `FeatureSlides` (`PinnedSequence`); przy ograniczonym ruchu zwykła lista. |
 | `PinnedSequence`, `SwapLayer` | Wspólny mechanizm obu sekcji: przyklejenie nagłówka i sceny oraz podmiana elementu co około 160 px przewinięcia (`STEP`, `SWITCH_AT`). W przeglądarce przykleja CSS `sticky`. Na telefonie scena przesuwa się dokładnie o przewinięcie (położenie sekcji jest mierzone tylko przed przyklejeniem, więc nic nie drży), a jedno przesunięcie palcem zmienia najwyżej jeden element: rozpęd zatrzymuje się na następnym, a strona dociąga do pokazanego. `SwapLayer` to jedna warstwa sceny z przenikaniem. |
+| `SettingsSection` | Karta jednej sekcji ustawień sklepu; po zmianie pokazuje „Zapisz” i „Cofnij”, każda sekcja zapisuje się osobno |
+| `SettingsMenu`, `SettingsPane` | Menu sekcji ustawień: na szerokim ekranie lista z boku, na wąskim przewijany pasek nad treścią, z kropką przy sekcji z niezapisanymi zmianami. `SettingsPane` wsuwa nowo wybraną sekcję od strony ruchu w menu (z dołu lub góry obok listy, z boku pod paskiem). |
 | `CtaBand` | Zielony pas z wezwaniem do działania na końcu strony |
 | `FaqList` | Pytania i odpowiedzi; odpowiedź rozsuwa się płynnie, strzałka obraca się razem z nią, otwarte jest jedno pytanie naraz |
 | `SectionHeader` | Tytuł i wstęp sekcji strony głównej (używany przez sekcje przyklejane) |
-| `ShopLoginGuide`, `ShopGuidesPanel` | Instrukcja logowania do panelu WordPressa i porady jako slajdy |
+| `ShopLoginSteps`, `ShopGuidesPanel` | Kroki logowania do panelu WordPressa z danymi do skopiowania (w „Ustawieniach ręcznych”) i porady jako slajdy |
+| `ShopOverview` | Kafelki ze stanem ustawień sklepu; brak płatności lub wysyłki jest wyróżniony (`missingForSales`), kafelek otwiera swoją sekcję ustawień |
 
 Hook `useFullBleed` pozwala sekcji wyjść z wyśrodkowanej kolumny na całą szerokość strony.
 

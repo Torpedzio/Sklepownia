@@ -1,8 +1,10 @@
+import { BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold } from '@expo-google-fonts/bricolage-grotesque';
 import {
-  BricolageGrotesque_600SemiBold,
-  BricolageGrotesque_700Bold,
-} from '@expo-google-fonts/bricolage-grotesque';
-import { Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold } from '@expo-google-fonts/figtree';
+  Figtree_400Regular,
+  Figtree_500Medium,
+  Figtree_600SemiBold,
+  Figtree_700Bold,
+} from '@expo-google-fonts/figtree';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -84,6 +86,7 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="shops/new" options={{ title: 'Nowy sklep', presentation: 'modal' }} />
         <Stack.Screen name="shops/[id]" options={{ title: 'Sklep' }} />
+        <Stack.Screen name="shops/[id]/settings" options={{ title: 'Ustawienia sklepu' }} />
       </Stack.Protected>
       <Stack.Screen name="about" options={{ title: 'Jak to działa', headerShown: nativeHeader }} />
       <Stack.Screen name="contact" options={{ title: 'Kontakt', headerShown: nativeHeader }} />
