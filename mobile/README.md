@@ -25,6 +25,7 @@ Aplikacja łączy się z API pod `http://<host Metro>:8000/api`. Inny adres: zmi
 ```bash
 npx tsc --noEmit
 npx expo lint
+npm test                # albo npm run test:coverage
 ```
 
 ## Zasady

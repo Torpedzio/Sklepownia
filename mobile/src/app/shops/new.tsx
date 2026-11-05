@@ -118,7 +118,7 @@ function NewShopForm({ options }: { options: FormOptions }) {
     <Page maxWidth={760}>
       <View style={styles.intro}>
         <ThemedText type="title">Opisz swój sklep</ThemedText>
-        <ThemedText themeColor="textSecondary">Wszystko poza nazwą i adresem zmienisz później w panelu sklepu.</ThemedText>
+        <ThemedText themeColor="textSecondary">Wszystko poza nazwą i adresem zmienisz później w ustawieniach sklepu.</ThemedText>
       </View>
 
       <Section title="Nazwa i adres">

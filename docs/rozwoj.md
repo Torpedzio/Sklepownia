@@ -7,10 +7,14 @@ Przed commitem:
 ```bash
 docker compose exec backend pytest                                                      # testy backendu
 docker compose exec backend python manage.py spectacular --validate --fail-on-warn > /dev/null   # schemat API
-cd mobile && npx tsc --noEmit && npx expo lint                                         # typy i lint aplikacji
+cd mobile && npx tsc --noEmit && npx expo lint && npm test                             # typy, lint i testy aplikacji
 ```
 
 Lint aplikacji zgłasza jeden błąd w szablonowym pliku `mobile/src/hooks/use-color-scheme.web.ts`.
+
+Pokrycie testami: `docker compose exec backend pytest --cov` i `cd mobile && npm run test:coverage`.
+Nowa funkcja dostaje testy w tym samym commicie: backend w `*/tests/`, aplikacja w `__tests__`
+(opis narzędzi: [backend.md](backend.md#testy), [aplikacja-mobilna.md](aplikacja-mobilna.md#testy)).
 
 ## Konwencje
 

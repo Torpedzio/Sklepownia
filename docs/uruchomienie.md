@@ -117,7 +117,7 @@ Aplikacja mobilna: `EXPO_PUBLIC_API_URL` (opcjonalnie) wymusza adres API.
 ```bash
 docker compose exec backend pytest                        # testy backendu
 docker compose exec backend python manage.py spectacular --validate --fail-on-warn > /dev/null   # schemat API
-cd mobile && npx tsc --noEmit && npx expo lint            # typy i lint aplikacji
+cd mobile && npx tsc --noEmit && npx expo lint && npm test   # typy, lint i testy aplikacji
 ```
 
 Lint zgłasza jeden znany błąd w pliku z szablonu Expo: `src/hooks/use-color-scheme.web.ts`.

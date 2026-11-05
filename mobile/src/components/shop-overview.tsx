@@ -7,7 +7,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Choice, ShopSettings } from '@/lib/types';
 
-type Tile = {
+export type Tile = {
   /** Settings section the tile opens (as in the address: ?section=…). */
   section: string;
   title: string;
@@ -19,7 +19,7 @@ type Tile = {
 
 /** The shop's settings at a glance; each tile opens its section of the settings. */
 export function ShopOverview({ shopId, settings }: { shopId: number; settings: ShopSettings }) {
-  const tiles = describe(settings);
+  const tiles = describeSettings(settings);
   return (
     <View style={styles.grid}>
       {tiles.map((tile) => (
@@ -48,7 +48,7 @@ function OverviewTile({ tile, onPress }: { tile: Tile; onPress: () => void }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${tile.title}: ${tile.value}. Zmień w ustawieniach.`}
+      accessibilityLabel={`${tile.title}: ${tile.value.replace(/\.$/, '')}. Zmień w ustawieniach.`}
       onPress={onPress}
       style={({ hovered, pressed }) => [
         styles.tile,
@@ -75,7 +75,8 @@ function OverviewTile({ tile, onPress }: { tile: Tile; onPress: () => void }) {
   );
 }
 
-function describe({ values, options }: ShopSettings): Tile[] {
+/** One tile per area of the settings, worded for the shop owner. */
+export function describeSettings({ values, options }: ShopSettings): Tile[] {
   const { payments, shipping, taxes, region } = values;
   const currency = region.currency;
   const label = (choices: Choice[], value: string) => choices.find((choice) => choice.value === value)?.label ?? value;

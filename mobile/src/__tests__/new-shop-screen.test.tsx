@@ -1,0 +1,110 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { router } from 'expo-router';
+
+import NewShopScreen from '@/app/shops/new';
+import { useAuth } from '@/context/auth';
+import { NotificationsProvider } from '@/context/notifications';
+import { ApiError } from '@/lib/api';
+import type { FormOptions } from '@/lib/types';
+import { mockApi, type Routes } from '@/testing/api';
+import { shopDetail } from '@/testing/fixtures';
+
+jest.mock('expo-router', () => require('@/testing/router'));
+jest.mock('@/lib/api', () => ({ ...jest.requireActual('@/lib/api'), api: jest.fn() }));
+jest.mock('@/context/auth', () => ({ useAuth: jest.fn() }));
+
+const options: FormOptions = {
+  industries: [
+    { value: 'food', label: 'Żywność i napoje' },
+    { value: 'books', label: 'Książki i multimedia' },
+  ],
+  languages: [{ value: 'pl_PL', label: 'Polski' }],
+  currencies: [{ value: 'PLN', label: 'Złoty (PLN)' }],
+  countries: [{ value: 'PL', label: 'Polska' }],
+  templates: [{ slug: 'storefront', name: 'Storefront', description: 'Prosty', preview_image_url: '' }],
+  category_count: { min: 1, max: 20, default: 5 },
+  base_domain: 'localhost',
+};
+
+async function open(routes: Routes = {}, shopCount = 0) {
+  (useAuth as jest.Mock).mockReturnValue({ user: { shop_limit: 3 } });
+  const api = mockApi({
+    'GET /shops/form-options/': options,
+    'GET /shops/': [Array.from({ length: shopCount }, (_, id) => ({ id }))],
+    ...routes,
+  });
+  await render(<NewShopScreen />, { wrapper: NotificationsProvider });
+  return { api };
+}
+
+beforeEach(() => jest.clearAllMocks());
+
+test('the address follows the name until edited, and is checked', async () => {
+  await open({
+    'GET /shops/check-slug/?slug=pracownia-ceramiki': { slug: 'pracownia-ceramiki', available: true, reason: null },
+  });
+
+  await fireEvent.changeText(await screen.findByPlaceholderText('np. Pracownia Ceramiki'), 'Pracownia Ceramiki');
+
+  expect(screen.getByText('pracownia-ceramiki.localhost')).toBeTruthy();
+  expect(await screen.findByText('✓ Adres jest wolny')).toBeTruthy();
+});
+
+test('a taken address says why', async () => {
+  await open({
+    'GET /shops/check-slug/?slug=kawa': { slug: 'kawa', available: false, reason: 'Ten adres jest już zajęty.' },
+  });
+
+  await fireEvent.changeText(await screen.findByPlaceholderText('np. Pracownia Ceramiki'), 'Kawa');
+
+  expect(await screen.findByText('Ten adres jest już zajęty.')).toBeTruthy();
+});
+
+test('the shop is created with the chosen options and opened', async () => {
+  const { api } = await open({
+    'GET /shops/check-slug/?slug=ksiegarnia': { slug: 'ksiegarnia', available: true, reason: null },
+    'POST /shops/': shopDetail({ id: 9, name: 'Księgarnia', status: 'pending' }),
+  });
+
+  await fireEvent.changeText(await screen.findByPlaceholderText('np. Pracownia Ceramiki'), 'Księgarnia');
+  await fireEvent.press(screen.getByRole('radio', { name: 'Książki i multimedia' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Załóż sklep' }));
+
+  expect(api.sent('POST /shops/')).toEqual([
+    expect.objectContaining({
+      name: 'Księgarnia',
+      slug: 'ksiegarnia',
+      industry: 'books',
+      template: 'storefront',
+      category_count: 5,
+    }),
+  ]);
+  await waitFor(() => expect(router.push).toHaveBeenCalledWith({ pathname: '/shops/[id]', params: { id: 9 } }));
+});
+
+test('errors from the server show under the fields', async () => {
+  await open({
+    'GET /shops/check-slug/?slug=kawa': { slug: 'kawa', available: true, reason: null },
+    'POST /shops/': new ApiError(400, { slug: ['Ten adres jest już zajęty.'] }),
+  });
+
+  await fireEvent.changeText(await screen.findByPlaceholderText('np. Pracownia Ceramiki'), 'Kawa');
+  await fireEvent.press(screen.getByRole('radio', { name: 'Żywność i napoje' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Załóż sklep' }));
+
+  expect(await screen.findByText('Ten adres jest już zajęty.')).toBeTruthy();
+  expect(router.push).not.toHaveBeenCalled();
+});
+
+test('the form waits for a name and an industry', async () => {
+  await open();
+
+  expect(await screen.findByRole('button', { name: 'Załóż sklep' })).toBeDisabled();
+});
+
+test('at the shop limit there is no form', async () => {
+  await open({}, 3);
+
+  expect(await screen.findByText('Masz już 3 sklepy')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Załóż sklep' })).toBeNull();
+});

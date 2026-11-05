@@ -15,7 +15,8 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   jedną stawkę VAT, region i motyw. Brakuje płatności internetowych (Przelewy24, PayU, karty), logo i kolorów motywu,
   wysyłki za granicę oraz regulaminu i polityki prywatności.
 - **Płatności za platformę, plany i limity**: limit sklepów to jedna liczba dla wszystkich (`SHOPS_MAX_PER_USER`).
-- **Testy aplikacji mobilnej:** są tylko testy backendu.
+- **Testy na urządzeniu:** testy aplikacji działają w Jest; zachowania zależne od urządzenia (przewijanie,
+  klawiatura, animacje) sprawdza się ręcznie w Expo Go.
 - **Zdjęcia w przykładowych produktach.** Produkty przykładowe nie mają zdjęć, więc nowy sklep pokazuje szare zaślepki.
 - **Porady w innych językach.** Instrukcja logowania i porady podają polskie nazwy z panelu WordPressa,
   także dla sklepów założonych w innym języku.

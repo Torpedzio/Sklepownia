@@ -19,18 +19,13 @@ import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
 import { api, ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
+import { changedFields, type Drafts, type FieldErrors, formatTime, sectionErrors, toApi } from '@/lib/settings-form';
 import type { SettingsSection as Section, ShopOperation, ShopSettings, ShopSettingsValues } from '@/lib/types';
-
-type Draft = Record<string, string | boolean>;
-type Drafts = Partial<Record<Section, Draft>>;
-type Errors = Partial<Record<Section, Record<string, string>>>;
 
 // Read the shop again on opening when the last read is older than this.
 const FRESH_FOR_MS = 60_000;
 const POLL_MS = 1500;
 const HISTORY_LENGTH = 10;
-// Money and rates are typed by people, who may use a comma.
-const DECIMAL_FIELDS = new Set(['courier_cost', 'free_shipping_min_amount', 'standard_rate']);
 // These take about a minute and change how the shop looks, so they're confirmed first.
 const SLOW_SECTIONS: Partial<Record<Section, string>> = {
   region: 'Zmiana języka, waluty albo kraju potrwa około minuty.',
@@ -72,7 +67,7 @@ export default function ShopSettingsScreen() {
   });
   const { data: history, refresh: refreshHistory } = useApiQuery<ShopOperation[]>(`/shops/${id}/operations/`);
   const [drafts, setDrafts] = useState<Drafts>({});
-  const [errors, setErrors] = useState<Errors>({});
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState<Section | 'security' | null>(null);
   // The operation whose end this screen reports; operations finished before it opened stay quiet.
   const [watched, setWatched] = useState<number | null>(null);
@@ -157,10 +152,7 @@ export default function ShopSettingsScreen() {
   }
 
   function changes(section: Section) {
-    const saved = values[section] as Record<string, unknown>;
-    return Object.fromEntries(
-      Object.entries(drafts[section] ?? {}).filter(([key, value]) => String(value) !== String(saved[key])),
-    );
+    return changedFields(values[section] as Record<string, unknown>, drafts[section]);
   }
 
   function undo(section: Section) {
@@ -681,34 +673,6 @@ function Note({ children, warning }: { children: string; warning?: boolean }) {
       </ThemedText>
     </View>
   );
-}
-
-function toApi(key: string, value: string | boolean) {
-  if (typeof value === 'boolean') return value;
-  if (DECIMAL_FIELDS.has(key)) return value.replace(',', '.').replace(/\s/g, '');
-  if (key === 'low_stock_threshold' && /^\d+$/.test(value.trim())) return Number(value.trim());
-  return value;
-}
-
-function sectionErrors(data: Record<string, unknown> | null): Errors {
-  const result: Errors = {};
-  for (const [section, fields] of Object.entries(data ?? {})) {
-    if (!fields || typeof fields !== 'object' || Array.isArray(fields)) continue;
-    result[section as Section] = Object.fromEntries(
-      Object.entries(fields as Record<string, unknown>).map(([field, messages]) => [
-        field,
-        Array.isArray(messages) ? String(messages[0]) : String(messages),
-      ]),
-    );
-  }
-  return result;
-}
-
-function formatTime(iso: string) {
-  const date = new Date(iso);
-  const today = new Date().toDateString() === date.toDateString();
-  const time = date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
-  return today ? `dziś, ${time}` : `${date.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' })}, ${time}`;
 }
 
 const styles = StyleSheet.create({

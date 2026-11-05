@@ -20,6 +20,8 @@ export function TextField({ label, error, hint, style, multiline, onFocus, onBlu
     <View style={styles.container}>
       <ThemedText type="smallBold">{label}</ThemedText>
       <TextInput
+        // Screen readers name the field after its visible label.
+        accessibilityLabel={label}
         placeholderTextColor={theme.textSecondary}
         multiline={multiline}
         onFocus={(e) => {

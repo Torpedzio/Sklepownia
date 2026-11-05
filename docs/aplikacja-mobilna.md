@@ -130,6 +130,29 @@ nie dopasowuje się sam do proporcji, więc po podmianie zdjęcia trzeba je popr
 npx expo start          # w: przeglądarka, kod QR: Expo Go
 npx tsc --noEmit        # typy
 npx expo lint           # lint (jeden znany błąd w szablonowym hooks/use-color-scheme.web.ts)
+npm test                # testy (Jest z jest-expo i React Native Testing Library)
+npm run test:coverage   # testy z pokryciem kodu; raport w coverage/lcov-report/index.html
 ```
 
-Testów automatycznych aplikacja jeszcze nie ma. Podgląd na telefonie: [uruchomienie.md](uruchomienie.md#podgląd-na-telefonie).
+Podgląd na telefonie: [uruchomienie.md](uruchomienie.md#podgląd-na-telefonie).
+
+## Testy
+
+Testy leżą w katalogach `__tests__` (testy ekranów w `src/__tests__/`), nigdy w `src/app/`, bo tam każdy plik
+jest ekranem. Konfiguracja Jest jest w `package.json`. Resolver Reanimated ładuje webowe wersje Reanimated
+i Worklets, więc animacje działają w testach bez natywnego środowiska.
+
+Pomocnicze pliki w `src/testing/`:
+
+| Plik | Do czego |
+|---|---|
+| `router.ts` | Atrapa `expo-router`: `jest.mock('expo-router', () => require('@/testing/router'))`. `Link` przy naciśnięciu woła `router.push(href)`, a parametry adresu ustawia się przez `useLocalSearchParams.mockReturnValue`. |
+| `api.ts` | `mockApi({'GET /shops/7/': …})` odpowiada na `api()` według metody i ścieżki. Tablica to kolejne odpowiedzi, a `Error` jest rzucany. `sent(klucz)` zwraca wysłane treści. |
+| `fixtures.ts` | `shopSettings()` i `shopDetail()`: przykładowe odpowiedzi API do nadpisania w teście |
+
+Testy sprawdzają to, co widzi użytkownik: szukają elementów po roli i nazwie (`getByRole('button', {name: 'Zapisz'})`),
+nie po identyfikatorach. Dlatego pola formularzy mają `accessibilityLabel` z widocznej etykiety.
+React Native Testing Library 14 renderuje asynchronicznie: `await render(...)` i `await fireEvent.press(...)`.
+
+Nietestowane zostają głównie animacje strony głównej (przyklejane sekcje, pokaz slajdów), układy nawigacji
+i pliki tylko dla przeglądarki.
