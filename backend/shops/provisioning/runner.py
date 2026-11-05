@@ -13,11 +13,12 @@ GENERIC_STEP_ERROR = "Wystąpił nieoczekiwany błąd."
 
 
 def run_job(job_id):
+    """Runs the job's steps. Returns the shop when it ended up active, otherwise None."""
     with transaction.atomic():
         job = ProvisioningJob.objects.select_for_update().select_related("shop").get(pk=job_id)
         if job.status != ProvisioningJob.Status.QUEUED:
             logger.info("Provisioning job %s already %s, skipping", job_id, job.status)
-            return
+            return None
         shop = Shop.objects.select_for_update().get(pk=job.shop_id)
         shop.transition_to(Shop.Status.PROVISIONING)
         job.status = ProvisioningJob.Status.RUNNING
@@ -35,13 +36,14 @@ def run_job(job_id):
             message = str(exc) if isinstance(exc, ProvisioningError) else GENERIC_STEP_ERROR
             _mark(step, ProvisioningStep.Status.FAILED, finished_at=timezone.now(), error=message)
             _fail(job, shop, provisioner, message)
-            return
+            return None
         _mark(step, ProvisioningStep.Status.DONE, finished_at=timezone.now())
 
     job.status = ProvisioningJob.Status.SUCCEEDED
     job.finished_at = timezone.now()
     job.save(update_fields=["status", "finished_at"])
     shop.transition_to(Shop.Status.ACTIVE)
+    return shop
 
 
 def _mark(step, status, **fields):

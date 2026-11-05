@@ -58,10 +58,10 @@ export type ShopDetail = Shop & {
   } | null;
 };
 
+/** Where the WordPress panel is. The login and password only ever go by e-mail, to `sent_to`. */
 export type ShopAdminAccess = {
   admin_url: string;
-  username: string;
-  password: string;
+  sent_to: string;
 };
 
 export type Choice = { value: string; label: string };

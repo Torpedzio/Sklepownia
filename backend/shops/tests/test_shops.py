@@ -209,14 +209,14 @@ def test_category_names_follow_industry_then_fill_up():
     assert category_names("other", 2) == ["Kategoria 1", "Kategoria 2"]
 
 
-def test_admin_access_for_active_shop(auth_client, django_capture_on_commit_callbacks):
+def test_admin_access_never_gives_out_the_login(auth_client, verified_user, django_capture_on_commit_callbacks):
     shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
+    password = Shop.objects.get(pk=shop_id).credentials.wp_admin_password
 
-    data = auth_client.get(f"/api/shops/{shop_id}/admin-access/").data
+    response = auth_client.get(f"/api/shops/{shop_id}/admin-access/")
 
-    assert data["admin_url"] == "https://moj-sklep.localhost/wp-admin/"
-    assert data["username"] == "admin"
-    assert data["password"] == Shop.objects.get(pk=shop_id).credentials.wp_admin_password
+    assert response.data == {"admin_url": "https://moj-sklep.localhost/wp-admin/", "sent_to": verified_user.email}
+    assert password not in response.content.decode()
 
 
 def test_admin_access_unavailable_until_shop_is_active(auth_client, django_capture_on_commit_callbacks, settings):

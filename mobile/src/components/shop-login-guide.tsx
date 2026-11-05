@@ -1,19 +1,40 @@
-import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
+import { useNotify } from '@/context/notifications';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
+import { api, ApiError } from '@/lib/api';
 import type { ShopAdminAccess } from '@/lib/types';
 
-/** Step-by-step sign-in to the shop's WordPress panel, with the credentials to copy. */
+/**
+ * Step-by-step sign-in to the shop's WordPress panel. The login and password are never shown here:
+ * they go to the owner's e-mail, and this offers to send them again.
+ */
 export function ShopLoginSteps({ shopId }: { shopId: number }) {
   const theme = useTheme();
+  const notify = useNotify();
   const { data: access, error } = useApiQuery<ShopAdminAccess>(`/shops/${shopId}/admin-access/`);
-  const [showPassword, setShowPassword] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  async function sendAgain() {
+    setSending(true);
+    try {
+      const sent = await api<ShopAdminAccess>(`/shops/${shopId}/send-admin-access/`, { method: 'POST' });
+      notify.success(`Wysłaliśmy dane logowania na ${sent.sent_to}.`);
+    } catch (e) {
+      notify.error(
+        e instanceof ApiError && e.status === 429
+          ? 'Dane wysłaliśmy już kilka razy. Spróbuj ponownie za godzinę.'
+          : (e as Error).message,
+      );
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <>
@@ -28,13 +49,21 @@ export function ShopLoginSteps({ shopId }: { shopId: number }) {
               {access.admin_url}
             </ThemedText>
           </Step>
-          <Step number={2} title="W polu „Nazwa użytkownika lub adres email” wpisz">
-            <Secret value={access.username} />
+          <Step number={2} title="Wpisz login i hasło z wiadomości e-mail">
+            <ThemedText type="small" themeColor="textSecondary">
+              Wysłaliśmy je na {access.sent_to}, gdy sklep był gotowy. Nie ma wiadomości? Zajrzyj do spamu albo wyślij
+              dane jeszcze raz.
+            </ThemedText>
+            <Button
+              title="Wyślij dane ponownie"
+              icon="mail"
+              variant="secondary"
+              loading={sending}
+              onPress={sendAgain}
+              style={styles.start}
+            />
           </Step>
-          <Step number={3} title="W polu „Hasło” wpisz">
-            <Secret value={access.password} hidden={!showPassword} onToggle={() => setShowPassword((v) => !v)} />
-          </Step>
-          <Step number={4} title="Kliknij „Zaloguj się”">
+          <Step number={3} title="Kliknij „Zaloguj się”">
             <ThemedText type="small" themeColor="textSecondary">
               Najważniejsze są Produkty i WooCommerce w menu po lewej.
             </ThemedText>
@@ -44,8 +73,8 @@ export function ShopLoginSteps({ shopId }: { shopId: number }) {
 
       <View style={[styles.note, { borderTopColor: theme.border }]}>
         <ThemedText type="small" themeColor="textSecondary">
-          Zapisz hasło w przeglądarce albo menedżerze haseł. Jeśli zmienisz je w panelu, tutaj dalej zobaczysz to
-          pierwotne.
+          Hasła nie pokazujemy w aplikacji, żeby nikt nie podejrzał go na ekranie. Zapisz je w przeglądarce albo
+          menedżerze haseł. Zapomniane hasło zmienisz w sekcji „Bezpieczeństwo”, a nowe przyjdzie e-mailem.
         </ThemedText>
       </View>
     </>
@@ -63,37 +92,6 @@ function Step({ number, title, children }: { number: number; title: string; chil
         <ThemedText type="smallBold">{title}</ThemedText>
         {children}
       </View>
-    </View>
-  );
-}
-
-function Secret({ value, hidden = false, onToggle }: { value: string; hidden?: boolean; onToggle?: () => void }) {
-  const theme = useTheme();
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    await Clipboard.setStringAsync(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-
-  return (
-    <View style={[styles.secret, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      <ThemedText style={styles.secretValue} selectable={!hidden} numberOfLines={1}>
-        {hidden ? '•'.repeat(12) : value}
-      </ThemedText>
-      {onToggle ? (
-        <Pressable onPress={onToggle} accessibilityRole="button" hitSlop={6}>
-          <ThemedText type="smallBold" themeColor="primary">
-            {hidden ? 'Pokaż' : 'Ukryj'}
-          </ThemedText>
-        </Pressable>
-      ) : null}
-      <Pressable onPress={copy} accessibilityRole="button" accessibilityLabel="Kopiuj" hitSlop={6}>
-        <ThemedText type="smallBold" themeColor={copied ? 'success' : 'primary'}>
-          {copied ? 'Skopiowano' : 'Kopiuj'}
-        </ThemedText>
-      </Pressable>
     </View>
   );
 }
@@ -129,19 +127,8 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: Spacing.two,
   },
-  secret: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 44,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-  },
-  secretValue: {
-    flex: 1,
-    fontFamily: Fonts.mono,
-    fontSize: 15,
+  start: {
+    alignSelf: 'flex-start',
   },
   note: {
     paddingTop: Spacing.three,

@@ -29,6 +29,7 @@
 | PostgreSQL | Konta, sklepy, konfiguracja, zaszyfrowane hasła sklepów, postęp zakładania | `db` w [docker-compose.yml](../docker-compose.yml) |
 | Redis | Kolejka zadań Celery | `redis` |
 | Worker Celery | Wykonuje długie zadania: zakładanie i usuwanie sklepów, wysyłkę e-maili | `worker` |
+| Mailpit | Lokalny serwer SMTP: przyjmuje całą pocztę i pokazuje ją w przeglądarce. Na produkcji zastępuje go dostawca poczty. | `mail` |
 | Traefik | Kieruje ruch do kontenera sklepu po nazwie hosta | `shops-proxy` w [infra/shops/](../infra/shops/) |
 | MariaDB | Jedna instancja, osobna baza i użytkownik dla każdego sklepu | `shops-db` |
 | Kontener sklepu | WordPress + WooCommerce + motyw, jeden na sklep | `shop-<id>`, obraz `shops/wordpress:7.1` |
@@ -47,7 +48,8 @@ Proces API nie dotyka Dockera (klient Dockera jest tworzony leniwie, dopiero prz
 3. Worker ([runner.run_job](../backend/shops/provisioning/runner.py)) zmienia status na `provisioning`
    i wykonuje kroki po kolei, zapisując stan każdego (`running`, `done`, `failed`).
 4. Aplikacja co 1,5 s pobiera `GET /api/shops/{id}/` i rysuje postęp na paragonie.
-5. Po ostatnim kroku sklep ma status `active`. Przy błędzie: status `failed`, opis błędu przy kroku,
+5. Po ostatnim kroku sklep ma status `active`, a właściciel dostaje e-mail „Sklep … jest gotowy” ze szczegółami
+   sklepu oraz loginem i hasłem do panelu WordPressa (`send_admin_access_email`). Przy błędzie: status `failed`, opis błędu przy kroku,
    a provisioner sprząta po nieudanej próbie (`cleanup`).
 6. „Spróbuj ponownie” (`POST /api/shops/{id}/retry/`) tworzy nowe zadanie. Każdy krok jest idempotentny,
    więc kroki już wykonane po prostu przechodzą, a praca idzie dalej od miejsca błędu.
@@ -113,6 +115,9 @@ więc po zmianie domeny trzeba przenieść istniejące sklepy poleceniem `update
 
 - Hasła sklepów (baza, administrator WordPressa, hasło API) są zaszyfrowane w bazie kluczem Fernet `FIELD_ENCRYPTION_KEY`
   (`EncryptedTextField`). Każde hasło jest zapisywane, zanim zostanie użyte, żeby ponowiona próba go nie zgubiła.
+- Login i hasło administratora sklepu nie wychodzą przez API. Trafiają tylko e-mailem na adres konta właściciela:
+  po założeniu sklepu, po zmianie hasła i na prośbę (`send-admin-access`, najwyżej 5 razy na godzinę).
+  Aplikacja pokazuje tylko adres panelu i adres, na który wysłano dane.
 - Użytkownik widzi tylko swoje sklepy (`ShopViewSet.get_queryset`). Zakładanie i ponawianie wymaga potwierdzonego e-maila.
 - Komunikaty błędów kroków pokazywane użytkownikowi pochodzą tylko z `ProvisioningError`; inne wyjątki
   (mogące zawierać hasła lub nazwy hostów) zastępuje ogólny komunikat, a szczegóły trafiają do logów workera.

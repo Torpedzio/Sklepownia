@@ -153,7 +153,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Email
 
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@localhost")
+# SMTP server for the smtp backend: locally Mailpit (the `mail` service), in production a real provider.
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "25"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "0") == "1"
+EMAIL_TIMEOUT = 10
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Sklepownia <no-reply@localhost>")
+# Name of the platform in e-mails.
+PLATFORM_NAME = os.environ.get("PLATFORM_NAME", "Sklepownia")
 # Where messages from the contact form go.
 CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "kontakt@localhost")
 
@@ -172,6 +181,8 @@ REST_FRAMEWORK = {
         'auth': '10/min',
         'email_verification': '10/hour',
         'contact': '5/hour',
+        # Resending a shop's admin login by e-mail.
+        'admin_access_email': '5/hour',
     },
 }
 

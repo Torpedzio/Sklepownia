@@ -116,7 +116,7 @@ export default function ShopSettingsScreen() {
     if (operation.kind === 'update_settings') {
       notify.success(`Zapisano w sklepie: ${operation.changed_fields.join(', ').toLowerCase()}.`);
     } else if (operation.kind === 'reset_admin_password') {
-      notify.success('Nowe hasło administratora jest gotowe. Znajdziesz je w szczegółach sklepu.');
+      notify.success('Nowe hasło administratora wysłaliśmy na Twój adres e-mail.');
     } else if (operation.kind === 'remove_sample_products') {
       const removed = operation.result.removed ?? 0;
       notify.success(
@@ -552,7 +552,8 @@ export default function ShopSettingsScreen() {
                   <View style={styles.actionText}>
                     <ThemedText type="smallBold">Nowe hasło administratora</ThemedText>
                     <ThemedText type="small" themeColor="textSecondary">
-                      Przyda się, jeśli ktoś mógł poznać obecne hasło. Wszyscy zalogowani do panelu zostaną wylogowani.
+                      Przyda się, jeśli ktoś mógł poznać obecne hasło. Nowe przyjdzie e-mailem, a wszyscy zalogowani do
+                      panelu zostaną wylogowani.
                     </ThemedText>
                   </View>
                   <Button
@@ -564,7 +565,7 @@ export default function ShopSettingsScreen() {
                       runOperation(
                         'reset-admin-password',
                         'Zmienić hasło administratora?',
-                        'Stare hasło przestanie działać, a nowe znajdziesz w szczegółach sklepu.',
+                        'Stare hasło przestanie działać, a nowe wyślemy na Twój adres e-mail.',
                         'Zmień hasło',
                       )
                     }

@@ -40,6 +40,7 @@ Migracje dodają też szablony sklepów (Storefront, Astra, Kadence) i serwer `l
 | http://localhost:8000/docs/ | Dokumentacja projektu (te pliki jako strona) |
 | http://localhost:8000/api/docs/ | Dokumentacja API (Swagger) |
 | http://localhost:8000/admin/ | Panel admina Django |
+| http://localhost:8030 | Mailpit: cała poczta wysłana przez platformę (nic nie wychodzi na zewnątrz) |
 
 Backend działa na `runserver` z katalogiem `backend/` podmontowanym do kontenera, więc zmiany w kodzie
 przeładowują się same. Worker Celery **nie** przeładowuje się sam: po zmianie kodu provisioningu
@@ -73,14 +74,15 @@ zmienną `EXPO_PUBLIC_API_URL`.
 3. Po zmianie sieci powtórz punkt 2 z nowym IP i zeskanuj nowy kod QR
    (albo wpisz w Expo Go `exp://<IP>:8081`). Więcej: [obsluga.md](obsluga.md#zmiana-sieci-lub-adresu-ip).
 
-## Potwierdzenie e-maila w środowisku lokalnym
+## Poczta w środowisku lokalnym
 
-Lokalnie e-maile nie są wysyłane, tylko wypisywane w logach (`EMAIL_BACKEND` domyślnie to backend konsolowy).
-Wysyłka idzie przez Celery, więc kod potwierdzający jest w logach workera:
+Lokalnie całą pocztę przyjmuje Mailpit (usługa `mail` w [docker-compose.yml](../docker-compose.yml)) i nic nie wychodzi
+na zewnątrz. Wiadomości czyta się w przeglądarce: http://localhost:8030. Trafiają tam kody potwierdzające e-mail,
+dane logowania do sklepów i wiadomości z formularza kontaktowego.
 
-```bash
-docker compose logs worker | grep -A2 "kod weryfikacyjny"
-```
+Port 8030 wybrany jest dlatego, że 8025 często zajmuje inny Mailpit (np. z DDEV). Inny port: `MAIL_UI_PORT` w `.env`.
+Bez ustawień poczty w `.env` backend wypisuje wiadomości w logach (`EMAIL_BACKEND` domyślnie to backend konsolowy):
+`docker compose logs worker`.
 
 ## Zmienne środowiskowe (`.env`)
 
@@ -94,7 +96,12 @@ docker compose logs worker | grep -A2 "kod weryfikacyjny"
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:8081` | Skąd przeglądarka może wołać API (wersja web) |
 | `REDIS_URL` | `redis://redis:6379/0` | Kolejka Celery |
 | `FIELD_ENCRYPTION_KEY` | — (wymagane) | Klucz Fernet do szyfrowania haseł sklepów. **Zmiana klucza = utrata dostępu do zapisanych haseł.** |
-| `EMAIL_BACKEND`, `DEFAULT_FROM_EMAIL` | konsola, `no-reply@localhost` | Wysyłka e-maili |
+| `EMAIL_BACKEND` | konsola | Lokalnie `django.core.mail.backends.smtp.EmailBackend` (Mailpit) |
+| `EMAIL_HOST`, `EMAIL_PORT` | `localhost`, `25` | Serwer SMTP; lokalnie `mail`, `1025` |
+| `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` | puste, `0` | Logowanie i szyfrowanie u dostawcy poczty na produkcji |
+| `DEFAULT_FROM_EMAIL` | `Sklepownia <no-reply@localhost>` | Nadawca wiadomości |
+| `PLATFORM_NAME` | `Sklepownia` | Nazwa platformy w treści wiadomości |
+| `MAIL_UI_PORT` | `8030` | Port podglądu Mailpit (tylko docker-compose) |
 | `CONTACT_EMAIL` | `kontakt@localhost` | Dokąd trafiają wiadomości z formularza kontaktowego |
 | `HANDBOOK_ROOT` | `/project` | Katalog repozytorium w kontenerze, z którego strona `/docs/` czyta dokumentację |
 | `SHOP_PROVISIONER` | `FakeProvisioner` | Symulacja albo prawdziwe sklepy ([architektura.md](architektura.md#provisionery)) |

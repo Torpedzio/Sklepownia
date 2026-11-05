@@ -38,7 +38,7 @@ Objaw niedziałającego serwera sklepów: sklepy nie odpowiadają, a `update_sho
 
 ```bash
 docker compose logs -f backend      # zapytania do API
-docker compose logs -f worker       # zakładanie sklepów, e-maile (lokalnie z kodami potwierdzającymi)
+docker compose logs -f worker       # zakładanie sklepów, wysyłka e-maili (treść wiadomości: http://localhost:8030)
 docker logs -f shop-<id>            # serwer WWW konkretnego sklepu
 docker logs -f shops-proxy          # Traefik
 ```
@@ -53,7 +53,7 @@ Użytkownik i panel admina widzą komunikat skrócony.
 | Telefon nie łączy się z Metro | Inna sieć albo sieć izolująca urządzenia (często gościnna lub firmowa). Test: `http://<IP>:8081/status` w przeglądarce telefonu. W ostateczności `npx expo start --tunnel` (wtedy API i sklepy nie są dostępne z telefonu). |
 | „Otwórz sklep” na telefonie nie działa | Domena sklepów to `localhost` albo stare IP. Patrz [zmiana sieci](#zmiana-sieci-lub-adresu-ip). |
 | Sklep przekierowuje na stary adres | WordPress ma zapisany stary adres. Uruchom `update_shop_addresses`. |
-| Brak kodu potwierdzającego e-mail | Lokalnie e-maile są tylko w logach workera: `docker compose logs worker`. |
+| Brak kodu potwierdzającego albo danych logowania do sklepu | Lokalnie poczta jest w Mailpit: http://localhost:8030. Pusto? Sprawdź `docker compose ps mail` i błędy wysyłki w `docker compose logs worker`. Dane sklepu wyśle ponownie przycisk „Wyślij dane ponownie” w ustawieniach ręcznych. |
 | Zmiana w provisioningu nie działa | Worker nie przeładowuje kodu sam: `docker compose restart worker`. |
 | Zakładanie stoi na „Oczekuje” | Worker nie działa albo nie widzi Redisa: `docker compose ps`, `docker compose logs worker`. |
 | Krok kończy się „Wystąpił nieoczekiwany błąd” | Szczegóły w logach workera. Po naprawie przyczyny użyj „Spróbuj ponownie” w aplikacji. |

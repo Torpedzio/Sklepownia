@@ -203,14 +203,14 @@ def test_refresh_reads_the_shop(auth_client, shop, django_capture_on_commit_call
 
 
 def test_reset_admin_password_gives_a_new_one(auth_client, shop, django_capture_on_commit_callbacks):
-    before = auth_client.get(f"/api/shops/{shop.pk}/admin-access/").data["password"]
+    before = shop.credentials.wp_admin_password
 
     with django_capture_on_commit_callbacks(execute=True):
         response = auth_client.post(f"/api/shops/{shop.pk}/reset-admin-password/")
 
     assert response.status_code == 202
     assert response.data["kind"] == "reset_admin_password"
-    assert auth_client.get(f"/api/shops/{shop.pk}/admin-access/").data["password"] != before
+    assert Shop.objects.get(pk=shop.pk).credentials.wp_admin_password != before
 
 
 def test_remove_sample_products_reports_how_many(auth_client, shop, django_capture_on_commit_callbacks):

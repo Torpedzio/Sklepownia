@@ -109,7 +109,7 @@ Ruch na ekranie (Reanimated) respektuje systemowe ograniczenie ruchu.
 | `CtaBand` | Zielony pas z wezwaniem do działania na końcu strony |
 | `FaqList` | Pytania i odpowiedzi; odpowiedź rozsuwa się płynnie, strzałka obraca się razem z nią, otwarte jest jedno pytanie naraz |
 | `SectionHeader` | Tytuł i wstęp sekcji strony głównej (używany przez sekcje przyklejane) |
-| `ShopLoginSteps`, `ShopGuidesPanel` | Kroki logowania do panelu WordPressa z danymi do skopiowania (w „Ustawieniach ręcznych”) i porady jako slajdy |
+| `ShopLoginSteps`, `ShopGuidesPanel` | Kroki logowania do panelu WordPressa w „Ustawieniach ręcznych”: przycisk do panelu, adres, na który wysłano login i hasło, i „Wyślij dane ponownie”. Danych logowania aplikacja nie pokazuje. Obok porady jako slajdy. |
 | `ShopOverview` | Kafelki ze stanem ustawień sklepu; brak płatności lub wysyłki jest wyróżniony (`missingForSales`), kafelek otwiera swoją sekcję ustawień |
 
 Hook `useFullBleed` pozwala sekcji wyjść z wyśrodkowanej kolumny na całą szerokość strony.

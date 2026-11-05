@@ -10,7 +10,8 @@ a platforma w około dwie minuty uruchamia działający sklep w osobnym kontener
 - Zakładanie sklepu z formularza: motyw (Storefront, Astra, Kadence), język, waluta, kraj,
   kategorie dobrane do branży i opcjonalnie przykładowe produkty.
 - Podgląd postępu zakładania krok po kroku i ponowienie kroku, który się nie udał.
-- Dostęp do panelu WordPressa i porady dotyczące prowadzenia sklepu.
+- Dane logowania do panelu WordPressa wysyłane e-mailem, nigdy pokazywane w aplikacji.
+- Ustawienia sklepu (płatności, wysyłka, podatki, region, wygląd) zmieniane z aplikacji.
 - Każdy sklep we własnym kontenerze, z własną bazą danych i adresem.
 - Jedna aplikacja na iOS, Androida i przeglądarkę.
 - Panel administratora z użytkownikami, sklepami i wiadomościami z formularza kontaktowego.
@@ -52,6 +53,7 @@ Po uruchomieniu:
 | http://localhost:8000/docs/ | Dokumentacja projektu jako strona |
 | http://localhost:8000/api/docs/ | Dokumentacja endpointów API |
 | http://localhost:8000/admin/ | Panel administratora |
+| http://localhost:8030 | Poczta wysłana przez platformę (Mailpit): kody potwierdzające, dane logowania do sklepów |
 
 ## Dokumentacja
 

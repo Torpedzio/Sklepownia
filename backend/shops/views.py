@@ -4,6 +4,7 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 
 from accounts.permissions import IsEmailVerified
 
@@ -11,6 +12,7 @@ from . import services
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import InvalidTransition, Shop, ShopCredentials, ShopOperation, ShopTemplate
 from .shop_settings import SettingsUpdateSerializer
+from .tasks import send_admin_access_email
 from .serializers import (
     DEFAULT_CATEGORY_COUNT,
     FormOptionsSerializer,
@@ -28,12 +30,13 @@ from .slugs import normalize_slug, slug_error
 
 # Settings and operations work on a running shop, so they share the creation's permissions.
 VERIFIED_ACTIONS = (
-    "create", "retry", "shop_settings", "refresh_settings", "reset_admin_password",
+    "create", "retry", "admin_access", "send_admin_access", "shop_settings", "refresh_settings", "reset_admin_password",
     "remove_sample_products", "operations", "operation",
 )
 OPERATION_HISTORY_LENGTH = 20
 
 NOT_ACTIVE = "Ustawienia można zmieniać, gdy sklep działa."
+PANEL_NOT_READY = "Panel będzie dostępny, gdy sklep zostanie założony."
 BUSY = "Sklep jeszcze zapisuje poprzednie zmiany. Spróbuj za chwilę."
 
 
@@ -63,6 +66,10 @@ def _settings_payload(shop):
     }
 
 
+def _panel_ready(shop):
+    return shop.status == Shop.Status.ACTIVE and ShopCredentials.objects.filter(shop=shop).exists()
+
+
 def _operation_conflict(exc):
     message = NOT_ACTIVE if isinstance(exc, services.ShopNotActive) else BUSY
     return Response({"detail": message}, status=status.HTTP_409_CONFLICT)
@@ -76,6 +83,8 @@ class ShopViewSet(
     viewsets.GenericViewSet,
 ):
     queryset = Shop.objects.none()
+    # Set per action (send_admin_access); without a scope ScopedRateThrottle lets everything through.
+    throttle_scope = None
 
     def get_queryset(self):
         return (
@@ -136,18 +145,27 @@ class ShopViewSet(
     @extend_schema(responses={200: ShopAdminAccessSerializer})
     @action(detail=True, methods=["get"], url_path="admin-access")
     def admin_access(self, request, pk=None):
+        """Where the WordPress panel is and where its login went. Never the login itself."""
         shop = self.get_object()
-        credentials = ShopCredentials.objects.filter(shop=shop).first()
-        if shop.status != Shop.Status.ACTIVE or credentials is None:
-            return Response(
-                {"detail": "Panel będzie dostępny, gdy sklep zostanie założony."},
-                status=status.HTTP_409_CONFLICT,
-            )
-        return Response({
-            "admin_url": shop.admin_url,
-            "username": credentials.wp_admin_username,
-            "password": credentials.wp_admin_password,
-        })
+        if not _panel_ready(shop):
+            return Response({"detail": PANEL_NOT_READY}, status=status.HTTP_409_CONFLICT)
+        return Response({"admin_url": shop.admin_url, "sent_to": shop.owner.email})
+
+    @extend_schema(
+        request=None,
+        responses={202: ShopAdminAccessSerializer, 409: OpenApiResponse(description="Sklep nie jest jeszcze gotowy.")},
+    )
+    @action(
+        detail=True, methods=["post"], url_path="send-admin-access",
+        throttle_classes=[ScopedRateThrottle], throttle_scope="admin_access_email",
+    )
+    def send_admin_access(self, request, pk=None):
+        """E-mails the shop's details and admin login to the account address again."""
+        shop = self.get_object()
+        if not _panel_ready(shop):
+            return Response({"detail": PANEL_NOT_READY}, status=status.HTTP_409_CONFLICT)
+        send_admin_access_email.delay(shop.pk, "resend")
+        return Response({"admin_url": shop.admin_url, "sent_to": shop.owner.email}, status=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
         parameters=[OpenApiParameter("slug", str, required=True)],
@@ -226,7 +244,7 @@ class ShopViewSet(
     )
     @action(detail=True, methods=["post"], url_path="reset-admin-password")
     def reset_admin_password(self, request, pk=None):
-        """New password for the shop administrator; read it from admin-access once the operation succeeds."""
+        """New password for the shop administrator, e-mailed to the owner once the operation succeeds."""
         return self._start(ShopOperation.Kind.RESET_ADMIN_PASSWORD)
 
     @extend_schema(

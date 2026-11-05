@@ -4,8 +4,10 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
 
 ## Czego brakuje w funkcjach
 
-- **E-maile:** platforma ani sklepy nie wysyłają prawdziwych e-maili (brak SMTP).
-  Kody potwierdzające są tylko w logach, a sklepy nie wyślą klientom potwierdzeń zamówień.
+- **E-maile sklepów:** platforma wysyła pocztę przez SMTP (lokalnie do Mailpit), ale sklepy WordPress nie mają
+  skonfigurowanej poczty, więc nie wyślą klientom potwierdzeń zamówień.
+- **Hasło w e-mailu:** dane logowania do panelu przychodzą zwykłym e-mailem. Bezpieczniejsze będzie logowanie
+  jednym kliknięciem z aplikacji, bez przesyłania hasła.
 - **Płatności i wysyłka** nie są konfigurowane. Właściciel robi to sam w panelu WooCommerce.
 - **Logowanie do panelu sklepu jednym kliknięciem.** Teraz aplikacja pokazuje login i hasło administratora.
   Pomysł: wtyczka „must-use” w WordPressie i jednorazowe linki logowania wydawane przez backend.
@@ -33,7 +35,7 @@ Projekt działa dziś tylko lokalnie. Przed uruchomieniem dla użytkowników trz
 3. **Serwer aplikacji.** Gunicorn lub uvicorn zamiast `runserver`, `DJANGO_DEBUG=0`, konkretne `DJANGO_ALLOWED_HOSTS`
    i `CORS_ALLOWED_ORIGINS`, pliki statyczne, kopie zapasowe PostgreSQL.
 4. **Kopie zapasowe sklepów:** wolumenów WordPressa i baz MariaDB.
-5. **SMTP** dla platformy i sklepów.
+5. **Poczta:** dostawca SMTP dla platformy (zmienne `EMAIL_*`, zamiast Mailpit) i dla sklepów, z rekordami SPF i DKIM domeny.
 6. **Monitorowanie:** zdrowie sklepów, błędy zakładania, zajętość serwera (`Server.max_shops`).
 7. **Wiele serwerów sklepów.** Model `Server` i krok przydziału serwera są gotowe, ale `DockerProvisioner`
    rozmawia tylko z lokalnym Dockerem.

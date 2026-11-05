@@ -195,7 +195,7 @@ test('a new admin password is reported when ready', async () => {
   await fireEvent.press(await screen.findByRole('button', { name: 'Zmień hasło' }));
 
   expect(api.sent('POST /shops/7/reset-admin-password/')).toHaveLength(1);
-  expect(await screen.findByText(/Nowe hasło administratora jest gotowe/)).toBeTruthy();
+  expect(await screen.findByText('Nowe hasło administratora wysłaliśmy na Twój adres e-mail.')).toBeTruthy();
 });
 
 test('removing sample products says how many went', async () => {
@@ -211,19 +211,23 @@ test('removing sample products says how many went', async () => {
   expect(await screen.findByText('Usunięto przykładowe produkty (6).')).toBeTruthy();
 });
 
-test('manual settings show how to sign in to WordPress', async () => {
-  await open('reczne', {
+test('manual settings never show the password, they send it by e-mail', async () => {
+  const access = { admin_url: 'http://palarnia.localhost/wp-admin/', sent_to: 'anna@example.com' };
+  const { api } = await open('reczne', {
     [SETTINGS]: shopSettings({}, fresh),
-    'GET /shops/7/admin-access/': {
-      admin_url: 'http://palarnia.localhost/wp-admin/',
-      username: 'admin',
-      password: 'tajne',
-    },
+    'GET /shops/7/admin-access/': access,
+    'POST /shops/7/send-admin-access/': [access, new ApiError(429, null)],
   });
 
   expect(await screen.findByText('http://palarnia.localhost/wp-admin/')).toBeTruthy();
-  expect(screen.getByText('admin')).toBeTruthy();
-  expect(screen.queryByText('tajne')).toBeNull();
+  expect(screen.getByText(/Wysłaliśmy je na anna@example.com/)).toBeTruthy();
+
+  await fireEvent.press(screen.getByRole('button', { name: 'Wyślij dane ponownie' }));
+  expect(await screen.findByText('Wysłaliśmy dane logowania na anna@example.com.')).toBeTruthy();
+  expect(api.sent('POST /shops/7/send-admin-access/')).toHaveLength(1);
+
+  await fireEvent.press(screen.getByRole('button', { name: 'Wyślij dane ponownie' }));
+  expect(await screen.findByText('Dane wysłaliśmy już kilka razy. Spróbuj ponownie za godzinę.')).toBeTruthy();
 });
 
 test('history lists the changes made from the app', async () => {

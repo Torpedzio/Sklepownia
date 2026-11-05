@@ -16,13 +16,14 @@ Kind = ShopOperation.Kind
 
 
 def run_operation(operation_id):
+    """Runs a queued operation and returns it; None when it had already run."""
     with transaction.atomic():
         operation = ShopOperation.objects.select_for_update(of=("self",)).select_related("shop__config__template").get(
             pk=operation_id,
         )
         if operation.status != ShopOperation.Status.QUEUED:
             logger.info("Shop operation %s already %s, skipping", operation_id, operation.status)
-            return
+            return None
         operation.status = ShopOperation.Status.RUNNING
         operation.started_at = timezone.now()
         operation.save(update_fields=["status", "started_at"])
@@ -46,8 +47,9 @@ def run_operation(operation_id):
         if operation.kind == Kind.UPDATE_SETTINGS:
             # Part of the change may have been applied; show what the shop really has now.
             _sync_quietly(provisioner, shop)
-        return
+        return operation
     _finish(operation, ShopOperation.Status.SUCCEEDED)
+    return operation
 
 
 def _update_settings(provisioner, shop, changes):

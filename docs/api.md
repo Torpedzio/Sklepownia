@@ -43,7 +43,8 @@ Limity zapytań: logowanie i rejestracja 10 na minutę, potwierdzanie e-maila 10
 | `GET shops/{id}/` | Szczegóły: pola z listy plus `config` (wybory z formularza) i `provisioning` (ostatnie zadanie z krokami) |
 | `DELETE shops/{id}/` | Usunięcie, `204`. W trakcie zakładania `409`. |
 | `POST shops/{id}/retry/` | Ponowienie po błędzie (wymaga potwierdzonego e-maila), `202`. W innym stanie `409`. |
-| `GET shops/{id}/admin-access/` | `{admin_url, username, password}` do panelu WordPressa. Tylko dla działającego sklepu, inaczej `409`. |
+| `GET shops/{id}/admin-access/` | `{admin_url, sent_to}`: adres panelu WordPressa i adres e-mail, na który wysłano login i hasło. Samych danych logowania API nie zwraca. Tylko dla działającego sklepu, inaczej `409`. |
+| `POST shops/{id}/send-admin-access/` | Wysyła ponownie e-mail z danymi sklepu i logowaniem, `202` z `{admin_url, sent_to}`. Najwyżej 5 razy na godzinę (`429`). |
 | `GET shops/check-slug/?slug=` | `{slug, available, reason}`: czy adres jest wolny i dlaczego nie |
 | `GET shops/form-options/` | Wszystko do formularza: branże, języki, waluty, kraje, motywy, zakres liczby kategorii, domena |
 
@@ -57,7 +58,7 @@ jedna naraz. Gdy sklep nie działa albo wykonuje poprzednią operację, odpowied
 | `GET shops/{id}/settings/` | `{values, synced_at, operation, busy, options}`: ustawienia w sekcjach, kiedy odczytano je ze sklepu, ostatnia operacja, czy sklep jest zajęty, wartości do wyboru (języki, waluty, kraje, strefy czasowe, motywy, typowe stawki VAT według kraju) |
 | `PATCH shops/{id}/settings/` | Dowolne sekcje i pola, np. `{"shipping": {"courier_enabled": true}}`. `202` z tym samym kształtem co `GET`, gdy coś się zmienia; `200`, gdy sklep już ma te wartości. `400` z błędami `{sekcja: {pole: [komunikat]}}`. |
 | `POST shops/{id}/settings/refresh/` | Ponowny odczyt ustawień ze sklepu (np. po zmianach w wp-admin), `202` |
-| `POST shops/{id}/reset-admin-password/` | Nowe hasło administratora, `202` z operacją. Hasło odczytasz z `admin-access` po zakończeniu. |
+| `POST shops/{id}/reset-admin-password/` | Nowe hasło administratora, `202` z operacją. Po zakończeniu hasło przychodzi e-mailem. |
 | `POST shops/{id}/remove-sample-products/` | Usunięcie produktów przykładowych, `202` z operacją; `result.removed` to ich liczba |
 | `GET shops/{id}/operations/` | 20 ostatnich operacji, od najnowszej |
 | `GET shops/{id}/operations/{operation_id}/` | Jedna operacja: `kind`, `status`, `changes`, `changed_fields` (etykiety zmienionych pól), `result`, `error`, czasy |

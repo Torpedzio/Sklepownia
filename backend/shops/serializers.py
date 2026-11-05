@@ -100,9 +100,10 @@ class ShopDetailSerializer(ShopSerializer):
 
 
 class ShopAdminAccessSerializer(serializers.Serializer):
+    """Where the admin panel is. The login and password are only ever sent by e-mail, to `sent_to`."""
+
     admin_url = serializers.URLField()
-    username = serializers.CharField()
-    password = serializers.CharField()
+    sent_to = serializers.EmailField(help_text="Adres, na który wysyłamy dane logowania (e-mail konta).")
 
 
 class SlugCheckSerializer(serializers.Serializer):
