@@ -114,7 +114,7 @@ Hook `useFullBleed` pozwala sekcji wyjść z wyśrodkowanej kolumny na całą sz
 
 | Katalog | Co | Skąd |
 |---|---|---|
-| `assets/images/features/` | Zdjęcia slajdów „Co dostajesz” | Zmniejszone kopie plików z katalogu `images/` w głównym katalogu repozytorium |
+| `assets/images/features/` | Zdjęcia slajdów „Co dostajesz” | Zmniejszone zdjęcia; oryginały w pełnej rozdzielczości nie są przechowywane w repozytorium |
 | `assets/images/themes/` | Podglądy motywów | Zrzuty ekranu sklepów założonych przez aplikację, 1200×750 |
 
 Proporcje zdjęć są zapisane obok nich w `content.ts` (`aspectRatio`). W przeglądarce `Image`

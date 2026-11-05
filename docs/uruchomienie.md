@@ -2,7 +2,7 @@
 
 ## Wymagania
 
-- Docker z Docker Compose (testowane na Fedorze z SELinux)
+- Docker z Docker Compose (na systemach z SELinux, np. Fedorze, też działa)
 - Node.js 20+ i npm (projekt rozwijany na Node 22)
 - Wolny port 8000 (API), 8080 (sklepy) i 8081 (Metro, serwer aplikacji)
 - Na telefonie: aplikacja Expo Go w wersji obsługującej SDK 58
@@ -66,7 +66,7 @@ zmienną `EXPO_PUBLIC_API_URL`.
 2. Sklepy muszą mieć domenę widoczną z telefonu, bo `localhost` na telefonie to sam telefon:
    ```bash
    # w .env, z IP komputera zapisanym myślnikami
-   SHOPS_BASE_DOMAIN=192-168-33-10.sslip.io
+   SHOPS_BASE_DOMAIN=192-168-1-20.sslip.io
    docker compose up -d backend worker
    docker compose exec worker python manage.py update_shop_addresses
    ```

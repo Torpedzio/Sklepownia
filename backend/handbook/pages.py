@@ -34,6 +34,7 @@ PAGES = [
     Page("aplikacja-mobilna", "Aplikacja mobilna", "docs/aplikacja-mobilna.md"),
     Page("serwer-sklepow", "Serwer sklepów", "infra/shops/README.md"),
     Page("obsluga", "Obsługa na co dzień", "docs/obsluga.md"),
+    Page("rozwoj", "Rozwój projektu", "docs/rozwoj.md"),
     Page("ograniczenia-i-plan", "Ograniczenia i plan", "docs/ograniczenia-i-plan.md"),
 ]
 PAGES_BY_SLUG = {page.slug: page for page in PAGES}

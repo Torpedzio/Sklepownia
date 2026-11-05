@@ -24,17 +24,17 @@ docker compose build wordpress     # obraz sklepu: WP 7.1 + WP-CLI + WooCommerce
 docker compose up -d               # Traefik + MariaDB
 ```
 
-Porty 80/443 zajmuje u nas `ddev-router`, dlatego sklepy są na **8080**.
+Sklepy są na porcie **8080**, żeby nie kolidować z innymi serwerami na 80/443.
 Przeglądarki i curl same rozwiązują `*.localhost` na 127.0.0.1, więc nie trzeba konfigurować DNS.
 
 ## Sklepy na telefonie
 
 Na telefonie `localhost` to sam telefon, więc sklepy potrzebują domeny wskazującej na komputer.
-Wystarczy publiczny DNS sslip.io: `<slug>.192-168-33-10.sslip.io` rozwiązuje się na `192.168.33.10`.
+Wystarczy publiczny DNS sslip.io: `<slug>.192-168-1-20.sslip.io` rozwiązuje się na `192.168.1.20`.
 
 ```bash
 # w głównym .env
-SHOPS_BASE_DOMAIN=192-168-33-10.sslip.io
+SHOPS_BASE_DOMAIN=192-168-1-20.sslip.io
 docker compose up -d backend worker
 docker compose exec worker python manage.py update_shop_addresses
 ```
@@ -59,7 +59,7 @@ Skrypt na końcu wypisuje adres, login i hasło do wp-admin oraz hasło API.
 
 ## Kroki i czasy
 
-Kroki odpowiadają `BaseProvisioner.STEPS` w backendzie. Czasy pochodzą z czystej instalacji na laptopie.
+Kroki odpowiadają `BaseProvisioner.STEPS` w backendzie. Czasy są orientacyjne, zmierzone na zwykłym laptopie.
 
 | Krok | Co robi | Czas |
 |---|---|---|
@@ -75,7 +75,7 @@ Kroki odpowiadają `BaseProvisioner.STEPS` w backendzie. Czasy pochodzą z czyst
 | Końcowe sprawdzenie | strona główna 200 i `wc/v3/system_status` z hasłem API | ~4 s |
 | **Razem** | | **~105 s** |
 
-## Wnioski z automatyzacji
+## Uwagi techniczne
 
 - **Każdy krok jest idempotentny.** Ponowne uruchomienie dokańcza sklep (w aplikacji: „Spróbuj ponownie”).
   Backend zapisuje hasła (bazy, admina, API) w `ShopCredentials` **zanim** ich użyje.
@@ -94,6 +94,6 @@ Kroki odpowiadają `BaseProvisioner.STEPS` w backendzie. Czasy pochodzą z czyst
   Pakiety językowe też można wbudować w obraz.
 - **Nazwy kategorii:** backend dobiera je do branży i liczby kategorii
   ([categories.py](../../backend/shops/categories.py)). Skrypt przyjmuje gotową listę.
-- **Dostęp do Dockera:** Traefik i worker backendu używają `docker.sock` (na Fedorze z `label=disable` przez SELinux).
+- **Dostęp do Dockera:** Traefik i worker backendu używają `docker.sock` (na systemach z SELinux z `label=disable`).
   Dla workera to w praktyce uprawnienia roota; przed produkcją trzeba go odseparować
   ([docs/ograniczenia-i-plan.md](../../docs/ograniczenia-i-plan.md)).

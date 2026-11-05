@@ -2,12 +2,12 @@
 
 ## Zmiana sieci lub adresu IP
 
-Sklepy otwierane z telefonu mają w adresie IP komputera (`<slug>.192-168-33-10.sslip.io`).
+Sklepy otwierane z telefonu mają w adresie IP komputera (np. `<slug>.192-168-1-20.sslip.io`).
 Po zmianie sieci Wi-Fi albo adresu IP:
 
 ```bash
-ip route get 1.1.1.1 | grep -oP 'src \K[\d.]+'          # bieżące IP, np. 10.201.84.26
-# w .env: SHOPS_BASE_DOMAIN=10-201-84-26.sslip.io
+ip route get 1.1.1.1 | grep -oP 'src \K[\d.]+'          # bieżące IP, np. 192.168.1.20
+# w .env: SHOPS_BASE_DOMAIN=192-168-1-20.sslip.io
 docker compose up -d backend worker                      # wczytanie nowego .env
 docker compose exec worker python manage.py update_shop_addresses
 ```
@@ -58,7 +58,6 @@ Użytkownik i panel admina widzą komunikat skrócony.
 | Zakładanie stoi na „Oczekuje” | Worker nie działa albo nie widzi Redisa: `docker compose ps`, `docker compose logs worker`. |
 | Krok kończy się „Wystąpił nieoczekiwany błąd” | Szczegóły w logach workera. Po naprawie przyczyny użyj „Spróbuj ponownie” w aplikacji. |
 | Aplikacja w przeglądarce pokazuje stary kod | Pamięć podręczna Metro: `npx expo start -c`. |
-| Storefront bez paska bocznego (kategorie, filtry) | Widżety zniknęły z paska; przyczyna nieznana ([ograniczenia](ograniczenia-i-plan.md)). Doraźnie: ponowne uruchomienie kroku `configure_navigation` dla sklepu w powłoce workera. |
 
 ## Ręczne operacje na sklepie
 

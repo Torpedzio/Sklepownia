@@ -2,18 +2,6 @@
 
 Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w tym samym commicie.
 
-## Znane problemy
-
-- **Storefront traci pasek boczny.** W jednym sklepie widżety (kategorie, filtry) zniknęły z paska bocznego,
-  choć ich dane zostały w bazie. Sprawdzone: przenoszenie adresów nie jest przyczyną.
-  Podejrzenie: WordPress przestawia widżety po zmianie motywu przez WP-CLI, przy pierwszym wejściu do panelu.
-  Do zbadania na świeżo założonym sklepie ze Storefront.
-- **Produkty przykładowe nie mają zdjęć.** Sklep po założeniu i podglądy motywów pokazują szare zaślepki.
-- **Instrukcja logowania i porady podają polskie nazwy z panelu WordPressa**, także dla sklepów w innym języku.
-- **Dane marki są tymczasowe:** nazwa, e-mail, telefon i adres w `mobile/src/constants/brand.ts`.
-- **Zdjęcia na stronie głównej:** przed publikacją trzeba sprawdzić prawa do zdjęć z katalogu `images/`.
-- **Lint aplikacji** zgłasza błąd w szablonowym pliku `mobile/src/hooks/use-color-scheme.web.ts`.
-
 ## Czego brakuje w funkcjach
 
 - **E-maile:** platforma ani sklepy nie wysyłają prawdziwych e-maili (brak SMTP).
@@ -26,6 +14,9 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
 - **Zmiana ustawień sklepu z aplikacji** (motyw, język, waluta). Dziś tylko przez panel WordPressa.
 - **Płatności za platformę, plany i limity**: limit sklepów to jedna liczba dla wszystkich (`SHOPS_MAX_PER_USER`).
 - **Testy aplikacji mobilnej:** są tylko testy backendu.
+- **Zdjęcia w przykładowych produktach.** Produkty przykładowe nie mają zdjęć, więc nowy sklep pokazuje szare zaślepki.
+- **Porady w innych językach.** Instrukcja logowania i porady podają polskie nazwy z panelu WordPressa,
+  także dla sklepów założonych w innym języku.
 
 ## Droga do produkcji
 
