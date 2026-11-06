@@ -58,13 +58,21 @@ def test_me_requires_authentication(api_client):
     assert api_client.get("/api/auth/me/").status_code == 401
 
 
-def test_me_reports_shop_limit(auth_client, settings):
-    settings.SHOPS_MAX_PER_USER = 3
-
+def test_me_reports_the_plan_and_its_shop_limit(auth_client):
     response = auth_client.get("/api/auth/me/")
 
     assert response.status_code == 200
+    assert response.data["plan"] == "Standard"
     assert response.data["shop_limit"] == 3
+    assert response.data["can_create_shops"] is True
+
+
+def test_me_without_a_plan_cannot_create_shops(api_client, unsubscribed_user):
+    api_client.force_authenticate(unsubscribed_user)
+
+    data = api_client.get("/api/auth/me/").data
+
+    assert (data["plan"], data["shop_limit"], data["can_create_shops"]) == (None, 0, False)
 
 
 def test_verify_email_with_correct_code(api_client, django_capture_on_commit_callbacks, mailoutbox):

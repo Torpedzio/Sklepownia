@@ -7,6 +7,7 @@ a platforma w około dwie minuty uruchamia działający sklep w osobnym kontener
 ## Funkcje
 
 - Konto użytkownika z potwierdzeniem adresu e-mail.
+- Płatne plany: płatność kartą przez Tpay, odnowienia z zapisanej karty, dane do faktury dla osób i firm.
 - Zakładanie sklepu z formularza: motyw (Storefront, Astra, Kadence), język, waluta, kraj,
   kategorie dobrane do branży i opcjonalnie przykładowe produkty.
 - Podgląd postępu zakładania krok po kroku i ponowienie kroku, który się nie udał.
@@ -20,7 +21,7 @@ a platforma w około dwie minuty uruchamia działający sklep w osobnym kontener
 
 | Katalog | Co to jest | Technologie |
 |---|---|---|
-| [backend/](backend/) | API, konta, zakładanie sklepów, panel admina | Django 5.2, DRF, Celery, PostgreSQL, Redis |
+| [backend/](backend/) | API, konta, płatności, zakładanie sklepów, panel admina | Django 5.2, DRF, Celery, PostgreSQL, Redis |
 | [mobile/](mobile/) | Aplikacja na iOS, Androida i przeglądarkę | Expo SDK 58, React Native 0.88, Expo Router |
 | [infra/shops/](infra/shops/) | Serwer sklepów: proxy, baza sklepów, obraz WordPressa | Docker, Traefik 3, MariaDB 11, WordPress 7.1 |
 | [docker-compose.yml](docker-compose.yml) | Lokalne uruchomienie backendu | Docker Compose |
@@ -65,6 +66,7 @@ Po uruchomieniu:
 | [docs/api.md](docs/api.md) | Przegląd endpointów API i zasad uwierzytelniania |
 | [docs/aplikacja-mobilna.md](docs/aplikacja-mobilna.md) | Ekrany, nawigacja, komponenty, wygląd, komunikacja z API |
 | [infra/shops/README.md](infra/shops/README.md) | Serwer sklepów, kroki instalacji WordPressa, uwagi techniczne |
+| [docs/platnosci.md](docs/platnosci.md) | Plany, płatności kartą przez Tpay, odnowienia, dane do faktury, symulowana bramka |
 | [docs/obsluga.md](docs/obsluga.md) | Codzienna obsługa: zmiana sieci, restart, logi, typowe problemy |
 | [docs/rozwoj.md](docs/rozwoj.md) | Sprawdzanie zmian, konwencje i utrzymanie dokumentacji |
 | [docs/ograniczenia-i-plan.md](docs/ograniczenia-i-plan.md) | Czego jeszcze brakuje i co trzeba zrobić przed produkcją |

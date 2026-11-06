@@ -1,0 +1,12 @@
+{% autoescape off %}{{ heading }}
+
+{{ intro }}
+
+SZCZEGÓŁY
+{% for label, value in rows %}{{ label }}: {{ value }}
+{% endfor %}
+Plan, kartę i dane do faktury zobaczysz w aplikacji: Konto → Plan i płatności.
+
+--
+{{ platform }}. Wiadomość wysłana na {{ recipient }}.
+{% endautoescape %}

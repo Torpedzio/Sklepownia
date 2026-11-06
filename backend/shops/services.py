@@ -8,16 +8,30 @@ from accounts.models import User
 
 from . import shop_settings
 from .choices import COUNTRY_TIMEZONES
-from .models import ProvisioningJob, ProvisioningStep, Shop, ShopConfig, ShopOperation, ShopSettings
+from .models import (
+    InvalidTransition,
+    ProvisioningJob,
+    ProvisioningStep,
+    Shop,
+    ShopConfig,
+    ShopOperation,
+    ShopSettings,
+)
 from .provisioning import get_provisioner
-from .tasks import provision_shop, run_shop_operation, teardown_shop
+from .tasks import provision_shop, resume_shop_container, run_shop_operation, suspend_shop, teardown_shop
 
 # An operation older than this no longer blocks new ones (e.g. the worker died while running it).
 OPERATION_TIMEOUT = timedelta(minutes=15)
 
 
 class ShopLimitReached(Exception):
-    pass
+    def __init__(self, limit):
+        super().__init__(limit)
+        self.limit = limit
+
+
+class PlanRequired(Exception):
+    """Creating shops needs an active paid plan."""
 
 
 class SlugTaken(Exception):
@@ -37,9 +51,11 @@ def create_shop(owner, *, name, slug, **config):
         with transaction.atomic():
             # Lock the owner so concurrent requests can't both pass the limit check.
             User.objects.select_for_update().get(pk=owner.pk)
-            live_shops = owner.shops.exclude(status=Shop.Status.DELETED).count()
-            if live_shops >= settings.SHOPS_MAX_PER_USER:
-                raise ShopLimitReached()
+            plan = active_plan(owner)
+            if plan is None:
+                raise PlanRequired()
+            if paid_shop_count(owner) >= plan.max_shops:
+                raise ShopLimitReached(plan.max_shops)
             shop = Shop.objects.create(owner=owner, name=name, slug=slug)
             ShopConfig.objects.create(shop=shop, **config)
             _enqueue_provisioning(shop)
@@ -50,7 +66,82 @@ def create_shop(owner, *, name, slug, **config):
     return shop
 
 
+def active_plan(user):
+    """The plan that lets the user create shops now, or None."""
+    from billing.models import Subscription
+
+    subscription = Subscription.objects.select_related("plan").filter(user=user).first()
+    return subscription.plan if subscription and subscription.allows_new_shops else None
+
+
+def counted_shops(user):
+    """Shops that take up the plan's limit: not deleted, not suspended, not test shops from before paid plans."""
+    return (
+        user.shops.exclude(status__in=[Shop.Status.DELETED, Shop.Status.SUSPENDED])
+        .filter(is_test=False)
+        .order_by("created_at", "pk")
+    )
+
+
+def paid_shop_count(user):
+    return counted_shops(user).count()
+
+
+def suspend_shops(shops):
+    """Takes shops beyond the plan's limit offline. Their files and data stay; resume_shop brings them back."""
+    for shop in shops:
+        with transaction.atomic():
+            shop = Shop.objects.select_for_update().get(pk=shop.pk)
+            if shop.status == Shop.Status.SUSPENDED:
+                continue
+            shop.transition_to(Shop.Status.SUSPENDED)
+            transaction.on_commit(lambda shop_id=shop.pk: suspend_shop.delay(shop_id))
+
+
+def resume_shop(shop):
+    """Brings a suspended shop back when the plan has room for it."""
+    with transaction.atomic():
+        User.objects.select_for_update().get(pk=shop.owner_id)
+        shop = Shop.objects.select_for_update().get(pk=shop.pk)
+        if shop.status != Shop.Status.SUSPENDED:
+            raise InvalidTransition(f"{shop.status} -> active")
+        plan = active_plan(shop.owner)
+        if plan is None:
+            raise PlanRequired()
+        if paid_shop_count(shop.owner) >= plan.max_shops:
+            raise ShopLimitReached(plan.max_shops)
+        _bring_back(shop)
+    return shop
+
+
+def resume_up_to_limit(user, limit):
+    """After a plan change gives room: brings back suspended shops, oldest first, as far as the limit allows."""
+    room = limit - paid_shop_count(user)
+    resumed = []
+    if room <= 0:
+        return resumed
+    suspended = user.shops.filter(status=Shop.Status.SUSPENDED, is_test=False).order_by("created_at", "pk")
+    for shop in suspended[:room]:
+        with transaction.atomic():
+            shop = Shop.objects.select_for_update().get(pk=shop.pk)
+            if shop.status == Shop.Status.SUSPENDED:
+                _bring_back(shop)
+                resumed.append(shop)
+    return resumed
+
+
+def _bring_back(shop):
+    # A shop whose setup never finished comes back as failed, so it can be retried; others come back running.
+    job = shop.provisioning_jobs.first()
+    finished = job is not None and job.status == ProvisioningJob.Status.SUCCEEDED
+    shop.transition_to(Shop.Status.ACTIVE if finished else Shop.Status.FAILED)
+    if finished:
+        transaction.on_commit(lambda: resume_shop_container.delay(shop.pk))
+
+
 def retry_shop(shop):
+    if not shop.is_test and active_plan(shop.owner) is None:
+        raise PlanRequired()
     with transaction.atomic():
         shop = Shop.objects.select_for_update().get(pk=shop.pk)
         shop.transition_to(Shop.Status.PENDING)

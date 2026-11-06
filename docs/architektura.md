@@ -28,7 +28,9 @@
 | Backend | REST API, uwierzytelnianie JWT, logika sklepów, panel admina Django | [backend/](../backend/) |
 | PostgreSQL | Konta, sklepy, konfiguracja, zaszyfrowane hasła sklepów, postęp zakładania | `db` w [docker-compose.yml](../docker-compose.yml) |
 | Redis | Kolejka zadań Celery | `redis` |
-| Worker Celery | Wykonuje długie zadania: zakładanie i usuwanie sklepów, wysyłkę e-maili | `worker` |
+| Worker Celery | Wykonuje długie zadania: zakładanie i usuwanie sklepów, wysyłkę e-maili, odnowienia planów | `worker` |
+| Celery beat | Zleca zadania według harmonogramu (`CELERY_BEAT_SCHEDULE`): co 15 minut odnowienia planów | `beat` |
+| Tpay | Operator płatności: strona płatności kartą, zapisywanie i obciążanie karty, powiadomienia ([platnosci.md](platnosci.md)) | zewnętrzny |
 | Mailpit | Lokalny serwer SMTP: przyjmuje całą pocztę i pokazuje ją w przeglądarce. Na produkcji zastępuje go dostawca poczty. | `mail` |
 | Traefik | Kieruje ruch do kontenera sklepu po nazwie hosta | `shops-proxy` w [infra/shops/](../infra/shops/) |
 | MariaDB | Jedna instancja, osobna baza i użytkownik dla każdego sklepu | `shops-db` |
@@ -41,7 +43,7 @@ Proces API nie dotyka Dockera (klient Dockera jest tworzony leniwie, dopiero prz
 
 1. Aplikacja wysyła formularz: `POST /api/shops/`.
 2. Backend w jednej transakcji ([services.create_shop](../backend/shops/services.py)):
-   - blokuje wiersz użytkownika i sprawdza limit sklepów (`SHOPS_MAX_PER_USER`),
+   - blokuje wiersz użytkownika, sprawdza aktywny plan i jego limit sklepów (`Plan.max_shops`; sklepy testowe się nie liczą),
    - tworzy `Shop` (status `pending`) i `ShopConfig` z wyborami z formularza,
    - tworzy `ProvisioningJob` z listą `ProvisioningStep` (po jednym na krok),
    - po zatwierdzeniu transakcji wrzuca zadanie `provision_shop` do kolejki.
@@ -82,13 +84,14 @@ Na jednym sklepie trwa najwyżej jedna operacja. Operacja starsza niż 15 minut 
 | `pending` | Czeka w kolejce na workera | `provisioning`, `failed`, `deleted` |
 | `provisioning` | Worker wykonuje kroki | `active`, `failed` |
 | `active` | Sklep działa | `suspended`, `deleted` |
-| `failed` | Zakładanie przerwane błędem | `pending` (ponowienie), `deleted` |
-| `suspended` | Zawieszony | `active`, `deleted` |
+| `failed` | Zakładanie przerwane błędem | `pending` (ponowienie), `suspended`, `deleted` |
+| `suspended` | Niedostępny w obecnym planie: kontener zatrzymany, dane zostają | `active`, `failed` (przywrócenie sklepu, którego zakładanie się nie skończyło), `deleted` |
 | `deleted` | Usunięty (wiersz zostaje w bazie) | — |
 
 Dozwolone przejścia są w `Shop.ALLOWED_TRANSITIONS` ([models.py](../backend/shops/models.py)).
 Niedozwolone przejście rzuca `InvalidTransition`; API zamienia je na `409 Conflict`
-(np. usunięcie sklepu w trakcie zakładania). Stan `suspended` jest przewidziany w modelu, ale nic go jeszcze nie ustawia.
+(np. usunięcie sklepu w trakcie zakładania). Stan `suspended` ustawia zmiana na plan z mniejszym limitem sklepów
+([platnosci.md](platnosci.md#zmiana-planu)); zawieszone sklepy nie liczą się do limitu.
 
 ## Provisionery
 

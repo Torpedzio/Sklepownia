@@ -38,11 +38,12 @@ Limity zapytań: logowanie i rejestracja 10 na minutę, potwierdzanie e-maila 10
 
 | Metoda i ścieżka | Opis |
 |---|---|
-| `GET shops/` | Sklepy użytkownika (bez usuniętych): `id, name, slug, url, status, status_display, created_at` |
-| `POST shops/` | Założenie sklepu (wymaga potwierdzonego e-maila). `201` ze szczegółami sklepu. `400` przy zajętym adresie albo osiągniętym limicie. |
+| `GET shops/` | Sklepy użytkownika (bez usuniętych): `id, name, slug, url, status, status_display, is_test, created_at`. `is_test`: sklep sprzed płatnych planów |
+| `POST shops/` | Założenie sklepu (wymaga potwierdzonego e-maila i aktywnego planu). `201` ze szczegółami sklepu. `402` bez planu, `400` przy zajętym adresie albo osiągniętym limicie planu (sklepy testowe się nie liczą). |
 | `GET shops/{id}/` | Szczegóły: pola z listy plus `config` (wybory z formularza) i `provisioning` (ostatnie zadanie z krokami) |
 | `DELETE shops/{id}/` | Usunięcie, `204`. W trakcie zakładania `409`. |
-| `POST shops/{id}/retry/` | Ponowienie po błędzie (wymaga potwierdzonego e-maila), `202`. W innym stanie `409`. |
+| `POST shops/{id}/resume/` | Przywrócenie sklepu zawieszonego przez plan, gdy plan ma na niego miejsce, `200` ze szczegółami. `400`: brak miejsca, `402`: brak planu, `409`: sklep nie jest zawieszony. |
+| `POST shops/{id}/retry/` | Ponowienie po błędzie (wymaga potwierdzonego e-maila, a poza sklepami testowymi aktywnego planu: inaczej `402`), `202`. W innym stanie `409`. |
 | `GET shops/{id}/admin-access/` | `{admin_url, sent_to}`: adres panelu WordPressa i adres e-mail, na który wysłano login i hasło. Samych danych logowania API nie zwraca. Tylko dla działającego sklepu, inaczej `409`. |
 | `POST shops/{id}/send-admin-access/` | Wysyła ponownie e-mail z danymi sklepu i logowaniem, `202` z `{admin_url, sent_to}`. Najwyżej 5 razy na godzinę (`429`). |
 | `GET shops/check-slug/?slug=` | `{slug, available, reason}`: czy adres jest wolny i dlaczego nie |
@@ -93,6 +94,11 @@ Pola formularza `POST shops/`:
 | `contact_email` | nie | Domyślnie e-mail właściciela konta |
 | `description` | nie | Do 500 znaków, trafia do opisu witryny |
 | `include_sample_products` | nie | Domyślnie `true` |
+
+## Płatności: `/api/billing/`
+
+Plany, dane do faktury, płatność kartą, anulowanie i powiadomienia od operatora: [platnosci.md](platnosci.md#api).
+`GET auth/me/` zwraca też `plan` (nazwa albo `null`), `shop_limit` (0 bez planu) i `can_create_shops`.
 
 ## Kontakt: `/api/contact/`
 

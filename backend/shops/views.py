@@ -30,14 +30,21 @@ from .slugs import normalize_slug, slug_error
 
 # Settings and operations work on a running shop, so they share the creation's permissions.
 VERIFIED_ACTIONS = (
-    "create", "retry", "admin_access", "send_admin_access", "shop_settings", "refresh_settings", "reset_admin_password",
+    "create", "retry", "resume", "admin_access", "send_admin_access", "shop_settings", "refresh_settings", "reset_admin_password",
     "remove_sample_products", "operations", "operation",
 )
 OPERATION_HISTORY_LENGTH = 20
 
 NOT_ACTIVE = "Ustawienia można zmieniać, gdy sklep działa."
 PANEL_NOT_READY = "Panel będzie dostępny, gdy sklep zostanie założony."
+PLAN_REQUIRED = "Wybierz plan, żeby zakładać sklepy."
 BUSY = "Sklep jeszcze zapisuje poprzednie zmiany. Spróbuj za chwilę."
+
+
+def plural_shops(count):
+    if count == 1:
+        return "sklep"
+    return "sklepy" if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14) else "sklepów"
 
 
 def _choices(choices_class):
@@ -111,9 +118,11 @@ class ShopViewSet(
         serializer.is_valid(raise_exception=True)
         try:
             shop = services.create_shop(request.user, **serializer.validated_data)
-        except services.ShopLimitReached:
+        except services.PlanRequired:
+            return Response({"detail": PLAN_REQUIRED}, status=status.HTTP_402_PAYMENT_REQUIRED)
+        except services.ShopLimitReached as limit:
             return Response(
-                {"detail": f"Możesz mieć maksymalnie {settings.SHOPS_MAX_PER_USER} sklepy."},
+                {"detail": f"Twój plan pozwala na {limit.limit} {plural_shops(limit.limit)}. Usuń jeden albo zmień plan."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except services.SlugTaken:
@@ -135,12 +144,40 @@ class ShopViewSet(
     def retry(self, request, pk=None):
         try:
             services.retry_shop(self.get_object())
+        except services.PlanRequired:
+            return Response({"detail": PLAN_REQUIRED}, status=status.HTTP_402_PAYMENT_REQUIRED)
         except InvalidTransition:
             return Response(
                 {"detail": "Ponowić można tylko zakładanie, które zakończyło się błędem."},
                 status=status.HTTP_409_CONFLICT,
             )
         return Response(ShopDetailSerializer(self.get_queryset().get(pk=pk)).data, status=status.HTTP_202_ACCEPTED)
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: ShopDetailSerializer,
+            400: OpenApiResponse(description="Plan nie ma miejsca na kolejny sklep."),
+            402: OpenApiResponse(description="Brak aktywnego planu."),
+            409: OpenApiResponse(description="Sklep nie jest zawieszony."),
+        },
+    )
+    @action(detail=True, methods=["post"])
+    def resume(self, request, pk=None):
+        """Brings back a shop suspended because it didn't fit the plan, when the plan has room now."""
+        try:
+            services.resume_shop(self.get_object())
+        except services.PlanRequired:
+            return Response({"detail": PLAN_REQUIRED}, status=status.HTTP_402_PAYMENT_REQUIRED)
+        except services.ShopLimitReached as limit:
+            return Response(
+                {"detail": f"Twój plan pozwala na {limit.limit} {plural_shops(limit.limit)}. "
+                           "Zmień plan albo usuń inny sklep, żeby przywrócić ten."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidTransition:
+            return Response({"detail": "Ten sklep nie jest zawieszony."}, status=status.HTTP_409_CONFLICT)
+        return Response(ShopDetailSerializer(self.get_queryset().get(pk=pk)).data)
 
     @extend_schema(responses={200: ShopAdminAccessSerializer})
     @action(detail=True, methods=["get"], url_path="admin-access")

@@ -42,6 +42,15 @@ class BaseProvisioner:
         """
         return None
 
+    def suspend(self, shop):
+        """Stop serving the shop, keeping everything it has. Safe to call more than once."""
+
+    def resume(self, shop):
+        """Serve a suspended shop again, with the resources its owner's plan gives now."""
+
+    def refresh_resources(self, shop):
+        """Apply the owner's current plan (e.g. memory) to a running shop."""
+
     # --- running shops (see provisioning/operations.py) ---
 
     def read_settings(self, shop):

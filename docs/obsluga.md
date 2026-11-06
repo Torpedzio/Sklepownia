@@ -39,6 +39,7 @@ Objaw niedziałającego serwera sklepów: sklepy nie odpowiadają, a `update_sho
 ```bash
 docker compose logs -f backend      # zapytania do API
 docker compose logs -f worker       # zakładanie sklepów, wysyłka e-maili (treść wiadomości: http://localhost:8030)
+docker compose logs -f beat         # harmonogram zadań (odnowienia planów co 15 minut)
 docker logs -f shop-<id>            # serwer WWW konkretnego sklepu
 docker logs -f shops-proxy          # Traefik
 ```
@@ -57,6 +58,9 @@ Użytkownik i panel admina widzą komunikat skrócony.
 | Zmiana w provisioningu nie działa | Worker nie przeładowuje kodu sam: `docker compose restart worker`. |
 | Zakładanie stoi na „Oczekuje” | Worker nie działa albo nie widzi Redisa: `docker compose ps`, `docker compose logs worker`. |
 | Krok kończy się „Wystąpił nieoczekiwany błąd” | Szczegóły w logach workera. Po naprawie przyczyny użyj „Spróbuj ponownie” w aplikacji. |
+| Płatność wisi na „Sprawdzamy płatność…” | Z symulowaną bramką: płatność nie została opłacona na stronie testowej. Z Tpay: powiadomienie nie dociera (lokalnie zwykle tak jest), ekran pyta Tpay sam co kilka sekund. Szczegóły w panelu admina: Płatności → Płatności, i w `docker compose logs backend`. |
+| Odnowienia planów się nie wykonują | Działa `beat`? `docker compose ps beat`, `docker compose logs beat`. Zadanie wykonuje worker: `docker compose logs worker`. |
+| Właściciel nie może założyć sklepu („Wybierz plan”) | Brak aktywnego planu albo zaległa płatność. Stan w panelu admina: Płatności → Subskrypcje; plan można tam nadać ręcznie. |
 | Aplikacja w przeglądarce pokazuje stary kod | Pamięć podręczna Metro: `npx expo start -c`. |
 
 ## Ręczne operacje na sklepie

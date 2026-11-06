@@ -17,5 +17,5 @@ TWÓJ SKLEP
 Płatności, wysyłkę i podatki ustawisz w aplikacji, w ustawieniach sklepu.
 {% endif %}
 --
-{{ platform }}. Wiadomość wysłana na {{ owner_email }}, adres konta, na którym działa ten sklep.
+{{ platform }}. Wiadomość wysłana na {{ recipient }}, adres konta, na którym działa ten sklep.
 {% endautoescape %}

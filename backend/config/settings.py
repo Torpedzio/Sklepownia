@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'shops',
     'support',
     'handbook',
+    'billing',
 ]
 
 MIDDLEWARE = [
@@ -70,7 +71,8 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        # Shared templates, e.g. the e-mail layout.
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -226,7 +228,6 @@ FIELD_ENCRYPTION_KEY = os.environ["FIELD_ENCRYPTION_KEY"]
 SHOPS_BASE_DOMAIN = os.environ.get("SHOPS_BASE_DOMAIN", "localhost")
 SHOPS_URL_SCHEME = os.environ.get("SHOPS_URL_SCHEME", "https")
 SHOPS_HTTP_PORT = int(os.environ.get("SHOPS_HTTP_PORT", "443"))
-SHOPS_MAX_PER_USER = int(os.environ.get("SHOPS_MAX_PER_USER", "3"))
 SHOP_PROVISIONER = os.environ.get("SHOP_PROVISIONER", "shops.provisioning.fake.FakeProvisioner")
 # Seconds each fake provisioning step takes, so the app can show real progress.
 FAKE_PROVISIONER_STEP_DELAY = float(os.environ.get("FAKE_PROVISIONER_STEP_DELAY", "2"))
@@ -242,3 +243,26 @@ SHOPS_DB_ROOT_PASSWORD = os.environ.get("SHOPS_DB_ROOT_PASSWORD", "")
 SHOPS_CONTAINER_MEMORY = os.environ.get("SHOPS_CONTAINER_MEMORY", "512m")
 # "local" lets WordPress accept application passwords over plain HTTP; use "production" with HTTPS.
 SHOPS_WP_ENVIRONMENT = os.environ.get("SHOPS_WP_ENVIRONMENT", "production")
+
+
+# Billing
+
+# How payments are taken: billing.gateways.fake.FakeGateway (simulated, the default) or
+# billing.gateways.tpay.TpayGateway (Tpay, with the TPAY_* keys).
+PAYMENT_GATEWAY = os.environ.get("PAYMENT_GATEWAY", "billing.gateways.fake.FakeGateway")
+TPAY_CLIENT_ID = os.environ.get("TPAY_CLIENT_ID", "")
+TPAY_CLIENT_SECRET = os.environ.get("TPAY_CLIENT_SECRET", "")
+# Merchant security code (Merchant panel → Notifications → Security), for the notification checksum.
+TPAY_SECURITY_CODE = os.environ.get("TPAY_SECURITY_CODE", "")
+TPAY_SANDBOX = os.environ.get("TPAY_SANDBOX", "1") == "1"
+# Public address of billing.views.gateway_notification. Tpay must reach it (ports 80, 443 or 8080).
+TPAY_NOTIFICATION_URL = os.environ.get("TPAY_NOTIFICATION_URL", "http://localhost:8000/api/billing/notifications/")
+# Fake gateway: decline renewals, to try out failed payments.
+FAKE_GATEWAY_DECLINE_RENEWALS = os.environ.get("FAKE_GATEWAY_DECLINE_RENEWALS", "0") == "1"
+# Where the gateway may send the payer back: the web app and the mobile app's links (exp:// in Expo Go).
+BILLING_RETURN_URL_PREFIXES = env_list("BILLING_RETURN_URL_PREFIXES", "http://localhost:8081/,mobile://,exp://")
+
+CELERY_BEAT_SCHEDULE = {
+    "renew-subscriptions": {"task": "billing.tasks.renew_subscriptions", "schedule": 15 * 60},
+    "reconcile-payments": {"task": "billing.tasks.reconcile_payments", "schedule": 5 * 60},
+}

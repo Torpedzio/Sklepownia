@@ -64,5 +64,19 @@ services:
       redis:
         condition: service_healthy
 
+  # Starts scheduled tasks (CELERY_BEAT_SCHEDULE), e.g. charging plan renewals; the worker runs them.
+  beat:
+    build:
+      context: ./backend
+      args:
+        DEV: "1"
+    command: celery -A config beat -l info --schedule /tmp/celerybeat-schedule
+    env_file: .env
+    volumes:
+      - ./backend:/app:Z
+    depends_on:
+      redis:
+        condition: service_healthy
+
 volumes:
   pgdata:

@@ -27,7 +27,7 @@ cp .env.example .env
 # uzupełnij: DJANGO_SECRET_KEY, FIELD_ENCRYPTION_KEY, SHOPS_DB_ROOT_PASSWORD (to samo co w infra/shops/.env)
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"   # FIELD_ENCRYPTION_KEY
 
-docker compose up -d                                   # db, redis, backend, worker
+docker compose up -d                                   # db, redis, backend, worker, beat, mail
 docker compose exec backend python manage.py migrate
 docker compose exec backend python manage.py createsuperuser   # konto do panelu /admin/
 ```
@@ -102,10 +102,16 @@ Bez ustawień poczty w `.env` backend wypisuje wiadomości w logach (`EMAIL_BACK
 | `DEFAULT_FROM_EMAIL` | `Sklepownia <no-reply@localhost>` | Nadawca wiadomości |
 | `PLATFORM_NAME` | `Sklepownia` | Nazwa platformy w treści wiadomości |
 | `MAIL_UI_PORT` | `8030` | Port podglądu Mailpit (tylko docker-compose) |
+| `PAYMENT_GATEWAY` | `FakeGateway` | Symulowana bramka albo `billing.gateways.tpay.TpayGateway` ([platnosci.md](platnosci.md#operatorzy-płatności)) |
+| `TPAY_CLIENT_ID`, `TPAY_CLIENT_SECRET` | puste | Klucze Open API z panelu Tpay |
+| `TPAY_SECURITY_CODE` | puste | Kod bezpieczeństwa powiadomień (panel Tpay → Powiadomienia → Bezpieczeństwo) |
+| `TPAY_SANDBOX` | `1` | `1` = środowisko testowe Tpay, `0` = produkcja |
+| `TPAY_NOTIFICATION_URL` | `http://localhost:8000/api/billing/notifications/` | Publiczny adres powiadomień o płatnościach |
+| `BILLING_RETURN_URL_PREFIXES` | `http://localhost:8081/,mobile://,exp://` | Dokąd operator może odesłać płacącego |
+| `FAKE_GATEWAY_DECLINE_RENEWALS` | `0` | `1` = symulowana bramka odrzuca odnowienia (test nieudanych płatności) |
 | `CONTACT_EMAIL` | `kontakt@localhost` | Dokąd trafiają wiadomości z formularza kontaktowego |
 | `HANDBOOK_ROOT` | `/project` | Katalog repozytorium w kontenerze, z którego strona `/docs/` czyta dokumentację |
 | `SHOP_PROVISIONER` | `FakeProvisioner` | Symulacja albo prawdziwe sklepy ([architektura.md](architektura.md#provisionery)) |
-| `SHOPS_MAX_PER_USER` | `3` | Limit sklepów na konto |
 | `SHOPS_BASE_DOMAIN` | `localhost` | Domena sklepów: `<slug>.<domena>` |
 | `SHOPS_URL_SCHEME`, `SHOPS_HTTP_PORT` | `https`, `443` | Lokalnie `http` i `8080` |
 | `SHOPS_WP_ENVIRONMENT` | `production` | `local` pozwala na hasła API WordPressa przez HTTP |

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Płatność testowa</title>
+<style>
+  body { margin:0; padding:24px 16px; background:#F4F6FA; color:#14213D; font-family:-apple-system, 'Segoe UI', Roboto, Arial, sans-serif; }
+  main { max-width:440px; margin:0 auto; background:#fff; border:1px solid #D9DEE8; border-radius:16px; padding:28px; }
+  .badge { display:inline-block; background:#FBF0CF; color:#14213D; font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; }
+  h1 { font-size:24px; margin:16px 0 4px; }
+  .amount { font-size:32px; font-weight:700; margin:16px 0; }
+  p { color:#5B6478; line-height:1.5; }
+  .card { font-family:Menlo, Consolas, monospace; background:#EBEEF4; border-radius:10px; padding:12px 14px; margin:16px 0; color:#14213D; }
+  button { width:100%; font-size:16px; font-weight:600; padding:14px; border-radius:10px; border:1.5px solid #0F7B5F; cursor:pointer; margin-top:10px; }
+  .pay { background:#0F7B5F; color:#fff; }
+  .decline { background:#fff; color:#B93A2B; border-color:#B93A2B; }
+</style>
+</head>
+<body>
+<main>
+  <span class="badge">Środowisko testowe, bez prawdziwych pieniędzy</span>
+  <h1>{{ platform }}: plan {{ payment.plan.name }}</h1>
+  <div class="amount">{{ payment.amount }} {{ payment.currency }}</div>
+  {% if payment.status == "pending" %}
+    <p>Ta strona udaje operatora płatności. Prawdziwy Tpay włączy się po wpisaniu kluczy w pliku .env.</p>
+    <div class="card">Visa •••• 4242, ważna do 12/30</div>
+    <form method="post">{% csrf_token %}
+      <button class="pay" name="action" value="pay">Zapłać kartą testową</button>
+      <button class="decline" name="action" value="decline">Odrzuć płatność</button>
+    </form>
+  {% else %}
+    <p>Ta płatność jest już zakończona: {{ payment.get_status_display|lower }}.</p>
+  {% endif %}
+</main>
+</body>
+</html>

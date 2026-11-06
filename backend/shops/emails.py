@@ -37,7 +37,8 @@ def admin_access_message(shop, reason):
         "platform": settings.PLATFORM_NAME,
         "shop": shop,
         "credentials": credentials,
-        "owner_email": shop.owner.email,
+        "recipient": shop.owner.email,
+        "subheading": shop.name,
         "details": [
             ("Adres sklepu", shop.url),
             ("Branża", config.get_industry_display()),

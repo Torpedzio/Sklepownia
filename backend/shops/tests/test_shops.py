@@ -84,15 +84,59 @@ def test_slug_must_be_unique_but_deleted_shops_free_it(auth_client, django_captu
     assert create_shop(auth_client, django_capture_on_commit_callbacks).status_code == 201
 
 
-def test_shop_limit_per_user(auth_client, django_capture_on_commit_callbacks, settings):
-    settings.SHOPS_MAX_PER_USER = 2
+def test_shop_limit_comes_from_the_plan(auth_client, plan, django_capture_on_commit_callbacks):
+    plan.max_shops = 2
+    plan.save()
     for i in range(2):
         assert create_shop(auth_client, django_capture_on_commit_callbacks, slug=f"sklep-{i}").status_code == 201
 
     response = create_shop(auth_client, django_capture_on_commit_callbacks, slug="sklep-3")
 
     assert response.status_code == 400
-    assert "maksymalnie" in response.data["detail"]
+    assert response.data["detail"] == "Twój plan pozwala na 2 sklepy. Usuń jeden albo zmień plan."
+
+
+def test_test_shops_do_not_count_towards_the_plan(auth_client, plan, verified_user, django_capture_on_commit_callbacks):
+    plan.max_shops = 1
+    plan.save()
+    Shop.objects.create(owner=verified_user, name="Stary", slug="stary", status=Shop.Status.ACTIVE, is_test=True)
+
+    assert create_shop(auth_client, django_capture_on_commit_callbacks).status_code == 201
+
+
+def test_creating_shops_needs_a_plan(api_client, unsubscribed_user):
+    api_client.force_authenticate(unsubscribed_user)
+
+    response = api_client.post("/api/shops/", shop_payload(), format="json")
+
+    assert response.status_code == 402
+    assert response.data["detail"] == "Wybierz plan, żeby zakładać sklepy."
+
+
+def test_a_lapsed_plan_stops_new_shops(auth_client, verified_user, django_capture_on_commit_callbacks):
+    from billing.models import Subscription
+
+    Subscription.objects.filter(user=verified_user).update(status=Subscription.Status.PAST_DUE)
+
+    assert create_shop(auth_client, django_capture_on_commit_callbacks).status_code == 402
+
+
+def test_retrying_a_failed_test_shop_needs_no_plan(api_client, unsubscribed_user, django_capture_on_commit_callbacks):
+    shop = Shop.objects.create(owner=unsubscribed_user, name="Stary", slug="stary", status=Shop.Status.FAILED,
+                               is_test=True)
+    api_client.force_authenticate(unsubscribed_user)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = api_client.post(f"/api/shops/{shop.pk}/retry/")
+
+    assert response.status_code == 202
+
+
+def test_retrying_a_paid_shop_needs_a_plan(api_client, unsubscribed_user):
+    shop = Shop.objects.create(owner=unsubscribed_user, name="Nowy", slug="nowy", status=Shop.Status.FAILED)
+    api_client.force_authenticate(unsubscribed_user)
+
+    assert api_client.post(f"/api/shops/{shop.pk}/retry/").status_code == 402
 
 
 def test_user_sees_only_own_shops(auth_client, api_client, django_capture_on_commit_callbacks):

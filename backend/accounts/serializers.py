@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
@@ -8,15 +7,38 @@ from .models import User
 
 
 class UserSerializer(serializers.ModelSerializer):
-    shop_limit = serializers.SerializerMethodField()
+    shop_limit = serializers.SerializerMethodField(help_text="Ile sklepów pozwala plan; 0 bez aktywnego planu.")
+    plan = serializers.SerializerMethodField(help_text="Nazwa aktywnego planu albo null.")
+    can_create_shops = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "first_name", "last_name", "is_email_verified", "date_joined", "shop_limit"]
+        fields = ["id", "email", "first_name", "last_name", "is_email_verified", "date_joined", "shop_limit",
+                  "plan", "can_create_shops"]
         read_only_fields = ["id", "email", "is_email_verified", "date_joined"]
 
+    def _plan(self, user):
+        from shops.services import active_plan
+
+        if not hasattr(self, "_plan_cache"):
+            self._plan_cache = {}
+        if user.pk not in self._plan_cache:
+            self._plan_cache[user.pk] = active_plan(user)
+        return self._plan_cache[user.pk]
+
     def get_shop_limit(self, user) -> int:
-        return settings.SHOPS_MAX_PER_USER
+        plan = self._plan(user)
+        return plan.max_shops if plan else 0
+
+    def get_plan(self, user) -> str | None:
+        plan = self._plan(user)
+        return plan.name if plan else None
+
+    def get_can_create_shops(self, user) -> bool:
+        from shops.services import paid_shop_count
+
+        plan = self._plan(user)
+        return bool(plan) and user.is_email_verified and paid_shop_count(user) < plan.max_shops
 
 
 class RegisterSerializer(serializers.ModelSerializer):

@@ -47,15 +47,16 @@ class Shop(models.Model):
         PROVISIONING = "provisioning", "Zakładanie"
         ACTIVE = "active", "Aktywny"
         FAILED = "failed", "Błąd"
-        SUSPENDED = "suspended", "Zawieszony"
+        SUSPENDED = "suspended", "Niedostępny w obecnym planie"
         DELETED = "deleted", "Usunięty"
 
     ALLOWED_TRANSITIONS = {
         Status.PENDING: {Status.PROVISIONING, Status.FAILED, Status.DELETED},
         Status.PROVISIONING: {Status.ACTIVE, Status.FAILED},
         Status.ACTIVE: {Status.SUSPENDED, Status.DELETED},
-        Status.FAILED: {Status.PENDING, Status.DELETED},
-        Status.SUSPENDED: {Status.ACTIVE, Status.DELETED},
+        # A shop beyond the plan's limit is suspended: stopped, with its data kept.
+        Status.FAILED: {Status.PENDING, Status.SUSPENDED, Status.DELETED},
+        Status.SUSPENDED: {Status.ACTIVE, Status.FAILED, Status.DELETED},
         Status.DELETED: set(),
     }
 
@@ -64,6 +65,8 @@ class Shop(models.Model):
     slug = models.CharField(max_length=30)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     server = models.ForeignKey(Server, on_delete=models.PROTECT, null=True, blank=True, related_name="shops")
+    # Shops from before paid plans: they don't need a plan and don't count towards its shop limit.
+    is_test = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

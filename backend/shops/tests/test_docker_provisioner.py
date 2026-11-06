@@ -621,3 +621,76 @@ def test_helpers():
     assert _env(container)["WORDPRESS_DB_HOST"] is None
     assert _int("7", 2) == 7
     assert _int(False, 2) == 2
+
+
+@pytest.mark.parametrize(("plan_code", "is_test", "memory"), [
+    ("business", False, "1024m"),
+    ("standard", False, "512m"),
+    ("business", True, "512m"),
+    (None, False, "512m"),
+])
+def test_shop_memory_comes_from_the_owners_plan(provisioner, shop, settings, plan_code, is_test, memory):
+    from billing.models import Plan
+    from conftest import subscribe
+
+    settings.SHOPS_CONTAINER_MEMORY = "512m"
+    if plan_code:
+        subscribe(shop.owner, Plan.objects.get(code=plan_code))
+    shop.is_test = is_test
+    provisioner.client.containers.get.side_effect = NotFound("brak")
+    provisioner.client.containers.run.return_value.exec_run.return_value.exit_code = 0
+
+    provisioner.step_start_container(shop)
+
+    assert provisioner.client.containers.run.call_args.kwargs["mem_limit"] == memory
+
+
+def test_suspending_stops_the_container_and_keeps_it(provisioner, shop):
+    container = provisioner.client.containers.get.return_value
+
+    provisioner.suspend(shop)
+
+    container.stop.assert_called_once()
+    container.remove.assert_not_called()
+
+
+def test_suspending_a_shop_without_a_container_does_nothing(provisioner, shop):
+    provisioner.client.containers.get.side_effect = NotFound("brak")
+
+    provisioner.suspend(shop)
+    provisioner.refresh_resources(shop)
+
+    provisioner.client.containers.run.assert_not_called()
+
+
+def test_resuming_starts_the_container_again(provisioner, shop, monkeypatch):
+    started = []
+    monkeypatch.setattr(DockerProvisioner, "step_start_container", lambda self, shop: started.append(shop.pk))
+
+    provisioner.resume(shop)
+    provisioner.refresh_resources(shop)
+
+    assert started == [shop.pk, shop.pk]
+
+
+def test_a_new_memory_limit_recreates_the_container(provisioner, shop, settings):
+    from billing.models import Plan
+    from conftest import subscribe
+
+    settings.SHOPS_CONTAINER_MEMORY = "512m"
+    subscribe(shop.owner, Plan.objects.get(code="business"))
+    environment_probe = MagicMock(labels={}, attrs={"Config": {"Env": []}, "HostConfig": {"Memory": 512 * 1024 ** 2}})
+    provisioner.client.containers.get.return_value = environment_probe
+    provisioner.client.containers.run.return_value.exec_run.return_value.exit_code = 0
+
+    provisioner.step_start_container(shop)
+
+    environment_probe.remove.assert_called_once_with(force=True)
+    assert provisioner.client.containers.run.call_args.kwargs["mem_limit"] == "1024m"
+
+
+@pytest.mark.parametrize(("limit", "expected"), [("512m", 512 * 1024 ** 2), ("1g", 1024 ** 3), ("1048576", 1048576)])
+def test_memory_limits_in_bytes(limit, expected):
+    from shops.provisioning.docker_provisioner import _memory_bytes
+
+    assert _memory_bytes(limit) == expected

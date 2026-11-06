@@ -16,7 +16,13 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
 - **Ustawienia sklepu w aplikacji** obejmują podstawy, zakupy, płatności przelewem i przy odbiorze, wysyłkę w kraju sklepu,
   jedną stawkę VAT, region i motyw. Brakuje płatności internetowych (Przelewy24, PayU, karty), logo i kolorów motywu,
   wysyłki za granicę oraz regulaminu i polityki prywatności.
-- **Płatności za platformę, plany i limity**: limit sklepów to jedna liczba dla wszystkich (`SHOPS_MAX_PER_USER`).
+- **Płatności, dalsze etapy** ([platnosci.md](platnosci.md)):
+  - zawieszanie sklepów (stan `suspended`), gdy plan wygaśnie lub zostanie anulowany, i usuwanie po okresie przechowania;
+  - zmiana karty z aplikacji (nowa płatność z zapisaniem karty);
+  - strona „Sklep niedostępny” pod adresem zawieszonego sklepu (dziś proxy odpowiada 404);
+  - faktury VAT przez KSeF (integracja z programem do faktur po opłaceniu);
+  - regulamin i polityka prywatności jako strony, do których prowadzą zgody przy płatności;
+  - zniżki, okresy próbne, plany roczne, inne metody płatności (BLIK, przelew), wypłata salda przy rezygnacji.
 - **Testy na urządzeniu:** testy aplikacji działają w Jest; zachowania zależne od urządzenia (przewijanie,
   klawiatura, animacje) sprawdza się ręcznie w Expo Go.
 - **Zdjęcia w przykładowych produktach.** Produkty przykładowe nie mają zdjęć, więc nowy sklep pokazuje szare zaślepki.

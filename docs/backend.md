@@ -19,6 +19,7 @@ backend/
 │   ├── services.py    create_shop, retry_shop, delete_shop, get_settings, update_settings, start_operation
 │   ├── shop_settings.py  sekcje ustawień sklepu: pola, etykiety, walidacja, wartości domyślne
 │   └── slugs.py       zasady adresów sklepów i lista zarezerwowanych
+├── billing/           plany, dane do faktury, płatności, odnowienia, operatorzy płatności (gateways/)
 ├── support/           formularz kontaktowy
 ├── handbook/          dokumentacja projektu (pliki Markdown) jako strony pod /docs/
 └── conftest.py        wspólne fixtures testów
@@ -107,6 +108,22 @@ Zmianę etykiet istniejących kroków trzeba przenieść migracją danych (przyk
 Pierwsza kategoria zastępuje domyślne „Bez kategorii” WooCommerce. Przy włączonych produktach przykładowych
 powstaje 6 produktów w pierwszych trzech kategoriach.
 
+## Aplikacja `billing`
+
+Opis działania, stanów i operatorów: [platnosci.md](platnosci.md).
+
+| Model | Opis |
+|---|---|
+| `Plan` | Cena brutto, VAT, okres w miesiącach, limit sklepów, korzyści. Migracja dodaje plan „Standard”. |
+| `BillingProfile` | Dane do faktury użytkownika: osoba albo firma z NIP, adres. |
+| `Subscription` | Plan użytkownika (jeden na konto): stan, okres, anulowanie, zapisana karta (token zaszyfrowany), ponowienia, zgody. |
+| `Payment` | Jedna płatność: pierwsza albo odnowienie, kwota, stan, identyfikatory u operatora, opłacony okres, dane do faktury z chwili płatności. |
+
+- `services.py` prowadzi cały cykl: `start_checkout`, `apply_result` (idempotentne zastosowanie wyniku),
+  `check_with_gateway`, `renew_due` i `renew`, `cancel`, `resume`. Widoki tylko je wołają.
+- Blokada zakładania sklepów: `shops.services.active_plan` i `paid_shop_count`; brak planu to `402`.
+- Wspólny wygląd e-maili: [templates/email/](../backend/templates/email/) (`layout.html`, `rows.html`, `button.html`).
+
 ## Aplikacja `support`
 
 `ContactMessage` zapisuje wiadomości z formularza kontaktowego (imię, e-mail, temat, treść, ewentualny użytkownik).
@@ -131,6 +148,9 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 | `shops.tasks.provision_shop` | Założenie i ponowienie sklepu | Wykonuje kroki zadania (`run_job`) |
 | `shops.tasks.teardown_shop` | Usunięcie sklepu | Usuwa kontener, wolumen i bazę |
 | `shops.tasks.send_admin_access_email` | Koniec zakładania, nowe hasło, prośba z aplikacji | Wysyła właścicielowi e-mail ze szczegółami sklepu i danymi logowania ([emails.py](../backend/shops/emails.py)); przy błędzie serwera pocztowego ponawia |
+| `billing.tasks.renew_subscriptions` | Co 15 minut (Celery beat) | Odnawia plany, ponawia nieudane odnowienia, kończy anulowane i niezapłacone |
+| `billing.tasks.reconcile_payments` | Co 5 minut (Celery beat) | Pyta operatora o płatności, które wciąż czekają; po dobie oznacza je jako niedokończone |
+| `billing.tasks.send_billing_email` | Opłacona płatność, nieudane odnowienie, koniec planu | Wysyła e-mail o planie i płatności |
 | `shops.tasks.run_shop_operation` | Zmiana i odczyt ustawień, nowe hasło, usunięcie produktów przykładowych | Wykonuje operację (`run_operation`) |
 | `support.tasks.notify_about_contact_message` | Wysłanie formularza kontaktowego | Przekazuje wiadomość e-mailem |
 
@@ -178,6 +198,7 @@ Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od
 | `shops/tests/test_shops.py` | Zakładanie, limit sklepów, adresy, ponawianie, usuwanie, dostęp do panelu, opcje formularza, polecenia |
 | `shops/tests/test_settings.py` | Ustawienia sklepu: odczyt, walidacja, zapis przez operacje, kolejka jednej operacji, błędy, nowe hasło, produkty przykładowe |
 | `shops/tests/test_docker_provisioner.py` | Polecenia, które `DockerProvisioner` wysyła do kontenerów (WP-CLI, MariaDB, curl), na podstawionej powłoce bez Dockera |
+| `billing/tests/test_billing.py`, `billing/tests/test_tpay.py` | Płatności i bramka Tpay ([platnosci.md](platnosci.md#testy)) |
 | `shops/tests/test_emails.py` | E-mail z danymi logowania: po założeniu i ponowieniu, ponowne wysłanie i jego limit, nowe hasło, brak danych w API |
 | `shops/tests/test_commands.py` | Polecenie `update_shop_addresses` i domyślne zachowanie `BaseProvisioner` |
 | `support/tests/test_contact.py` | Formularz kontaktowy i powiadomienie |

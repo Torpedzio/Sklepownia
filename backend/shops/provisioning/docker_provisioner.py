@@ -275,7 +275,14 @@ class DockerProvisioner(BaseProvisioner):
         container = self._find_container(shop)
         # The official image reads DB settings from env at runtime, so a container with outdated
         # env or Traefik labels (a new domain) can be replaced without touching the files in the volume.
-        if container is not None and (_env(container) != environment or not labels.items() <= container.labels.items()):
+        memory = _container_memory(shop)
+        outdated = container is not None and (
+            _env(container) != environment
+            or not labels.items() <= container.labels.items()
+            # A different plan means a different memory limit.
+            or container.attrs.get("HostConfig", {}).get("Memory") != _memory_bytes(memory)
+        )
+        if outdated:
             container.remove(force=True)
             container = None
         if container is None:
@@ -285,7 +292,7 @@ class DockerProvisioner(BaseProvisioner):
                 detach=True,
                 network=settings.SHOPS_NETWORK,
                 restart_policy={"Name": "unless-stopped"},
-                mem_limit=settings.SHOPS_CONTAINER_MEMORY,
+                mem_limit=memory,
                 nano_cpus=1_000_000_000,
                 volumes={name: {"bind": WP_PATH, "mode": "rw"}},
                 environment=environment,
@@ -659,6 +666,18 @@ class DockerProvisioner(BaseProvisioner):
         db = _db_name(shop)
         self._sql(f"DROP DATABASE IF EXISTS `{db}`; DROP USER IF EXISTS '{db}'@'%';")
 
+    def suspend(self, shop):
+        container = self._find_container(shop)
+        if container is not None:
+            container.stop()
+
+    def resume(self, shop):
+        self.step_start_container(shop)
+
+    def refresh_resources(self, shop):
+        if self._find_container(shop) is not None:
+            self.step_start_container(shop)
+
     def update_address(self, shop):
         if self._find_container(shop) is None:
             return None
@@ -775,3 +794,22 @@ def _money(value):
         return str(Decimal(str(value).replace(",", ".").replace(" ", "")).quantize(Decimal("0.01")))
     except (InvalidOperation, ValueError):
         return "0.00"
+
+
+def _container_memory(shop):
+    """The owner's plan sets how much memory a shop gets; test shops and shops without a plan get the default."""
+    from billing.models import Subscription
+
+    subscription = Subscription.objects.select_related("plan").filter(user_id=shop.owner_id).first()
+    if shop.is_test or subscription is None or subscription.status not in (
+        Subscription.Status.ACTIVE, Subscription.Status.PAST_DUE,
+    ):
+        return settings.SHOPS_CONTAINER_MEMORY
+    return f"{subscription.plan.shop_memory_mb}m"
+
+
+def _memory_bytes(limit):
+    """Docker's memory limit in bytes for "512m" / "1g"."""
+    units = {"k": 1024, "m": 1024 ** 2, "g": 1024 ** 3}
+    limit = str(limit).lower()
+    return int(limit[:-1]) * units[limit[-1]] if limit[-1] in units else int(limit)
