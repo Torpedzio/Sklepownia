@@ -542,7 +542,7 @@ export default function ShopSettingsScreen() {
             {active === 'manual' ? (
               <SettingsSection
                 title="Ustawienia ręczne"
-                description="Wszystko, czego nie ma w aplikacji, ustawisz w panelu WordPressa swojego sklepu. Logujesz się do niego tymi danymi:">
+                description="Wszystko, czego nie ma w aplikacji, ustawisz w panelu WordPressa swojego sklepu.">
                 <ShopLoginSteps shopId={Number(id)} />
               </SettingsSection>
             ) : null}

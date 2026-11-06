@@ -45,15 +45,8 @@ export function ShopLoginSteps({ shopId }: { shopId: number }) {
         <View style={styles.steps}>
           <Step number={1} title="Otwórz stronę logowania">
             <Button title="Otwórz panel sklepu" icon="external" onPress={() => Linking.openURL(access.admin_url)} />
-            <ThemedText type="small" themeColor="textSecondary" selectable>
-              {access.admin_url}
-            </ThemedText>
           </Step>
           <Step number={2} title="Wpisz login i hasło z wiadomości e-mail">
-            <ThemedText type="small" themeColor="textSecondary">
-              Wysłaliśmy je na {access.sent_to}, gdy sklep był gotowy. Nie ma wiadomości? Zajrzyj do spamu albo wyślij
-              dane jeszcze raz.
-            </ThemedText>
             <Button
               title="Wyślij dane ponownie"
               icon="mail"
@@ -62,11 +55,6 @@ export function ShopLoginSteps({ shopId }: { shopId: number }) {
               onPress={sendAgain}
               style={styles.start}
             />
-          </Step>
-          <Step number={3} title="Kliknij „Zaloguj się”">
-            <ThemedText type="small" themeColor="textSecondary">
-              Najważniejsze są Produkty i WooCommerce w menu po lewej.
-            </ThemedText>
           </Step>
         </View>
       ) : null}

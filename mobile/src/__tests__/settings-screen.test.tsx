@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Linking } from 'react-native';
 
 import ShopSettingsScreen from '@/app/shops/[id]/settings';
 import { NotificationsProvider } from '@/context/notifications';
@@ -212,6 +213,7 @@ test('removing sample products says how many went', async () => {
 });
 
 test('manual settings never show the password, they send it by e-mail', async () => {
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue();
   const access = { admin_url: 'http://palarnia.localhost/wp-admin/', sent_to: 'anna@example.com' };
   const { api } = await open('reczne', {
     [SETTINGS]: shopSettings({}, fresh),
@@ -219,8 +221,8 @@ test('manual settings never show the password, they send it by e-mail', async ()
     'POST /shops/7/send-admin-access/': [access, new ApiError(429, null)],
   });
 
-  expect(await screen.findByText('http://palarnia.localhost/wp-admin/')).toBeTruthy();
-  expect(screen.getByText(/Wysłaliśmy je na anna@example.com/)).toBeTruthy();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Otwórz panel sklepu' }));
+  expect(openURL).toHaveBeenCalledWith('http://palarnia.localhost/wp-admin/');
 
   await fireEvent.press(screen.getByRole('button', { name: 'Wyślij dane ponownie' }));
   expect(await screen.findByText('Wysłaliśmy dane logowania na anna@example.com.')).toBeTruthy();
