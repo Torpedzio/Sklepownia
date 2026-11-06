@@ -87,9 +87,14 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen name="shops/new" options={{ title: 'Nowy sklep', presentation: 'modal' }} />
         <Stack.Screen name="shops/[id]" options={{ title: 'Sklep' }} />
         <Stack.Screen name="shops/[id]/settings" options={{ title: 'Ustawienia sklepu' }} />
+        <Stack.Screen name="billing/index" options={{ title: 'Plan i płatności' }} />
+        <Stack.Screen name="billing/checkout" options={{ title: 'Wybierz plan' }} />
+        <Stack.Screen name="billing/change" options={{ title: 'Zmień plan' }} />
+        <Stack.Screen name="billing/return" options={{ title: 'Płatność' }} />
       </Stack.Protected>
       <Stack.Screen name="about" options={{ title: 'Jak to działa', headerShown: nativeHeader }} />
       <Stack.Screen name="contact" options={{ title: 'Kontakt', headerShown: nativeHeader }} />
+      <Stack.Screen name="pricing" options={{ title: 'Cennik', headerShown: nativeHeader }} />
     </Stack>
   );
 }

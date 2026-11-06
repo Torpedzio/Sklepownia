@@ -31,6 +31,7 @@ export function SiteHeader() {
             <>
               <NavLink href="/" label="Strona główna" />
               <NavLink href="/about" label="Jak to działa" />
+              <NavLink href="/pricing" label="Cennik" />
               <NavLink href="/contact" label="Kontakt" />
               {user ? <NavLink href="/account" label="Konto" /> : null}
             </>

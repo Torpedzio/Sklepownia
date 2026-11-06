@@ -25,6 +25,8 @@ const anna: User = {
   is_email_verified: true,
   date_joined: '2026-10-01T12:00:00Z',
   shop_limit: 3,
+  plan: 'Standard',
+  can_create_shops: true,
 };
 
 function signedIn(user: User | null, actions: Record<string, jest.Mock> = {}) {
@@ -151,6 +153,7 @@ describe('shop list', () => {
     url: `http://sklep-${id}.localhost`,
     status,
     status_display: status,
+    is_test: false,
     created_at: '2026-11-01T10:00:00Z',
   });
 
@@ -179,7 +182,26 @@ describe('shop list', () => {
     mockApi({ 'GET /shops/': [[shop(1, 'active'), shop(2, 'active'), shop(3, 'active')]] });
     await renderScreen(<ShopsScreen />);
 
-    expect(await screen.findByText(/To limit na jedno konto\./)).toBeTruthy();
+    expect(await screen.findByText(/To limit Twojego planu\./)).toBeTruthy();
+  });
+
+  test('marks test shops and leads to choosing a plan without one', async () => {
+    signedIn({ ...anna, plan: null, shop_limit: 0, can_create_shops: false });
+    mockApi({ 'GET /shops/': [[{ ...shop(1, 'active'), is_test: true }]] });
+    await renderScreen(<ShopsScreen />);
+
+    expect(await screen.findByText('Testowy')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Nowy sklep' }));
+    expect(router.push).toHaveBeenCalledWith('/billing/checkout');
+  });
+
+  test('without a plan the first shop starts with choosing one', async () => {
+    signedIn({ ...anna, plan: null, shop_limit: 0, can_create_shops: false });
+    mockApi({ 'GET /shops/': [[]] });
+    await renderScreen(<ShopsScreen />);
+
+    await fireEvent.press(await screen.findByRole('button', { name: 'Wybierz plan i załóż sklep' }));
+    expect(router.push).toHaveBeenCalledWith('/billing/checkout');
   });
 
   test('shows why the list did not load', async () => {
@@ -220,9 +242,11 @@ describe('account', () => {
     signedIn(anna, { updateProfile: jest.fn(), signOut });
     await renderScreen(<AccountScreen />);
 
+    await fireEvent.press(screen.getByRole('link', { name: /Plan i płatności/ }));
     await fireEvent.press(screen.getByRole('link', { name: /Kontakt/ }));
     await fireEvent.press(screen.getByRole('button', { name: 'Wyloguj się' }));
 
+    expect(router.push).toHaveBeenCalledWith('/billing');
     expect(router.push).toHaveBeenCalledWith('/contact');
     expect(signOut).toHaveBeenCalled();
     expect(await screen.findByText('Wylogowano.')).toBeTruthy();

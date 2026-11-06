@@ -28,12 +28,17 @@ Zasada: w `app/` są tylko ekrany. Komponenty, hooki i narzędzia są poza tym k
 | `/` | `app/index.tsx` | Wszyscy. Strona główna z pokazem slajdów, krokami, motywami i FAQ. |
 | `/about` | `app/about.tsx` | Wszyscy. „Jak to działa”, cała lista funkcji i pytań. |
 | `/contact` | `app/contact.tsx` | Wszyscy. Dane kontaktowe i formularz. |
+| `/pricing` | `app/pricing.tsx` | Wszyscy. Cennik z planami i przejściem do wyboru planu. |
 | `/sign-in`, `/sign-up` | `app/sign-in.tsx`, `app/sign-up.tsx` | Tylko niezalogowani |
 | `/verify-email` | `app/verify-email.tsx` | Zalogowani bez potwierdzonego e-maila |
 | `/shops` | `app/(tabs)/shops.tsx` | Zalogowani z potwierdzonym e-mailem. Lista sklepów. |
 | `/help` | `app/(tabs)/help.tsx` | jw. Porady dotyczące prowadzenia sklepu. |
 | `/account` | `app/(tabs)/account.tsx` | jw. Profil i wylogowanie. |
-| `/shops/new` | `app/shops/new.tsx` | jw. Formularz nowego sklepu (na telefonie jako okno modalne). |
+| `/shops/new` | `app/shops/new.tsx` | jw. Formularz nowego sklepu (na telefonie jako okno modalne). Bez planu zamiast formularza „Najpierw wybierz plan”. |
+| `/billing` | `app/billing/index.tsx` | jw. Plan i płatności: stan planu, karta, anulowanie i wznowienie, dane do faktury, historia płatności. |
+| `/billing/change` | `app/billing/change.tsx` | jw. Zmiana planu: podgląd dopłaty albo kwoty na saldo, wybór sklepów, które zostają aktywne, potwierdzenie. |
+| `/billing/checkout` | `app/billing/checkout.tsx` | jw. Wybór planu, dane do faktury, zgody i przejście do płatności. |
+| `/billing/return` | `app/billing/return.tsx` | jw. Powrót ze strony płatności (`?payment=<id>`): czeka na wynik i prowadzi do zakładania sklepu. |
 | `/shops/[id]` | `app/shops/[id].tsx` | jw. Sklep: w trakcie zakładania postęp na paragonie; działający sklep ma kartę z przyciskami (sklep, ustawienia, panel WordPressa) na całą szerokość, pod nią „Ustawienia w skrócie” z kafelkami prowadzącymi do sekcji ustawień i paragon obok, dalej porady i usuwanie. W przeglądarce strzałka przy tytule cofa także po odświeżeniu strony (`backArrowOptions`). |
 | `/shops/[id]/settings` | `app/shops/[id]/settings.tsx` | jw. Ustawienia działającego sklepu: menu sekcji i jedna wybrana sekcja (`?section=platnosci`), nowe hasło, usunięcie produktów przykładowych, ustawienia ręczne (logowanie do wp-admin), ostatnie zmiany. |
 
@@ -99,8 +104,9 @@ Ruch na ekranie (Reanimated) respektuje systemowe ograniczenie ruchu.
 | `AuthLayout` | Układ logowania, rejestracji i potwierdzania e-maila |
 | `ui/Button`, `ui/TextField`, `ui/ChipSelect`, `ui/SwitchRow`, `ui/Tooltip` | Podstawowe kontrolki. `SwitchRow` to ustawienie włącz/wyłącz z opisem; przełącza je cały wiersz. `Button` delikatnie powiększa się po najechaniu i zapada przy wciśnięciu. |
 | `Receipt` | Paragon z wierszami, sumą i pieczątką; po najechaniu unosi się i obraca |
-| `ShopSign`, `StatusBadge` | Karta sklepu na liście i znacznik statusu |
-| `NewShopButton` | Przycisk nowego sklepu; po osiągnięciu limitu wyszarzony, z dymkiem wyjaśnienia |
+| `ShopSign`, `StatusBadge`, `TestBadge` | Karta sklepu na liście (sklepy zawieszone przez plan wyszarzone i na końcu listy), znacznik statusu i znacznik „Testowy” sklepów sprzed płatnych planów |
+| `NewShopButton` | Przycisk nowego sklepu; bez planu prowadzi do wyboru planu, po osiągnięciu limitu planu wyszarzony z dymkiem. Sklepy testowe nie liczą się do limitu (`paidShopCount`). |
+| `PlanCard`, `BillingProfileForm` | Plan z ceną brutto, korzyściami i znacznikiem „Polecany” (do wyboru albo z przyciskiem wyrównanym do dołu karty) i formularz danych do faktury (osoba albo firma z NIP) |
 | `FeatureSlides` | „Co dostajesz” na całą szerokość pod markizą. Przy przewijaniu przyklejona witryna, w której każde przewinięcie pokazuje następny slajd (`PinnedSequence`); przy ograniczonym ruchu pokaz slajdów ze strzałkami, kropkami i automatycznym przewijaniem. Zdjęcia przechodzą po bokach gradientem w kolor strony (`SIDE_FADE_WIDE`, `SIDE_FADE_NARROW`). |
 | `ThemeShowcase` | Motywy jako pasy na całą szerokość: zrzut sklepu przechodzący gradientem w tło. Przy przewijaniu działa jak `FeatureSlides` (`PinnedSequence`); przy ograniczonym ruchu zwykła lista. |
 | `PinnedSequence`, `SwapLayer` | Wspólny mechanizm obu sekcji: przyklejenie nagłówka i sceny oraz podmiana elementu co około 160 px przewinięcia (`STEP`, `SWITCH_AT`). W przeglądarce przykleja CSS `sticky`. Na telefonie scena przesuwa się dokładnie o przewinięcie (położenie sekcji jest mierzone tylko przed przyklejeniem, więc nic nie drży), a jedno przesunięcie palcem zmienia najwyżej jeden element: rozpęd zatrzymuje się na następnym, a strona dociąga do pokazanego. `SwapLayer` to jedna warstwa sceny z przenikaniem. |
@@ -113,6 +119,13 @@ Ruch na ekranie (Reanimated) respektuje systemowe ograniczenie ruchu.
 | `ShopOverview` | Kafelki ze stanem ustawień sklepu; brak płatności lub wysyłki jest wyróżniony (`missingForSales`), kafelek otwiera swoją sekcję ustawień |
 
 Hook `useFullBleed` pozwala sekcji wyjść z wyśrodkowanej kolumny na całą szerokość strony.
+
+## Płatności w aplikacji
+
+[lib/payment.ts](../mobile/src/lib/payment.ts): `goToPayment(checkout)` w przeglądarce przechodzi na stronę płatności
+(powrót przekierowaniem), a na telefonie otwiera ją w systemowej przeglądarce (`expo-web-browser`,
+`openAuthSessionAsync`) z powrotem przez `Linking.createURL('/billing/return')`. Po opłaceniu ekran powrotu
+odświeża konto (`useAuth().refreshUser()`), bo plan i limit sklepów aplikacja czyta z użytkownika.
 
 ## Obrazy
 

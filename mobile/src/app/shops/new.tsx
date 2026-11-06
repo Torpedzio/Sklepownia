@@ -1,8 +1,8 @@
-import { router } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, View } from 'react-native';
 
-import { isShopLimitReached, shopLimitMessage } from '@/components/new-shop-button';
+import { isShopLimitReached, paidShopCount, shopLimitMessage } from '@/components/new-shop-button';
 import { Page } from '@/components/page';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -27,11 +27,34 @@ export default function NewShopScreen() {
   const { data: shops, error: shopsError } = useApiQuery<Shop[]>('/shops/');
 
   // The form is also reachable by URL, so check the limit here and not only on the buttons.
-  if (user && isShopLimitReached(user.shop_limit, shops?.length)) return <LimitReached limit={user.shop_limit} />;
+  if (user && !user.plan) return <PlanRequired />;
+  if (user && isShopLimitReached(user.shop_limit, paidShopCount(shops)))
+    return <LimitReached limit={user.shop_limit} />;
   if (options && (shops || shopsError)) return <NewShopForm options={options} />;
   return (
     <Page>
-      {error ? <ThemedText themeColor="danger">{error.message}</ThemedText> : <ActivityIndicator style={styles.loader} />}
+      {error ? (
+        <ThemedText themeColor="danger">{error.message}</ThemedText>
+      ) : (
+        <ActivityIndicator style={styles.loader} />
+      )}
+    </Page>
+  );
+}
+
+function PlanRequired() {
+  const theme = useTheme();
+  return (
+    <Page maxWidth={760}>
+      <View style={[styles.limit, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <ThemedText type="title">Najpierw wybierz plan</ThemedText>
+        <ThemedText themeColor="textSecondary">
+          Sklepy zakładasz w ramach planu. Wybierz go i zapłać kartą, a od razu wrócisz do zakładania sklepu.
+        </ThemedText>
+        <Link href="/billing/checkout" asChild>
+          <Button title="Wybierz plan" icon="card" style={styles.limitButton} />
+        </Link>
+      </View>
     </Page>
   );
 }
@@ -111,14 +134,17 @@ function NewShopForm({ options }: { options: FormOptions }) {
   }
 
   const { min, max } = options.category_count;
-  const slugError = fieldErrors.slug ?? (slugCheck && !slugCheck.available ? slugCheck.reason ?? undefined : undefined);
+  const slugError =
+    fieldErrors.slug ?? (slugCheck && !slugCheck.available ? (slugCheck.reason ?? undefined) : undefined);
   const address = `${form.slug || 'twoj-sklep'}.${options.base_domain}`;
 
   return (
     <Page maxWidth={760}>
       <View style={styles.intro}>
         <ThemedText type="title">Opisz swój sklep</ThemedText>
-        <ThemedText themeColor="textSecondary">Wszystko poza nazwą i adresem zmienisz później w ustawieniach sklepu.</ThemedText>
+        <ThemedText themeColor="textSecondary">
+          Wszystko poza nazwą i adresem zmienisz później w ustawieniach sklepu.
+        </ThemedText>
       </View>
 
       <Section title="Nazwa i adres">
@@ -179,7 +205,10 @@ function NewShopForm({ options }: { options: FormOptions }) {
                 onPress={() => update('template', template.slug)}
                 style={[
                   styles.template,
-                  { backgroundColor: selected ? theme.primaryMuted : theme.surface, borderColor: selected ? theme.primary : theme.border },
+                  {
+                    backgroundColor: selected ? theme.primaryMuted : theme.surface,
+                    borderColor: selected ? theme.primary : theme.border,
+                  },
                 ]}>
                 <View style={styles.swatches}>
                   {colors.map((color) => (
@@ -205,11 +234,19 @@ function NewShopForm({ options }: { options: FormOptions }) {
             </ThemedText>
           </View>
           <View style={styles.stepper}>
-            <StepperButton label="−" disabled={form.category_count <= min} onPress={() => update('category_count', form.category_count - 1)} />
+            <StepperButton
+              label="−"
+              disabled={form.category_count <= min}
+              onPress={() => update('category_count', form.category_count - 1)}
+            />
             <ThemedText type="subtitle" style={styles.stepperValue}>
               {form.category_count}
             </ThemedText>
-            <StepperButton label="+" disabled={form.category_count >= max} onPress={() => update('category_count', form.category_count + 1)} />
+            <StepperButton
+              label="+"
+              disabled={form.category_count >= max}
+              onPress={() => update('category_count', form.category_count + 1)}
+            />
           </View>
         </View>
         <View style={styles.row}>
@@ -228,9 +265,24 @@ function NewShopForm({ options }: { options: FormOptions }) {
       </Section>
 
       <Section title="Region">
-        <ChipSelect label="Język sklepu" options={options.languages} value={form.language} onChange={(v) => update('language', v)} />
-        <ChipSelect label="Waluta" options={options.currencies} value={form.currency} onChange={(v) => update('currency', v)} />
-        <ChipSelect label="Kraj" options={options.countries} value={form.country} onChange={(v) => update('country', v)} />
+        <ChipSelect
+          label="Język sklepu"
+          options={options.languages}
+          value={form.language}
+          onChange={(v) => update('language', v)}
+        />
+        <ChipSelect
+          label="Waluta"
+          options={options.currencies}
+          value={form.currency}
+          onChange={(v) => update('currency', v)}
+        />
+        <ChipSelect
+          label="Kraj"
+          options={options.countries}
+          value={form.country}
+          onChange={(v) => update('country', v)}
+        />
       </Section>
 
       <Button
@@ -250,7 +302,11 @@ function Section({ title, text, children }: { title: string; text?: string; chil
     <View style={[styles.section, { borderTopColor: theme.border }]}>
       <View style={styles.sectionHead}>
         <ThemedText type="subtitle">{title}</ThemedText>
-        {text ? <ThemedText type="small" themeColor="textSecondary">{text}</ThemedText> : null}
+        {text ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            {text}
+          </ThemedText>
+        ) : null}
       </View>
       {children}
     </View>
@@ -265,7 +321,10 @@ function StepperButton({ label, disabled, onPress }: { label: string; disabled: 
       accessibilityLabel={label === '+' ? 'Więcej kategorii' : 'Mniej kategorii'}
       onPress={onPress}
       disabled={disabled}
-      style={[styles.stepperButton, { borderColor: theme.border, backgroundColor: theme.surface, opacity: disabled ? 0.4 : 1 }]}>
+      style={[
+        styles.stepperButton,
+        { borderColor: theme.border, backgroundColor: theme.surface, opacity: disabled ? 0.4 : 1 },
+      ]}>
       <ThemedText type="subtitle">{label}</ThemedText>
     </Pressable>
   );

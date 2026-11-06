@@ -5,7 +5,11 @@ export type User = {
   last_name: string;
   is_email_verified: boolean;
   date_joined: string;
+  /** How many shops the active plan allows; 0 without a plan. Test shops don't count. */
   shop_limit: number;
+  /** Name of the active plan, or null. */
+  plan: string | null;
+  can_create_shops: boolean;
 };
 
 export type Tokens = { access: string; refresh: string };
@@ -19,6 +23,8 @@ export type Shop = {
   url: string;
   status: ShopStatus;
   status_display: string;
+  /** From before paid plans: works without a plan and doesn't count towards its limit. */
+  is_test: boolean;
   created_at: string;
 };
 
@@ -151,4 +157,104 @@ export type ShopSettings = {
     themes: Choice[];
     vat_rates: Record<string, string[]>;
   };
+};
+
+export type Plan = {
+  code: string;
+  name: string;
+  description: string;
+  /** Gross price per period, e.g. "49.00". */
+  price: string;
+  currency: string;
+  vat_rate: string;
+  interval_months: number;
+  max_shops: number;
+  /** Memory of each shop's container. */
+  shop_memory_mb: number;
+  /** Highlighted as the usual choice. */
+  is_featured: boolean;
+  features: string[];
+};
+
+export type BillingProfile = {
+  kind: 'individual' | 'company';
+  full_name: string;
+  company_name: string;
+  tax_id: string;
+  street: string;
+  postal_code: string;
+  city: string;
+  country: string;
+};
+
+export type SubscriptionStatus = 'incomplete' | 'active' | 'past_due' | 'canceled' | 'expired';
+
+export type Subscription = {
+  plan: Plan;
+  status: SubscriptionStatus;
+  status_display: string;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  next_attempt_at: string | null;
+  card: { brand: string; tail: string; expiry: string } | null;
+  /** Overpaid money (e.g. after a cheaper plan mid-period); renewals use it first. */
+  credit: string;
+  allows_new_shops: boolean;
+};
+
+export type Payment = {
+  id: number;
+  kind: 'initial' | 'renewal' | 'upgrade';
+  kind_display: string;
+  status: 'pending' | 'paid' | 'failed';
+  status_display: string;
+  plan_name: string;
+  amount: string;
+  /** Taken from the balance instead of the card. */
+  credit_used: string;
+  currency: string;
+  gateway_title: string;
+  period_start: string | null;
+  period_end: string | null;
+  error: string;
+  created_at: string;
+  paid_at: string | null;
+};
+
+export type BillingOverview = {
+  subscription: Subscription | null;
+  profile: BillingProfile | null;
+  payments: Payment[];
+};
+
+export type Checkout = { payment: Payment; redirect_url: string };
+
+export type ShopBrief = { id: number; name: string; status: ShopStatus };
+
+/** What moving to another plan would mean now. */
+export type PlanChangePreview = {
+  plan: Plan;
+  direction: 'upgrade' | 'downgrade' | '';
+  /** Price difference for the rest of the paid period. */
+  surcharge: string;
+  credit_used: string;
+  /** To pay now. */
+  amount_due: string;
+  /** A surcharge below 5 zł that isn't charged. */
+  waived: boolean;
+  /** Unused money moved to the balance. */
+  credit_added: string;
+  credit_after: string;
+  keep: ShopBrief[];
+  suspend: ShopBrief[];
+  resume: ShopBrief[];
+  /** Why the change isn't possible; empty when it is. */
+  blocked: string;
+};
+
+export type PlanChangeResult = {
+  change: PlanChangePreview;
+  payment: Payment | null;
+  redirect_url: string | null;
 };

@@ -80,6 +80,7 @@ export function shopDetail(overrides: Partial<ShopDetail> = {}): ShopDetail {
     status_display:
       { active: 'Aktywny', provisioning: 'Zakładanie', failed: 'Błąd', pending: 'Oczekuje' }[status as string] ??
       status,
+    is_test: false,
     created_at: '2026-11-05T10:00:00Z',
     config: {
       industry: 'food',

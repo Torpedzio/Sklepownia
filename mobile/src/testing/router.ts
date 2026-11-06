@@ -34,3 +34,11 @@ export function Link({ href, asChild, children, ...rest }: LinkProps) {
   }
   return createElement(Text, { ...rest, onPress, accessibilityRole: 'link' }, children);
 }
+
+/** Navigates on render, like expo-router's Redirect. */
+export function Redirect({ href }: { href: unknown }) {
+  useEffect(() => {
+    router.replace(href);
+  }, [href]);
+  return null;
+}

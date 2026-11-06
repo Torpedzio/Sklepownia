@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CtaBand } from '@/components/cta-band';
 import { FaqList } from '@/components/faq-list';
 import { FeatureSlides } from '@/components/feature-slides';
-import { NewShopButton } from '@/components/new-shop-button';
+import { NewShopButton, paidShopCount } from '@/components/new-shop-button';
 import { Page } from '@/components/page';
 import { Receipt } from '@/components/receipt';
 import { SiteFooter } from '@/components/site-footer';
@@ -41,7 +41,7 @@ export default function HomeScreen() {
         top={<SiteHeader />}
         bottom={
           <>
-            <ClosingBand shopCount={shops?.length} />
+            <ClosingBand shopCount={paidShopCount(shops)} />
             <SiteFooter />
           </>
         }
@@ -66,7 +66,7 @@ export default function HomeScreen() {
                     variant="secondary"
                     size="large"
                     icon="plus"
-                    shopCount={shops?.length}
+                    shopCount={paidShopCount(shops)}
                   />
                 </>
               ) : (

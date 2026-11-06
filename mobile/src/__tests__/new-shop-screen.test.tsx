@@ -26,11 +26,11 @@ const options: FormOptions = {
   base_domain: 'localhost',
 };
 
-async function open(routes: Routes = {}, shopCount = 0) {
-  (useAuth as jest.Mock).mockReturnValue({ user: { shop_limit: 3 } });
+async function open(routes: Routes = {}, shopCount = 0, plan: string | null = 'Standard') {
+  (useAuth as jest.Mock).mockReturnValue({ user: { shop_limit: 3, plan } });
   const api = mockApi({
     'GET /shops/form-options/': options,
-    'GET /shops/': [Array.from({ length: shopCount }, (_, id) => ({ id }))],
+    'GET /shops/': [Array.from({ length: shopCount }, (_, id) => ({ id, is_test: false }))],
     ...routes,
   });
   await render(<NewShopScreen />, { wrapper: NotificationsProvider });
@@ -107,4 +107,21 @@ test('at the shop limit there is no form', async () => {
 
   expect(await screen.findByText('Masz już 3 sklepy')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Załóż sklep' })).toBeNull();
+});
+
+test('without a plan the form sends you to choose one', async () => {
+  await open({}, 0, null);
+
+  expect(await screen.findByText('Najpierw wybierz plan')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Wybierz plan' }));
+  expect(router.push).toHaveBeenCalledWith('/billing/checkout');
+});
+
+test('test shops do not count towards the limit', async () => {
+  (useAuth as jest.Mock).mockReturnValue({ user: { shop_limit: 1, plan: 'Standard' } });
+  mockApi({ 'GET /shops/form-options/': options, 'GET /shops/': [[{ id: 1, is_test: true }]] });
+
+  await render(<NewShopScreen />, { wrapper: NotificationsProvider });
+
+  expect(await screen.findByText('Opisz swój sklep')).toBeTruthy();
 });

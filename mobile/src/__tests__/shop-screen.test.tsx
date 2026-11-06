@@ -4,6 +4,7 @@ import { Linking } from 'react-native';
 
 import ShopScreen from '@/app/shops/[id]';
 import { NotificationsProvider } from '@/context/notifications';
+import { ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
 import type { ShopDetail } from '@/lib/types';
 import { mockApi, type Routes } from '@/testing/api';
@@ -125,4 +126,32 @@ test('deleting can be called off', async () => {
   await fireEvent.press(await screen.findByRole('button', { name: 'Usuń sklep' }));
 
   expect(api.sent('DELETE /shops/7/')).toEqual([]);
+});
+
+test('a suspended shop can be brought back or the plan changed', async () => {
+  const suspended = shopDetail({ status: 'suspended', status_display: 'Niedostępny w obecnym planie' });
+  const { api } = await open([suspended, shopDetail()], {
+    'POST /shops/7/resume/': shopDetail(),
+    'GET /shops/7/settings/': shopSettings(),
+  });
+
+  expect(await screen.findByText('Sklep niedostępny w obecnym planie')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Zmień plan' }));
+  expect(router.push).toHaveBeenCalledWith('/billing/change');
+
+  await fireEvent.press(screen.getByRole('button', { name: 'Przywróć sklep' }));
+  expect(api.sent('POST /shops/7/resume/')).toHaveLength(1);
+  expect(await screen.findByText('Sklep „Palarnia” znów działa.')).toBeTruthy();
+});
+
+test('bringing a shop back explains when the plan is full', async () => {
+  await open(shopDetail({ status: 'suspended', status_display: 'Niedostępny w obecnym planie' }), {
+    'POST /shops/7/resume/': new ApiError(400, {
+      detail: 'Twój plan pozwala na 1 sklep. Zmień plan albo usuń inny sklep, żeby przywrócić ten.',
+    }),
+  });
+
+  await fireEvent.press(await screen.findByRole('button', { name: 'Przywróć sklep' }));
+
+  expect(await screen.findByText(/Zmień plan albo usuń inny sklep/)).toBeTruthy();
 });

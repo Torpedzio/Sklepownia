@@ -26,7 +26,11 @@ export default function AccountScreen() {
   if (!user) return null;
   const changed = firstName !== user.first_name || lastName !== user.last_name;
   const initial = (user.first_name || user.email).charAt(0).toUpperCase();
-  const joined = new Date(user.date_joined).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
+  const joined = new Date(user.date_joined).toLocaleDateString('pl-PL', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 
   async function handleSave() {
     setSaving(true);
@@ -46,7 +50,9 @@ export default function AccountScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.flex, { backgroundColor: theme.background }]} edges={Platform.OS === 'web' ? [] : ['top']}>
+    <SafeAreaView
+      style={[styles.flex, { backgroundColor: theme.background }]}
+      edges={Platform.OS === 'web' ? [] : ['top']}>
       <Page maxWidth={ReadableWidth + 64}>
         <View style={styles.profile}>
           <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
@@ -73,6 +79,7 @@ export default function AccountScreen() {
         </View>
 
         <View style={[styles.card, styles.links, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <LinkRow href="/billing" icon="card" label="Plan i płatności" />
           <LinkRow href="/about" icon="help" label="Jak to działa" />
           <LinkRow href="/contact" icon="mail" label="Kontakt" />
         </View>
@@ -86,7 +93,7 @@ export default function AccountScreen() {
   );
 }
 
-function LinkRow({ href, icon, label }: { href: '/about' | '/contact'; icon: IconName; label: string }) {
+function LinkRow({ href, icon, label }: { href: '/billing' | '/about' | '/contact'; icon: IconName; label: string }) {
   return (
     <Link href={href} asChild>
       <Pressable accessibilityRole="link" style={styles.linkRow}>

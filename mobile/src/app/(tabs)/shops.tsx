@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Awning } from '@/components/awning';
 import { Icon } from '@/components/icon';
 import { Logo } from '@/components/logo';
-import { isShopLimitReached, NewShopButton } from '@/components/new-shop-button';
+import { isShopLimitReached, NewShopButton, paidShopCount } from '@/components/new-shop-button';
 import { Page } from '@/components/page';
 import { ShopSign } from '@/components/shop-sign';
 import { ThemedText } from '@/components/themed-text';
@@ -22,14 +22,23 @@ const IN_PROGRESS = ['pending', 'provisioning'];
 export default function DashboardScreen() {
   const { user } = useAuth();
   const theme = useTheme();
-  const { data: shops, error, isLoading, isRefreshing, refresh } = useApiQuery<Shop[]>('/shops/', {
+  const {
+    data: shops,
+    error,
+    isLoading,
+    isRefreshing,
+    refresh,
+  } = useApiQuery<Shop[]>('/shops/', {
     refetchInterval: (data) => (data?.some((shop) => IN_PROGRESS.includes(shop.status)) ? 3000 : false),
   });
   const active = shops?.filter((shop) => shop.status === 'active').length ?? 0;
-  const limitReached = isShopLimitReached(user?.shop_limit, shops?.length);
+  const paidShops = paidShopCount(shops);
+  const limitReached = isShopLimitReached(user?.shop_limit, paidShops);
 
   return (
-    <SafeAreaView style={[styles.flex, { backgroundColor: theme.background }]} edges={Platform.OS === 'web' ? [] : ['top']}>
+    <SafeAreaView
+      style={[styles.flex, { backgroundColor: theme.background }]}
+      edges={Platform.OS === 'web' ? [] : ['top']}>
       <Page refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} />}>
         {Platform.OS === 'web' ? null : (
           <Link href="/" asChild>
@@ -49,12 +58,11 @@ export default function DashboardScreen() {
             {shops?.length ? (
               <ThemedText themeColor="textSecondary">
                 {shops.length} {plural(shops.length, ['sklep', 'sklepy', 'sklepów'])}, w tym {active}{' '}
-                {plural(active, ['otwarty', 'otwarte', 'otwartych'])}.
-                {limitReached ? ' To limit na jedno konto.' : ''}
+                {plural(active, ['otwarty', 'otwarte', 'otwartych'])}.{limitReached ? ' To limit Twojego planu.' : ''}
               </ThemedText>
             ) : null}
           </View>
-          {shops?.length ? <NewShopButton title="Nowy sklep" icon="plus" shopCount={shops.length} /> : null}
+          {shops?.length ? <NewShopButton title="Nowy sklep" icon="plus" shopCount={paidShops} /> : null}
         </View>
 
         {error ? <ThemedText themeColor="danger">{error.message}</ThemedText> : null}
@@ -74,20 +82,31 @@ export default function DashboardScreen() {
             <ThemedText themeColor="textSecondary" style={[styles.center, styles.emptyText]}>
               Podaj nazwę, branżę i wygląd. Po niecałych dwóch minutach sklep będzie gotowy do dodawania produktów.
             </ThemedText>
-            <Link href="/shops/new" asChild>
-              <Button title="Załóż pierwszy sklep" size="large" icon="plus" />
+            <Link href={user?.plan ? '/shops/new' : '/billing/checkout'} asChild>
+              <Button
+                title={user?.plan ? 'Załóż pierwszy sklep' : 'Wybierz plan i załóż sklep'}
+                size="large"
+                icon="plus"
+              />
             </Link>
           </View>
         ) : (
-          <View style={styles.grid}>{shops?.map((shop) => <ShopSign key={shop.id} shop={shop} />)}</View>
+          <View style={styles.grid}>
+            {/* Shops suspended by the plan go last: the ones that work come first. */}
+            {[...(shops ?? [])]
+              .sort((a, b) => Number(a.status === 'suspended') - Number(b.status === 'suspended'))
+              .map((shop) => (
+                <ShopSign key={shop.id} shop={shop} />
+              ))}
+          </View>
         )}
 
         <Link href="/help" asChild>
-          <Pressable accessibilityRole="link" style={StyleSheet.flatten([styles.tip, { backgroundColor: theme.accentMuted }])}>
+          <Pressable
+            accessibilityRole="link"
+            style={StyleSheet.flatten([styles.tip, { backgroundColor: theme.accentMuted }])}>
             <Icon name="help" size={20} />
-            <ThemedText style={styles.flex}>
-              Pierwszy raz? Zobacz, jak dodać produkty i włączyć płatności.
-            </ThemedText>
+            <ThemedText style={styles.flex}>Pierwszy raz? Zobacz, jak dodać produkty i włączyć płatności.</ThemedText>
             <Icon name="chevron" size={18} color="textSecondary" />
           </Pressable>
         </Link>

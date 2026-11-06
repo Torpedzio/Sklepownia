@@ -13,6 +13,8 @@ type AuthContextValue = {
   verifyEmail: (code: string) => Promise<void>;
   resendCode: () => Promise<void>;
   updateProfile: (changes: Pick<User, 'first_name' | 'last_name'>) => Promise<void>;
+  /** Loads the account again, e.g. after paying for a plan. */
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -71,6 +73,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     },
     async updateProfile(changes) {
       setUser(await api<User>('/auth/me/', { method: 'PATCH', body: changes }));
+    },
+    async refreshUser() {
+      setUser(await api<User>('/auth/me/'));
     },
   };
 

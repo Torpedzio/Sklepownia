@@ -1,4 +1,4 @@
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, StyleSheet, useWindowDimensions, View } from 'react-native';
 
@@ -7,6 +7,7 @@ import { Page } from '@/components/page';
 import { Receipt, type ReceiptRow } from '@/components/receipt';
 import { ShopGuidesPanel } from '@/components/shop-guides';
 import { missingForSales, ShopOverview } from '@/components/shop-overview';
+import { TestBadge } from '@/components/shop-sign';
 import { StatusBadge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -132,7 +133,10 @@ export default function ShopScreen() {
         <ThemedText themeColor="textSecondary" selectable>
           {shop.url}
         </ThemedText>
-        <StatusBadge status={shop.status} label={shop.status_display} />
+        <View style={styles.badges}>
+          <StatusBadge status={shop.status} label={shop.status_display} />
+          {shop.is_test ? <TestBadge /> : null}
+        </View>
       </View>
 
       {active ? (
@@ -149,6 +153,33 @@ export default function ShopScreen() {
             <Button title="Otwórz sklep" icon="external" onPress={() => Linking.openURL(shop.url)} />
             <Button title="Ustawienia sklepu" icon="filter" variant="secondary" onPress={() => openSettings()} />
             <Button title="Panel WordPressa" icon="admin" variant="secondary" onPress={() => openSettings('reczne')} />
+          </View>
+        </View>
+      ) : null}
+
+      {shop.status === 'suspended' ? (
+        <View style={[styles.card, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
+          <ThemedText type="heading">Sklep niedostępny w obecnym planie</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Klienci go nie widzą, ale nic z niego nie zniknęło: produkty, zamówienia i ustawienia czekają. Przywrócisz
+            go, gdy plan będzie miał miejsce, czyli po zmianie planu albo usunięciu innego sklepu.
+          </ThemedText>
+          <View style={styles.actions}>
+            <Button
+              title="Przywróć sklep"
+              icon="refresh"
+              loading={busy}
+              onPress={() =>
+                runAction(async () => {
+                  await api(`/shops/${id}/resume/`, { method: 'POST' });
+                  notify.success(`Sklep „${shop.name}” znów działa.`);
+                  await refresh();
+                })
+              }
+            />
+            <Link href="/billing/change" asChild>
+              <Button title="Zmień plan" icon="filter" variant="secondary" />
+            </Link>
           </View>
         </View>
       ) : null}
@@ -210,6 +241,11 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.six,
   },
   header: {
+    gap: Spacing.two,
+  },
+  badges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.two,
   },
   columns: {
