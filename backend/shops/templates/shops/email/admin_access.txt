@@ -5,8 +5,8 @@
 
 LOGOWANIE DO PANELU SKLEPU
 Adres panelu: {{ shop.admin_url }}
-Login: {{ credentials.wp_admin_username }}
-Hasło: {{ credentials.wp_admin_password }}
+Login: {{ credentials.admin_login }}
+Hasło: {{ credentials.admin_password }}
 
 Zapisz hasło w menedżerze haseł albo w przeglądarce. Zapomniane hasło zmienisz w aplikacji:
 Ustawienia sklepu → Bezpieczeństwo. Nowe przyjdzie w kolejnej wiadomości.
@@ -14,7 +14,7 @@ Ustawienia sklepu → Bezpieczeństwo. Nowe przyjdzie w kolejnej wiadomości.
 TWÓJ SKLEP
 {% for label, value in details %}{{ label }}: {{ value }}
 {% endfor %}
-Płatności, wysyłkę i podatki ustawisz w aplikacji, w ustawieniach sklepu.
+{{ settings_note }}
 {% endif %}
 --
 {{ platform }}. Wiadomość wysłana na {{ recipient }}, adres konta, na którym działa ten sklep.

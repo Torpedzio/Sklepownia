@@ -11,6 +11,7 @@ from accounts.permissions import IsEmailVerified
 from . import services
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import InvalidTransition, Shop, ShopCredentials, ShopOperation, ShopTemplate
+from .platforms import PLATFORMS, platform_info
 from .shop_settings import SettingsUpdateSerializer
 from .tasks import send_admin_access_email
 from .serializers import (
@@ -56,6 +57,8 @@ def _settings_payload(shop):
     operation = shop.operations.first()
     return {
         "values": stored.values,
+        "sections": list(platform_info(shop.platform).settings_sections),
+        "panel_name": platform_info(shop.platform).panel_name,
         "synced_at": stored.synced_at,
         "operation": ShopOperationSerializer(operation).data if operation else None,
         "busy": services.current_operation(shop) is not None,
@@ -66,7 +69,7 @@ def _settings_payload(shop):
             "timezones": _choices(Timezone),
             "themes": [
                 {"value": template.slug, "label": template.name}
-                for template in ShopTemplate.objects.filter(is_active=True)
+                for template in ShopTemplate.objects.filter(is_active=True, platform=shop.platform)
             ],
             "vat_rates": VAT_RATES,
         },
@@ -74,7 +77,11 @@ def _settings_payload(shop):
 
 
 def _panel_ready(shop):
-    return shop.status == Shop.Status.ACTIVE and ShopCredentials.objects.filter(shop=shop).exists()
+    return (
+        shop.status == Shop.Status.ACTIVE
+        and shop.admin_url is not None
+        and ShopCredentials.objects.filter(shop=shop).exists()
+    )
 
 
 def _operation_conflict(exc):
@@ -182,7 +189,7 @@ class ShopViewSet(
     @extend_schema(responses={200: ShopAdminAccessSerializer})
     @action(detail=True, methods=["get"], url_path="admin-access")
     def admin_access(self, request, pk=None):
-        """Where the WordPress panel is and where its login went. Never the login itself."""
+        """Where the admin panel is and where its login went. Never the login itself."""
         shop = self.get_object()
         if not _panel_ready(shop):
             return Response({"detail": PANEL_NOT_READY}, status=status.HTTP_409_CONFLICT)
@@ -219,6 +226,10 @@ class ShopViewSet(
     def form_options(self, request):
         templates = ShopTemplate.objects.filter(is_active=True)
         return Response({
+            "platforms": [
+                {"value": platform.value, "label": platform.label, "description": info.description}
+                for platform, info in PLATFORMS.items()
+            ],
             "industries": _choices(Industry),
             "languages": _choices(Language),
             "currencies": _choices(Currency),
@@ -250,7 +261,11 @@ class ShopViewSet(
         if request.method == "GET":
             return Response(_settings_payload(shop))
         serializer = SettingsUpdateSerializer(
-            data=request.data, partial=True, context={"current": services.get_settings(shop).values},
+            data=request.data, partial=True, context={
+                "current": services.get_settings(shop).values,
+                "sections": platform_info(shop.platform).settings_sections,
+                "platform": shop.platform,
+            },
         )
         serializer.is_valid(raise_exception=True)
         try:
@@ -266,7 +281,7 @@ class ShopViewSet(
     )
     @action(detail=True, methods=["post"], url_path="settings/refresh")
     def refresh_settings(self, request, pk=None):
-        """Reads the settings from the shop again, e.g. after changes made in wp-admin."""
+        """Reads the settings from the shop again, e.g. after changes made in the admin panel."""
         shop = self.get_object()
         services.get_settings(shop)
         try:

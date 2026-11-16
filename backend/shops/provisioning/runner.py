@@ -25,7 +25,7 @@ def run_job(job_id):
         job.started_at = timezone.now()
         job.save(update_fields=["status", "started_at"])
 
-    provisioner = get_provisioner()
+    provisioner = get_provisioner(shop.platform)
     for step in job.steps.all():
         _mark(step, ProvisioningStep.Status.RUNNING, started_at=timezone.now())
         try:

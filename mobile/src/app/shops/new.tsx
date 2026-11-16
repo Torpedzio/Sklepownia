@@ -85,8 +85,9 @@ function NewShopForm({ options }: { options: FormOptions }) {
   const [form, setForm] = useState<NewShop>(() => ({
     name: '',
     slug: '',
+    platform: options.platforms[0].value,
     industry: '',
-    template: options.templates[0]?.slug ?? '',
+    template: options.templates.find((t) => t.platform === options.platforms[0].value)?.slug ?? '',
     category_count: options.category_count.default,
     language: options.languages[0].value,
     currency: options.currencies[0].value,
@@ -133,6 +134,18 @@ function NewShopForm({ options }: { options: FormOptions }) {
     }
   }
 
+  function choosePlatform(platform: NewShop['platform']) {
+    if (platform === form.platform) return;
+    // Each platform has its own themes.
+    setForm((current) => ({
+      ...current,
+      platform,
+      template: options.templates.find((t) => t.platform === platform)?.slug ?? '',
+    }));
+    setFieldErrors(({ platform: _, template: __, ...rest }) => rest);
+  }
+
+  const templates = options.templates.filter((t) => t.platform === form.platform);
   const { min, max } = options.category_count;
   const slugError =
     fieldErrors.slug ?? (slugCheck && !slugCheck.available ? (slugCheck.reason ?? undefined) : undefined);
@@ -192,37 +205,38 @@ function NewShopForm({ options }: { options: FormOptions }) {
         />
       </Section>
 
+      <Section title="System sklepu" text="Na nim będzie działał sklep i jego panel. Później go nie zmienisz.">
+        <View style={styles.templates} accessibilityRole="radiogroup">
+          {options.platforms.map((platform) => (
+            <Choice
+              key={platform.value}
+              title={platform.label}
+              text={platform.description}
+              selected={platform.value === form.platform}
+              onPress={() => choosePlatform(platform.value)}
+            />
+          ))}
+        </View>
+        {fieldErrors.platform ? <ThemedText themeColor="danger">{fieldErrors.platform}</ThemedText> : null}
+      </Section>
+
       <Section title="Wygląd">
         <View style={styles.templates} accessibilityRole="radiogroup">
-          {options.templates.map((template) => {
-            const selected = template.slug === form.template;
+          {templates.map((template) => {
             const colors = Themes.find((t) => t.name === template.name)?.colors ?? [];
             return (
-              <Pressable
+              <Choice
                 key={template.slug}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
+                title={template.name}
+                text={template.description}
+                colors={colors}
+                selected={template.slug === form.template}
                 onPress={() => update('template', template.slug)}
-                style={[
-                  styles.template,
-                  {
-                    backgroundColor: selected ? theme.primaryMuted : theme.surface,
-                    borderColor: selected ? theme.primary : theme.border,
-                  },
-                ]}>
-                <View style={styles.swatches}>
-                  {colors.map((color) => (
-                    <View key={color} style={[styles.swatch, { backgroundColor: color }]} />
-                  ))}
-                </View>
-                <ThemedText type="heading">{template.name}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {template.description}
-                </ThemedText>
-              </Pressable>
+              />
             );
           })}
         </View>
+        {fieldErrors.template ? <ThemedText themeColor="danger">{fieldErrors.template}</ThemedText> : null}
       </Section>
 
       <Section title="Asortyment">
@@ -310,6 +324,47 @@ function Section({ title, text, children }: { title: string; text?: string; chil
       </View>
       {children}
     </View>
+  );
+}
+
+function Choice({
+  title,
+  text,
+  colors = [],
+  selected,
+  onPress,
+}: {
+  title: string;
+  text: string;
+  colors?: string[];
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[
+        styles.template,
+        {
+          backgroundColor: selected ? theme.primaryMuted : theme.surface,
+          borderColor: selected ? theme.primary : theme.border,
+        },
+      ]}>
+      {colors.length ? (
+        <View style={styles.swatches}>
+          {colors.map((color) => (
+            <View key={color} style={[styles.swatch, { backgroundColor: color }]} />
+          ))}
+        </View>
+      ) : null}
+      <ThemedText type="heading">{title}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        {text}
+      </ThemedText>
+    </Pressable>
   );
 }
 

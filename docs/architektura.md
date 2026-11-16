@@ -17,7 +17,7 @@
            │                       Serwer sklepów (infra/shops)
            │                       ┌──────────────────────────────────────────────────────┐
            └─────────────────────▶ │ Traefik :8080 ──Host: <slug>.<domena>──▶ shop-<id>   │
-                                   │                                          (WordPress) │
+                                   │                         (WordPress albo PrestaShop) │
                                    │                       MariaDB shops-db ◀─┘           │
                                    └──────────────────────────────────────────────────────┘
 ```
@@ -34,7 +34,7 @@
 | Mailpit | Lokalny serwer SMTP: przyjmuje całą pocztę i pokazuje ją w przeglądarce. Na produkcji zastępuje go dostawca poczty. | `mail` |
 | Traefik | Kieruje ruch do kontenera sklepu po nazwie hosta | `shops-proxy` w [infra/shops/](../infra/shops/) |
 | MariaDB | Jedna instancja, osobna baza i użytkownik dla każdego sklepu | `shops-db` |
-| Kontener sklepu | WordPress + WooCommerce + motyw, jeden na sklep | `shop-<id>`, obraz `shops/wordpress:7.1` |
+| Kontener sklepu | Jeden na sklep: WordPress + WooCommerce + motyw albo PrestaShop ([platformy](#platformy-sklepów)) | `shop-<id>`, obraz `shops/wordpress:7.1` albo `prestashop/prestashop:9.2.1-apache` |
 
 Backend i worker to ten sam kod. Tylko worker ma dostęp do socketu Dockera, bo tylko on zakłada kontenery.
 Proces API nie dotyka Dockera (klient Dockera jest tworzony leniwie, dopiero przy pierwszym kroku).
@@ -93,16 +93,32 @@ Niedozwolone przejście rzuca `InvalidTransition`; API zamienia je na `409 Confl
 (np. usunięcie sklepu w trakcie zakładania). Stan `suspended` ustawia zmiana na plan z mniejszym limitem sklepów
 ([platnosci.md](platnosci.md#zmiana-planu)); zawieszone sklepy nie liczą się do limitu.
 
+## Platformy sklepów
+
+Klient wybiera w formularzu system, na którym działa sklep. Platformy opisuje [platforms.py](../backend/shops/platforms.py):
+kroki zakładania widoczne na paragonie, sekcje ustawień, które aplikacja umie zmieniać, i nazwę panelu.
+Motyw (`ShopTemplate`) należy do jednej platformy, a sklep (`Shop.platform`) ma ją na stałe.
+
+| Platforma | Kontener | Panel | Ustawienia w aplikacji |
+|---|---|---|---|
+| WooCommerce | WordPress + WooCommerce + motyw, konfiguracja przez WP-CLI | `/wp-admin/`, login `admin` | wszystkie sekcje |
+| PrestaShop 9 | oficjalny obraz, instalator wiersza poleceń, konfiguracja przez PHP w sklepie | losowy folder `admin…` (`Shop.admin_path`), login e-mailem | podstawowe, otwarcie sklepu, płatności, wygląd; wysyłka, podatki i region w panelu |
+
+Inne systemy, które rozważaliśmy, i ich ograniczenia: [ograniczenia-i-plan.md](ograniczenia-i-plan.md#inne-platformy-sklepów).
+
 ## Provisionery
 
 Sposób zakładania sklepów wybiera zmienna `SHOP_PROVISIONER`:
 
-| Provisioner | Do czego |
+| Wartość | Do czego |
 |---|---|
-| `shops.provisioning.fake.FakeProvisioner` | Symulacja bez infrastruktury: każdy krok czeka `FAKE_PROVISIONER_STEP_DELAY` sekund, opcjonalny błąd w kroku `FAKE_PROVISIONER_FAIL_AT_STEP`. Używany w testach. |
-| `shops.provisioning.docker_provisioner.DockerProvisioner` | Prawdziwe sklepy na serwerze z [infra/shops/](../infra/shops/), polecenia przez Docker API i WP-CLI w kontenerze sklepu. |
+| `shops.provisioning.fake.FakeProvisioner` | Symulacja bez infrastruktury, dla wszystkich platform: każdy krok czeka `FAKE_PROVISIONER_STEP_DELAY` sekund, opcjonalny błąd w kroku `FAKE_PROVISIONER_FAIL_AT_STEP`. Używany w testach. |
+| `docker` | Prawdziwe sklepy na serwerze z [infra/shops/](../infra/shops/), każda platforma swoim provisionerem: `DockerProvisioner` (WooCommerce) i `PrestaShopProvisioner`. Stara wartość `shops.provisioning.docker_provisioner.DockerProvisioner` znaczy to samo. |
 
-Oba dziedziczą po `BaseProvisioner`, który definiuje listę kroków (`STEPS`) oraz `cleanup`, `teardown` i `update_address`,
+`get_provisioner(shop.platform)` ([provisioning/\_\_init\_\_.py](../backend/shops/provisioning/__init__.py)) zwraca provisioner dla sklepu.
+Oba prawdziwe dziedziczą po `ContainerProvisioner` ([container.py](../backend/shops/provisioning/container.py)):
+serwer, baza, kontener z regułą Traefika i limitem pamięci z planu, usuwanie, zawieszanie i wznawianie są wspólne.
+Wszystkie provisionery dziedziczą po `BaseProvisioner`, który definiuje `cleanup`, `teardown` i `update_address`,
 a dla działających sklepów `read_settings`, `apply_settings`, `reset_admin_password` i `remove_sample_products`.
 `FakeProvisioner` trzyma ustawienia tylko w bazie platformy, a błąd można wywołać, podając w
 `FAKE_PROVISIONER_FAIL_AT_STEP` nazwę metody (np. `apply_settings`).
@@ -110,13 +126,13 @@ a dla działających sklepów `read_settings`, `apply_settings`, `reset_admin_pa
 ## Adresy sklepów
 
 Adres sklepu to `<scheme>://<slug>.<SHOPS_BASE_DOMAIN>[:port]`, liczony na bieżąco z ustawień
-(`Shop.url`, `Shop.admin_url`). Ten sam adres jest zapisany w bazie WordPressa i w regule Traefika kontenera,
+(`Shop.url`, `Shop.admin_url`). Ten sam adres jest zapisany w bazie sklepu i w regule Traefika kontenera,
 więc po zmianie domeny trzeba przenieść istniejące sklepy poleceniem `update_shop_addresses`
 ([docs/obsluga.md](obsluga.md#zmiana-sieci-lub-adresu-ip)).
 
 ## Bezpieczeństwo
 
-- Hasła sklepów (baza, administrator WordPressa, hasło API) są zaszyfrowane w bazie kluczem Fernet `FIELD_ENCRYPTION_KEY`
+- Hasła sklepów (baza, administrator panelu, hasło API WordPressa) są zaszyfrowane w bazie kluczem Fernet `FIELD_ENCRYPTION_KEY`
   (`EncryptedTextField`). Każde hasło jest zapisywane, zanim zostanie użyte, żeby ponowiona próba go nie zgubiła.
 - Login i hasło administratora sklepu nie wychodzą przez API. Trafiają tylko e-mailem na adres konta właściciela:
   po założeniu sklepu, po zmianie hasła i na prośbę (`send-admin-access`, najwyżej 5 razy na godzinę).

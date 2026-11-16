@@ -5,9 +5,11 @@ import { Icon, type IconName } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { Choice, ShopSettings } from '@/lib/types';
+import type { Choice, SettingsSection, ShopSettings } from '@/lib/types';
 
 export type Tile = {
+  /** The settings section the tile shows. */
+  key: SettingsSection;
   /** Settings section the tile opens (as in the address: ?section=…). */
   section: string;
   title: string;
@@ -36,11 +38,22 @@ export function ShopOverview({ shopId, settings }: { shopId: number; settings: S
 }
 
 /** What still stops customers from buying, for the shop's main card. */
-export function missingForSales({ values }: ShopSettings) {
+export function missingForSales(settings: ShopSettings) {
+  const { values } = settings;
   const missing: string[] = [];
-  if (!values.payments.bank_transfer_enabled && !values.payments.cash_on_delivery_enabled) missing.push('płatności');
-  if (!hasShipping(values.shipping)) missing.push('wysyłkę');
+  if (
+    supports(settings, 'payments') &&
+    !values.payments.bank_transfer_enabled &&
+    !values.payments.cash_on_delivery_enabled
+  )
+    missing.push('płatności');
+  if (supports(settings, 'shipping') && !hasShipping(values.shipping)) missing.push('wysyłkę');
   return missing;
+}
+
+/** Whether the app can change `section` on the shop's platform; the rest is set in the shop's panel. */
+export function supports(settings: Pick<ShopSettings, 'sections'>, section: SettingsSection) {
+  return !settings.sections || settings.sections.includes(section);
 }
 
 function OverviewTile({ tile, onPress }: { tile: Tile; onPress: () => void }) {
@@ -75,8 +88,12 @@ function OverviewTile({ tile, onPress }: { tile: Tile; onPress: () => void }) {
   );
 }
 
-/** One tile per area of the settings, worded for the shop owner. */
-export function describeSettings({ values, options }: ShopSettings): Tile[] {
+/** One tile per area of the settings the platform has, worded for the shop owner. */
+export function describeSettings(settings: ShopSettings): Tile[] {
+  return allTiles(settings).filter((tile) => supports(settings, tile.key));
+}
+
+function allTiles({ values, options }: ShopSettings): Tile[] {
   const { payments, shipping, taxes, region } = values;
   const currency = region.currency;
   const label = (choices: Choice[], value: string) => choices.find((choice) => choice.value === value)?.label ?? value;
@@ -96,6 +113,7 @@ export function describeSettings({ values, options }: ShopSettings): Tile[] {
 
   return [
     {
+      key: 'availability',
       section: 'dostepnosc',
       title: 'Sklep',
       icon: 'power',
@@ -104,6 +122,7 @@ export function describeSettings({ values, options }: ShopSettings): Tile[] {
         : 'Zamknięty. Klienci widzą stronę „Wkrótce otwarcie”.',
     },
     {
+      key: 'payments',
       section: 'platnosci',
       title: 'Płatności',
       icon: 'card',
@@ -111,6 +130,7 @@ export function describeSettings({ values, options }: ShopSettings): Tile[] {
       missing: !paymentMethods.length,
     },
     {
+      key: 'shipping',
       section: 'wysylka',
       title: 'Wysyłka',
       icon: 'truck',
@@ -118,6 +138,7 @@ export function describeSettings({ values, options }: ShopSettings): Tile[] {
       missing: !shippingMethods.length,
     },
     {
+      key: 'shopping',
       section: 'zakupy',
       title: 'Zakupy',
       icon: 'cart',
@@ -127,6 +148,7 @@ export function describeSettings({ values, options }: ShopSettings): Tile[] {
       ].join(', '),
     },
     {
+      key: 'taxes',
       section: 'podatki',
       title: 'Podatki',
       icon: 'percent',
@@ -135,18 +157,21 @@ export function describeSettings({ values, options }: ShopSettings): Tile[] {
         : 'Bez naliczania VAT',
     },
     {
+      key: 'region',
       section: 'region',
       title: 'Region',
       icon: 'globe',
       value: `${label(options.languages, region.language)}, ${currency}, ${label(options.countries, region.country)}`,
     },
     {
+      key: 'appearance',
       section: 'wyglad',
       title: 'Wygląd',
       icon: 'palette',
       value: `Motyw ${label(options.themes, values.appearance.theme)}`,
     },
     {
+      key: 'general',
       section: 'podstawowe',
       title: 'Kontakt',
       icon: 'mail',

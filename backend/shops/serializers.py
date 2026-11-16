@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
 from .models import ProvisioningJob, ProvisioningStep, Shop, ShopConfig, ShopOperation, ShopTemplate
+from .platforms import Platform, platform_info
 from .shop_settings import SECTIONS, describe
 from .slugs import normalize_slug, slug_error
 
@@ -12,12 +13,15 @@ DEFAULT_CATEGORY_COUNT = 5
 class ShopTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShopTemplate
-        fields = ["slug", "name", "description", "preview_image_url"]
+        fields = ["slug", "platform", "name", "description", "preview_image_url"]
 
 
 class ShopCreateSerializer(serializers.Serializer):
     name = serializers.CharField(min_length=2, max_length=100)
     slug = serializers.CharField(max_length=30)
+    platform = serializers.ChoiceField(
+        choices=Platform.choices, required=False, help_text="Domyślnie platforma wybranego motywu.",
+    )
     industry = serializers.ChoiceField(choices=Industry.choices)
     template = serializers.SlugRelatedField(slug_field="slug", queryset=ShopTemplate.objects.filter(is_active=True))
     category_count = serializers.IntegerField(
@@ -39,15 +43,22 @@ class ShopCreateSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         attrs.setdefault("contact_email", self.context["request"].user.email)
+        platform = attrs.setdefault("platform", attrs["template"].platform)
+        if attrs["template"].platform != platform:
+            raise serializers.ValidationError({"template": ["Ten motyw jest dla innej platformy. Wybierz motyw ponownie."]})
         return attrs
 
 
 class ShopSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    platform_display = serializers.CharField(source="get_platform_display", read_only=True)
 
     class Meta:
         model = Shop
-        fields = ["id", "name", "slug", "url", "status", "status_display", "is_test", "created_at"]
+        fields = [
+            "id", "name", "slug", "url", "status", "status_display", "platform", "platform_display",
+            "is_test", "created_at",
+        ]
 
 
 class ShopConfigSerializer(serializers.ModelSerializer):
@@ -89,9 +100,13 @@ class ProvisioningJobSerializer(serializers.ModelSerializer):
 class ShopDetailSerializer(ShopSerializer):
     config = ShopConfigSerializer()
     provisioning = serializers.SerializerMethodField()
+    panel_name = serializers.SerializerMethodField(help_text="Jak właściciel zna panel sklepu, np. „panel WordPressa”.")
 
     class Meta(ShopSerializer.Meta):
-        fields = [*ShopSerializer.Meta.fields, "config", "provisioning"]
+        fields = [*ShopSerializer.Meta.fields, "panel_name", "config", "provisioning"]
+
+    def get_panel_name(self, shop) -> str:
+        return platform_info(shop.platform).panel_name
 
     @extend_schema_field(ProvisioningJobSerializer(allow_null=True))
     def get_provisioning(self, shop):
@@ -123,7 +138,14 @@ class CategoryCountRangeSerializer(serializers.Serializer):
     default = serializers.IntegerField()
 
 
+class PlatformOptionSerializer(serializers.Serializer):
+    value = serializers.CharField()
+    label = serializers.CharField()
+    description = serializers.CharField()
+
+
 class FormOptionsSerializer(serializers.Serializer):
+    platforms = PlatformOptionSerializer(many=True)
     industries = ChoiceSerializer(many=True)
     languages = ChoiceSerializer(many=True)
     currencies = ChoiceSerializer(many=True)
@@ -175,6 +197,11 @@ class ShopSettingsOptionsSerializer(serializers.Serializer):
 
 class ShopSettingsSerializer(serializers.Serializer):
     values = ShopSettingsValuesSerializer(help_text="Ostatnio odczytane albo zapisane ustawienia.")
+    sections = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="Sekcje, które aplikacja może zmieniać na platformie sklepu; pozostałe ustawia się w panelu.",
+    )
+    panel_name = serializers.CharField(help_text="Jak właściciel zna panel sklepu, np. „panel WordPressa”.")
     synced_at = serializers.DateTimeField(allow_null=True, help_text="Kiedy ustawienia odczytano ze sklepu.")
     operation = ShopOperationSerializer(allow_null=True, help_text="Ostatnia operacja na sklepie.")
     busy = serializers.BooleanField(help_text="Sklep wykonuje operację; kolejną można zlecić po jej zakończeniu.")

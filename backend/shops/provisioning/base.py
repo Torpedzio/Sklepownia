@@ -4,27 +4,12 @@ class ProvisioningError(Exception):
 
 class BaseProvisioner:
     """
-    Sets up a WordPress + WooCommerce shop step by step.
+    Sets up a shop on one platform step by step: the steps are listed in shops/platforms.py.
 
     Every step must be idempotent: a retry creates a new job and runs all steps
     again, so a step has to cope with work left behind by a failed attempt.
     Implementations define a `step_<key>(shop)` method for each step.
     """
-
-    # Labels are shown to shop owners, so they say what the shop gets, not how it's done.
-    STEPS = [
-        ("allocate_server", "Miejsce na serwerze"),
-        ("create_database", "Baza produktów i zamówień"),
-        ("start_container", "Uruchomienie sklepu"),
-        ("install_wordpress", "Strona i konto administratora"),
-        ("configure_locale", "Język i strefa czasowa"),
-        ("configure_woocommerce", "Waluta, koszyk i zamówienia"),
-        ("install_theme", "Wygląd sklepu"),
-        ("create_categories", "Kategorie produktów"),
-        ("configure_navigation", "Wyszukiwarka i filtry"),
-        ("generate_api_keys", "Połączenie z aplikacją"),
-        ("health_check", "Końcowe sprawdzenie"),
-    ]
 
     def run_step(self, key, shop):
         getattr(self, f"step_{key}")(shop)

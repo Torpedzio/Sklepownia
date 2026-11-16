@@ -14,6 +14,10 @@ jest.mock('@/lib/api', () => ({ ...jest.requireActual('@/lib/api'), api: jest.fn
 jest.mock('@/context/auth', () => ({ useAuth: jest.fn() }));
 
 const options: FormOptions = {
+  platforms: [
+    { value: 'woocommerce', label: 'WooCommerce', description: 'WordPress z wtyczką WooCommerce.' },
+    { value: 'prestashop', label: 'PrestaShop', description: 'Samodzielny system sklepowy.' },
+  ],
   industries: [
     { value: 'food', label: 'Żywność i napoje' },
     { value: 'books', label: 'Książki i multimedia' },
@@ -21,7 +25,11 @@ const options: FormOptions = {
   languages: [{ value: 'pl_PL', label: 'Polski' }],
   currencies: [{ value: 'PLN', label: 'Złoty (PLN)' }],
   countries: [{ value: 'PL', label: 'Polska' }],
-  templates: [{ slug: 'storefront', name: 'Storefront', description: 'Prosty', preview_image_url: '' }],
+  templates: [
+    { slug: 'storefront', platform: 'woocommerce', name: 'Storefront', description: 'Prosty', preview_image_url: '' },
+    { slug: 'hummingbird', platform: 'prestashop', name: 'Hummingbird', description: 'Nowy', preview_image_url: '' },
+    { slug: 'classic', platform: 'prestashop', name: 'Classic', description: 'Klasyczny', preview_image_url: '' },
+  ],
   category_count: { min: 1, max: 20, default: 5 },
   base_domain: 'localhost',
 };
@@ -75,11 +83,33 @@ test('the shop is created with the chosen options and opened', async () => {
       name: 'Księgarnia',
       slug: 'ksiegarnia',
       industry: 'books',
+      platform: 'woocommerce',
       template: 'storefront',
       category_count: 5,
     }),
   ]);
   await waitFor(() => expect(router.push).toHaveBeenCalledWith({ pathname: '/shops/[id]', params: { id: 9 } }));
+});
+
+test('each platform offers its own themes', async () => {
+  const { api } = await open({
+    'GET /shops/check-slug/?slug=kawa': { slug: 'kawa', available: true, reason: null },
+    'POST /shops/': shopDetail({ id: 9, status: 'pending' }),
+  });
+
+  expect(await screen.findByRole('radio', { name: /Storefront/ })).toBeTruthy();
+  expect(screen.queryByRole('radio', { name: /Hummingbird/ })).toBeNull();
+
+  await fireEvent.press(screen.getByRole('radio', { name: /PrestaShop/ }));
+
+  expect(screen.queryByRole('radio', { name: /Storefront/ })).toBeNull();
+  expect(screen.getByRole('radio', { name: /Hummingbird/ })).toBeSelected();
+  await fireEvent.press(screen.getByRole('radio', { name: /Classic/ }));
+  await fireEvent.changeText(screen.getByPlaceholderText('np. Pracownia Ceramiki'), 'Kawa');
+  await fireEvent.press(screen.getByRole('radio', { name: 'Żywność i napoje' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Załóż sklep' }));
+
+  expect(api.sent('POST /shops/')).toEqual([expect.objectContaining({ platform: 'prestashop', template: 'classic' })]);
 });
 
 test('errors from the server show under the fields', async () => {

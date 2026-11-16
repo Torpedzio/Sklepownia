@@ -155,3 +155,16 @@ test('bringing a shop back explains when the plan is full', async () => {
 
   expect(await screen.findByText(/Zmień plan albo usuń inny sklep/)).toBeTruthy();
 });
+
+test('a PrestaShop shop names its panel and asks only for what the app can set', async () => {
+  const presta = shopDetail({ platform: 'prestashop', platform_display: 'PrestaShop', panel_name: 'panel PrestaShop' });
+  const settings = shopSettings({}, { sections: ['general', 'availability', 'payments', 'appearance'] });
+  await open(presta, { 'GET /shops/7/settings/': settings });
+
+  expect(await screen.findByRole('button', { name: 'Panel PrestaShop' })).toBeTruthy();
+  // Shipping is set in the PrestaShop panel, so the app neither shows nor asks for it.
+  expect(
+    screen.getByText('Zanim ogłosisz sklep, ustaw płatności. Bez tego klienci nie złożą zamówienia.'),
+  ).toBeTruthy();
+  expect(screen.queryByText('Wysyłka')).toBeNull();
+});

@@ -42,16 +42,16 @@ Limity zapytań: logowanie i rejestracja 10 na minutę, potwierdzanie e-maila 10
 
 | Metoda i ścieżka | Opis |
 |---|---|
-| `GET shops/` | Sklepy użytkownika (bez usuniętych): `id, name, slug, url, status, status_display, is_test, created_at`. `is_test`: sklep sprzed płatnych planów |
+| `GET shops/` | Sklepy użytkownika (bez usuniętych): `id, name, slug, url, status, status_display, platform, platform_display, is_test, created_at`. `platform`: `woocommerce` albo `prestashop`. `is_test`: sklep sprzed płatnych planów |
 | `POST shops/` | Założenie sklepu (wymaga potwierdzonego e-maila i aktywnego planu). `201` ze szczegółami sklepu. `402` bez planu, `400` przy zajętym adresie albo osiągniętym limicie planu (sklepy testowe się nie liczą). |
-| `GET shops/{id}/` | Szczegóły: pola z listy plus `config` (wybory z formularza) i `provisioning` (ostatnie zadanie z krokami) |
+| `GET shops/{id}/` | Szczegóły: pola z listy plus `panel_name` (np. „panel PrestaShop”), `config` (wybory z formularza) i `provisioning` (ostatnie zadanie z krokami; kroki zależą od platformy) |
 | `DELETE shops/{id}/` | Usunięcie, `204`. W trakcie zakładania `409`. |
 | `POST shops/{id}/resume/` | Przywrócenie sklepu zawieszonego przez plan, gdy plan ma na niego miejsce, `200` ze szczegółami. `400`: brak miejsca, `402`: brak planu, `409`: sklep nie jest zawieszony. |
 | `POST shops/{id}/retry/` | Ponowienie po błędzie (wymaga potwierdzonego e-maila, a poza sklepami testowymi aktywnego planu: inaczej `402`), `202`. W innym stanie `409`. |
-| `GET shops/{id}/admin-access/` | `{admin_url, sent_to}`: adres panelu WordPressa i adres e-mail, na który wysłano login i hasło. Samych danych logowania API nie zwraca. Tylko dla działającego sklepu, inaczej `409`. |
+| `GET shops/{id}/admin-access/` | `{admin_url, sent_to}`: adres panelu sklepu i adres e-mail, na który wysłano login i hasło. Samych danych logowania API nie zwraca. Tylko dla działającego sklepu, inaczej `409`. |
 | `POST shops/{id}/send-admin-access/` | Wysyła ponownie e-mail z danymi sklepu i logowaniem, `202` z `{admin_url, sent_to}`. Najwyżej 5 razy na godzinę (`429`). |
 | `GET shops/check-slug/?slug=` | `{slug, available, reason}`: czy adres jest wolny i dlaczego nie |
-| `GET shops/form-options/` | Wszystko do formularza: branże, języki, waluty, kraje, motywy, zakres liczby kategorii, domena |
+| `GET shops/form-options/` | Wszystko do formularza: platformy (`{value, label, description}`), branże, języki, waluty, kraje, motywy (każdy z `platform`), zakres liczby kategorii, domena |
 
 ### Ustawienia i operacje na działającym sklepie
 
@@ -60,9 +60,9 @@ jedna naraz. Gdy sklep nie działa albo wykonuje poprzednią operację, odpowied
 
 | Metoda i ścieżka | Opis |
 |---|---|
-| `GET shops/{id}/settings/` | `{values, synced_at, operation, busy, options}`: ustawienia w sekcjach, kiedy odczytano je ze sklepu, ostatnia operacja, czy sklep jest zajęty, wartości do wyboru (języki, waluty, kraje, strefy czasowe, motywy, typowe stawki VAT według kraju) |
-| `PATCH shops/{id}/settings/` | Dowolne sekcje i pola, np. `{"shipping": {"courier_enabled": true}}`. `202` z tym samym kształtem co `GET`, gdy coś się zmienia; `200`, gdy sklep już ma te wartości. `400` z błędami `{sekcja: {pole: [komunikat]}}`. |
-| `POST shops/{id}/settings/refresh/` | Ponowny odczyt ustawień ze sklepu (np. po zmianach w wp-admin), `202` |
+| `GET shops/{id}/settings/` | `{values, sections, panel_name, synced_at, operation, busy, options}`: ustawienia w sekcjach, sekcje, które aplikacja może zmieniać na platformie sklepu, nazwa panelu, kiedy odczytano je ze sklepu, ostatnia operacja, czy sklep jest zajęty, wartości do wyboru (języki, waluty, kraje, strefy czasowe, motywy, typowe stawki VAT według kraju) |
+| `PATCH shops/{id}/settings/` | Dowolne sekcje i pola, np. `{"shipping": {"courier_enabled": true}}`. `202` z tym samym kształtem co `GET`, gdy coś się zmienia; `200`, gdy sklep już ma te wartości. `400` z błędami `{sekcja: {pole: [komunikat]}}`, także dla sekcji, której platforma sklepu nie ma w `sections`, i motywu innej platformy. |
+| `POST shops/{id}/settings/refresh/` | Ponowny odczyt ustawień ze sklepu (np. po zmianach w panelu), `202` |
 | `POST shops/{id}/reset-admin-password/` | Nowe hasło administratora, `202` z operacją. Po zakończeniu hasło przychodzi e-mailem. |
 | `POST shops/{id}/remove-sample-products/` | Usunięcie produktów przykładowych, `202` z operacją; `result.removed` to ich liczba |
 | `GET shops/{id}/operations/` | 20 ostatnich operacji, od najnowszej |
@@ -92,6 +92,7 @@ Pola formularza `POST shops/`:
 | `name` | tak | 2–100 znaków |
 | `slug` | tak | Adres: 3–30 znaków, `a-z`, `0-9`, `-` |
 | `industry` | tak | Wartość z `form-options.industries` |
+| `platform` | nie | `woocommerce` albo `prestashop`; domyślnie platforma motywu. Motyw innej platformy daje `400` przy `template` |
 | `template` | tak | `slug` motywu z `form-options.templates` |
 | `category_count` | nie | 1–20, domyślnie z `form-options.category_count.default` |
 | `language`, `currency`, `country` | nie | Domyślnie `pl_PL`, `PLN`, `PL` |

@@ -10,9 +10,9 @@
           <p style="margin:0 0 4px; font-size:13px; color:#5B6478;">Adres panelu</p>
           <p style="margin:0 0 12px; font-size:15px;"><a href="{{ shop.admin_url }}" style="color:#0F7B5F;">{{ shop.admin_url }}</a></p>
           <p style="margin:0 0 4px; font-size:13px; color:#5B6478;">Login</p>
-          <p style="margin:0 0 12px; font-size:17px; font-family:Menlo, Consolas, 'Courier New', monospace;">{{ credentials.wp_admin_username }}</p>
+          <p style="margin:0 0 12px; font-size:17px; font-family:Menlo, Consolas, 'Courier New', monospace;">{{ credentials.admin_login }}</p>
           <p style="margin:0 0 4px; font-size:13px; color:#5B6478;">Hasło</p>
-          <p style="margin:0; font-size:17px; font-family:Menlo, Consolas, 'Courier New', monospace; word-break:break-all;">{{ credentials.wp_admin_password }}</p>
+          <p style="margin:0; font-size:17px; font-family:Menlo, Consolas, 'Courier New', monospace; word-break:break-all;">{{ credentials.admin_password }}</p>
         </td>
       </tr>
     </table>
@@ -23,7 +23,7 @@
   </td>
 </tr>
 {% if reason != "new_password" %}
-{% include "email/rows.html" with title="Twój sklep" rows=details note="Płatności, wysyłkę i podatki ustawisz w aplikacji, w ustawieniach sklepu." %}
+{% include "email/rows.html" with title="Twój sklep" rows=details note=settings_note %}
 {% endif %}
 {% endblock %}
 {% block footer %}{{ platform }}. Wiadomość wysłana na {{ recipient }}, adres konta, na którym działa ten sklep.{% endblock %}

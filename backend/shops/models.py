@@ -5,6 +5,7 @@ from django.db.models import Q
 
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
 from .fields import EncryptedTextField
+from .platforms import Platform, platform_info
 
 
 class InvalidTransition(Exception):
@@ -25,11 +26,14 @@ class Server(models.Model):
 
 
 class ShopTemplate(models.Model):
+    """A theme a shop can start with. Each belongs to one platform."""
+
     slug = models.SlugField(unique=True)
+    platform = models.CharField(max_length=20, choices=Platform.choices, default=Platform.WOOCOMMERCE)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
-    # WordPress theme slug from wordpress.org, installed with `wp theme install`.
-    wp_theme = models.CharField(max_length=100)
+    # The platform's name for the theme: a WordPress theme slug (`wp theme activate`) or a PrestaShop theme directory.
+    theme = models.CharField(max_length=100)
     preview_image_url = models.URLField(blank=True)
     is_active = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=0)
@@ -64,6 +68,9 @@ class Shop(models.Model):
     name = models.CharField(max_length=100)
     slug = models.CharField(max_length=30)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    platform = models.CharField(max_length=20, choices=Platform.choices, default=Platform.WOOCOMMERCE)
+    # Where the admin panel is, relative to the shop's address. PrestaShop picks a random one at installation.
+    admin_path = models.CharField(max_length=64, blank=True)
     server = models.ForeignKey(Server, on_delete=models.PROTECT, null=True, blank=True, related_name="shops")
     # Shops from before paid plans: they don't need a plan and don't count towards its shop limit.
     is_test = models.BooleanField(default=False)
@@ -94,8 +101,9 @@ class Shop(models.Model):
         return f"{scheme}://{self.domain}" + ("" if port == default_port else f":{port}")
 
     @property
-    def admin_url(self) -> str:
-        return f"{self.url}/wp-admin/"
+    def admin_url(self) -> str | None:
+        path = self.admin_path or platform_info(self.platform).admin_path
+        return f"{self.url}/{path}/" if path else None
 
     def can_transition_to(self, new_status):
         return new_status in self.ALLOWED_TRANSITIONS[self.status]
@@ -132,9 +140,10 @@ class ShopCredentials(models.Model):
 
     shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="credentials")
     db_password = EncryptedTextField(blank=True)
-    wp_admin_username = models.CharField(max_length=60)
-    wp_admin_password = EncryptedTextField(blank=True)
-    # Used by the platform for the WordPress/WooCommerce REST API (Basic Auth).
+    # What the owner types to sign in to the admin panel: a username (WordPress) or an e-mail (PrestaShop).
+    admin_login = models.CharField(max_length=254)
+    admin_password = EncryptedTextField(blank=True)
+    # WooCommerce only: Application Password for the WordPress/WooCommerce REST API (Basic Auth).
     wp_application_password = EncryptedTextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

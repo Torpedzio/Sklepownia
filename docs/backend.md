@@ -47,10 +47,10 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 | Model | Opis |
 |---|---|
 | `Server` | Serwer, na którym działają kontenery sklepów, z limitem `max_shops`. Migracja tworzy serwer `local`. |
-| `ShopTemplate` | Motyw do wyboru w formularzu (`wp_theme` to nazwa motywu WordPressa). Migracja dodaje Storefront, Astrę i Kadence. |
-| `Shop` | Sklep: właściciel, nazwa, `slug` (część adresu), status z maszyną stanów, serwer. `url` i `admin_url` są liczone z ustawień. |
+| `ShopTemplate` | Motyw do wyboru w formularzu, dla jednej platformy (`platform`). `theme` to nazwa motywu w systemie sklepu. Migracje dodają Storefront, Astrę i Kadence (WooCommerce) oraz Hummingbird i Classic (PrestaShop). |
+| `Shop` | Sklep: właściciel, nazwa, `slug` (część adresu), platforma, status z maszyną stanów, serwer. `url` i `admin_url` są liczone z ustawień; folder panelu PrestaShop jest w `admin_path`. |
 | `ShopConfig` | Wybory z formularza: branża, motyw, liczba kategorii, język, waluta, kraj, e-mail, produkty przykładowe. Zmiany z ustawień (opis, e-mail, język, waluta, kraj, motyw) są tu dopisywane. |
-| `ShopCredentials` | Hasła sklepu: bazy, administratora WordPressa, hasło API. Wszystkie zaszyfrowane. |
+| `ShopCredentials` | Login administratora (`admin_login`: nazwa użytkownika w WordPressie, e-mail w PrestaShop) i hasła: bazy, administratora, API WordPressa. Hasła zaszyfrowane. |
 | `ProvisioningJob` | Jedna próba założenia sklepu (status, błąd, czasy). Ponowienie tworzy nowe zadanie. |
 | `ProvisioningStep` | Krok zadania: klucz, etykieta dla użytkownika, status, błąd, czasy. |
 | `ShopSettings` | Ostatnio odczytane albo zapisane ustawienia sklepu (`values`, JSON w sekcjach) i czas odczytu ze sklepu. |
@@ -64,19 +64,24 @@ bez adresów zarezerwowanych dla platformy ([slugs.py](../backend/shops/slugs.py
 
 Przebieg i stany: [architektura.md](architektura.md#przebieg-zakładania-sklepu).
 
-- `BaseProvisioner.STEPS` ([base.py](../backend/shops/provisioning/base.py)) to lista par `(klucz, etykieta)`.
+- Kroki każdej platformy to lista par `(klucz, etykieta)` w [platforms.py](../backend/shops/platforms.py).
   Etykiety widzi właściciel sklepu na paragonie, więc mówią, co sklep dostaje, a nie jak to jest robione.
 - Provisioner implementuje metodę `step_<klucz>(shop)` dla każdego kroku. **Każdy krok musi być idempotentny**:
   ponowienie uruchamia wszystkie kroki od nowa.
 - `runner.run_job` wykonuje kroki i zapisuje ich stan. Użytkownik widzi treść tylko wyjątków `ProvisioningError`.
   Pozostałe wyjątki zastępuje ogólny komunikat, a pełny opis ląduje w logach workera.
-- `DockerProvisioner` tworzy kontener `shop-<id>`, wolumen `shop-<id>` i bazę `shop_<id>`.
-  WordPressa konfiguruje przez WP-CLI w kontenerze. Ustawienia zależne od motywu (pasek boczny) są w `THEME_NAVIGATION`.
+- `ContainerProvisioner` ([container.py](../backend/shops/provisioning/container.py)) tworzy kontener `shop-<id>`,
+  wolumen `shop-<id>` i bazę `shop_<id>`. Na nim stoją:
+  - `DockerProvisioner` (WooCommerce): WordPressa konfiguruje przez WP-CLI w kontenerze. Ustawienia zależne od motywu
+    (pasek boczny) są w `THEME_NAVIGATION`.
+  - `PrestaShopProvisioner` ([prestashop.py](../backend/shops/provisioning/prestashop.py)): instaluje sklep
+    instalatorem `install/index_cli.php`, a resztę robi skryptami PHP uruchamianymi w sklepie (`_php`, dane w `$d` jak w WordPressie).
+    Szczegóły i pułapki: [infra/shops/README.md](../infra/shops/README.md#prestashop).
 
 Jak dodać nowy krok:
 
-1. Dopisz `("klucz", "Etykieta dla użytkownika")` do `BaseProvisioner.STEPS` we właściwym miejscu.
-2. Dodaj `step_klucz(self, shop)` w `DockerProvisioner`. Krok ma działać także przy ponownym uruchomieniu.
+1. Dopisz `("klucz", "Etykieta dla użytkownika")` do kroków platformy w `platforms.py` we właściwym miejscu.
+2. Dodaj `step_klucz(self, shop)` w provisionerze tej platformy. Krok ma działać także przy ponownym uruchomieniu.
 3. Opisz krok w tabeli w [infra/shops/README.md](../infra/shops/README.md#kroki-i-czasy).
 4. Jeśli etykieta ma się pokazać na paragonie na stronie głównej, dopisz ją też do `SetupSteps`
    w [mobile/src/constants/content.ts](../mobile/src/constants/content.ts).
@@ -98,6 +103,14 @@ Przebieg: [architektura.md](architektura.md#ustawienia-działającego-sklepu). S
 
 Nowe ustawienie: pole w serializerze sekcji, wartość domyślna w `default_settings`, odczyt w `read_settings`,
 zapis w `apply_settings`, pole w `ShopSettingsValues` w aplikacji i kontrolka na ekranie ustawień.
+
+Każda platforma ma listę sekcji, które aplikacja umie zmieniać (`settings_sections` w `platforms.py`).
+API zwraca ją jako `sections`, aplikacja pokazuje tylko te sekcje, a zmiana innej sekcji kończy się `400`.
+`read_settings` zwraca tylko sekcje platformy; pozostałe zostają z wartościami domyślnymi.
+PrestaShop: produkty przykładowe są zapamiętane po identyfikatorach w konfiguracji sklepu (`SKLEPOWNIA_SAMPLE_PRODUCTS`).
+
+Nowa platforma: wpis w `Platform` i `PLATFORMS` (kroki, sekcje, nazwa panelu), provisioner (zwykle na `ContainerProvisioner`)
+w `DOCKER_PROVISIONERS`, motywy migracją danych, metoda `step_<klucz>` symulacji tam, gdzie powstają dane logowania.
 
 Istniejące sklepy mają kroki zapisane w bazie. Nowy krok pojawi się u nich dopiero przy ponowieniu.
 Zmianę etykiet istniejących kroków trzeba przenieść migracją danych (przykład: `0005_plain_step_labels`).
@@ -198,6 +211,8 @@ Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od
 | `shops/tests/test_shops.py` | Zakładanie, limit sklepów, adresy, ponawianie, usuwanie, dostęp do panelu, opcje formularza, polecenia |
 | `shops/tests/test_settings.py` | Ustawienia sklepu: odczyt, walidacja, zapis przez operacje, kolejka jednej operacji, błędy, nowe hasło, produkty przykładowe |
 | `shops/tests/test_docker_provisioner.py` | Polecenia, które `DockerProvisioner` wysyła do kontenerów (WP-CLI, MariaDB, curl), na podstawionej powłoce bez Dockera |
+| `shops/tests/test_prestashop_provisioner.py` | To samo dla `PrestaShopProvisioner`: instalator, skrypty PHP i ich dane, sprawdzenie sklepu i panelu |
+| `shops/tests/test_platforms.py` | Platformy przez API: wybór motywu i platformy, kroki, panel, sekcje ustawień, wybór provisionera |
 | `billing/tests/test_billing.py`, `billing/tests/test_tpay.py` | Płatności i bramka Tpay ([platnosci.md](platnosci.md#testy)) |
 | `shops/tests/test_emails.py` | E-mail z danymi logowania: po założeniu i ponowieniu, ponowne wysłanie i jego limit, nowe hasło, brak danych w API |
 | `shops/tests/test_commands.py` | Polecenie `update_shop_addresses` i domyślne zachowanie `BaseProvisioner` |

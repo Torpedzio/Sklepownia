@@ -7,6 +7,7 @@ import { Icon } from '@/components/icon';
 import { Page } from '@/components/page';
 import { SettingsMenu, SettingsPane, type SettingsMenuItem } from '@/components/settings-menu';
 import { SettingsSection } from '@/components/settings-section';
+import { supports } from '@/components/shop-overview';
 import { ShopLoginSteps } from '@/components/shop-login-guide';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -49,14 +50,23 @@ const MENU: (SettingsMenuItem<MenuKey> & { slug: string })[] = [
   { key: 'history', slug: 'historia', title: 'Ostatnie zmiany', icon: 'history' },
 ];
 
-const MENU_ORDER = MENU.map((item) => item.key);
+const SECTION_KEYS: MenuKey[] = ['general', 'availability', 'shopping', 'payments', 'shipping', 'taxes', 'region', 'appearance'];
+
+/** "panel WordPressa" → "panelu WordPressa", for "w …". */
+function panelLocative(panelName: string | undefined) {
+  return (panelName ?? 'panel sklepu').replace(/^panel\b/, 'panelu');
+}
+
+/** The menu without the sections the shop's platform doesn't let the app change. */
+function menuFor(settings: ShopSettings | undefined) {
+  if (!settings) return MENU;
+  return MENU.filter((item) => !SECTION_KEYS.includes(item.key) || supports(settings, item.key as Section));
+}
 
 export default function ShopSettingsScreen() {
   const { id, section: sectionSlug } = useLocalSearchParams<{ id: string; section?: string }>();
   const { width } = useWindowDimensions();
   const wide = width >= WideBreakpoint;
-  const active = (MENU.find((item) => item.slug === sectionSlug) ?? MENU[0]).key;
-  const select = (key: MenuKey) => router.setParams({ section: MENU.find((item) => item.key === key)!.slug });
   const notify = useNotify();
   const {
     data: settings,
@@ -65,6 +75,9 @@ export default function ShopSettingsScreen() {
   } = useApiQuery<ShopSettings>(`/shops/${id}/settings/`, {
     refetchInterval: (data) => (data?.busy ? POLL_MS : false),
   });
+  const menu = menuFor(settings);
+  const active = (menu.find((item) => item.slug === sectionSlug) ?? menu[0]).key;
+  const select = (key: MenuKey) => router.setParams({ section: MENU.find((item) => item.key === key)!.slug });
   const { data: history, refresh: refreshHistory } = useApiQuery<ShopOperation[]>(`/shops/${id}/operations/`);
   const [drafts, setDrafts] = useState<Drafts>({});
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -79,7 +92,7 @@ export default function ShopSettingsScreen() {
     if (settings.busy && settings.operation) setWatched(settings.operation.id);
   }
 
-  // Read the settings from the shop once on opening, so changes made in wp-admin show up.
+  // Read the settings from the shop once on opening, so changes made in its panel show up.
   const readOnOpen = useRef(false);
   useEffect(() => {
     if (!settings || readOnOpen.current) return;
@@ -247,7 +260,7 @@ export default function ShopSettingsScreen() {
       <View style={[styles.layout, wide && styles.layoutWide]}>
         <View style={wide && styles.menu}>
           <SettingsMenu
-            items={MENU.map((item) => ({
+            items={menu.map((item) => ({
               ...item,
               dirty: item.key in values && Object.keys(changes(item.key as Section)).length > 0,
             }))}
@@ -257,7 +270,7 @@ export default function ShopSettingsScreen() {
           />
         </View>
         <View style={[styles.content, wide && styles.flex]}>
-          <SettingsPane active={active} order={MENU_ORDER} vertical={wide}>
+          <SettingsPane active={active} order={menu.map((item) => item.key)} vertical={wide}>
             {active === 'general' ? (
               <SettingsSection
                 title="Podstawowe"
@@ -542,7 +555,7 @@ export default function ShopSettingsScreen() {
             {active === 'manual' ? (
               <SettingsSection
                 title="Ustawienia ręczne"
-                description="Wszystko, czego nie ma w aplikacji, ustawisz w panelu WordPressa swojego sklepu.">
+                description={`Wszystko, czego nie ma w aplikacji, ustawisz w ${panelLocative(settings.panel_name)} swojego sklepu.`}>
                 <ShopLoginSteps shopId={Number(id)} />
               </SettingsSection>
             ) : null}

@@ -7,7 +7,9 @@ from django.db import connection
 from accounts.models import User
 from shops.categories import category_names
 from shops.models import InvalidTransition, ProvisioningStep, Shop
-from shops.provisioning.base import BaseProvisioner
+from shops.platforms import Platform, platform_info
+
+WOO_STEPS = platform_info(Platform.WOOCOMMERCE).steps
 
 pytestmark = pytest.mark.django_db
 
@@ -41,21 +43,21 @@ def test_create_shop_provisions_it_to_active(auth_client, verified_user, django_
     assert response.data["status"] == "pending"
     assert response.data["config"]["category_count"] == 8
     assert response.data["config"]["contact_email"] == verified_user.email
-    assert response.data["provisioning"]["total_steps"] == len(BaseProvisioner.STEPS)
+    assert response.data["provisioning"]["total_steps"] == len(WOO_STEPS)
 
     detail = auth_client.get(f"/api/shops/{response.data['id']}/").data
     assert detail["status"] == "active"
     assert detail["url"] == "https://moj-sklep.localhost"
     assert detail["provisioning"]["status"] == "succeeded"
-    assert detail["provisioning"]["completed_steps"] == len(BaseProvisioner.STEPS)
+    assert detail["provisioning"]["completed_steps"] == len(WOO_STEPS)
 
 
 def test_credentials_are_encrypted_at_rest(auth_client, django_capture_on_commit_callbacks):
     shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
-    password = Shop.objects.get(pk=shop_id).credentials.wp_admin_password
+    password = Shop.objects.get(pk=shop_id).credentials.admin_password
 
     with connection.cursor() as cursor:
-        cursor.execute("SELECT wp_admin_password FROM shops_shopcredentials WHERE shop_id = %s", [shop_id])
+        cursor.execute("SELECT admin_password FROM shops_shopcredentials WHERE shop_id = %s", [shop_id])
         raw = cursor.fetchone()[0]
 
     assert password
@@ -213,7 +215,12 @@ def test_check_slug(auth_client, django_capture_on_commit_callbacks):
 def test_form_options(auth_client):
     data = auth_client.get("/api/shops/form-options/").data
 
-    assert [t["slug"] for t in data["templates"]] == ["storefront", "astra", "kadence"]
+    assert [(t["slug"], t["platform"]) for t in data["templates"]] == [
+        ("storefront", "woocommerce"), ("astra", "woocommerce"), ("kadence", "woocommerce"),
+        ("hummingbird", "prestashop"), ("classic", "prestashop"),
+    ]
+    assert [p["value"] for p in data["platforms"]] == ["woocommerce", "prestashop"]
+    assert all(p["description"] for p in data["platforms"])
     assert {"value": "PLN", "label": "Złoty (PLN)"} in data["currencies"]
     assert data["category_count"] == {"min": 1, "max": 20, "default": 5}
 
@@ -229,7 +236,7 @@ def test_steps_are_created_in_order(auth_client, django_capture_on_commit_callba
     shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
     keys = list(ProvisioningStep.objects.filter(job__shop_id=shop_id).values_list("key", flat=True))
 
-    assert keys == [key for key, _ in BaseProvisioner.STEPS]
+    assert keys == [key for key, _ in WOO_STEPS]
 
 
 def test_openapi_schema_generates(api_client, user):
@@ -255,7 +262,7 @@ def test_category_names_follow_industry_then_fill_up():
 
 def test_admin_access_never_gives_out_the_login(auth_client, verified_user, django_capture_on_commit_callbacks):
     shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
-    password = Shop.objects.get(pk=shop_id).credentials.wp_admin_password
+    password = Shop.objects.get(pk=shop_id).credentials.admin_password
 
     response = auth_client.get(f"/api/shops/{shop_id}/admin-access/")
 

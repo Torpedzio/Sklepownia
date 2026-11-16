@@ -1,8 +1,9 @@
 # Serwer sklepów
 
-Tu działają sklepy WordPress + WooCommerce, każdy we własnym kontenerze.
+Tu działają sklepy WordPress + WooCommerce i PrestaShop, każdy we własnym kontenerze.
 Sklepy zakłada backend: worker Celery wykonuje kroki z
-[docker_provisioner.py](../../backend/shops/provisioning/docker_provisioner.py) przez socket Dockera.
+[docker_provisioner.py](../../backend/shops/provisioning/docker_provisioner.py) (WooCommerce) albo
+[prestashop.py](../../backend/shops/provisioning/prestashop.py) przez socket Dockera.
 Skrypt `provision-shop.sh` robi to samo ręcznie i przydaje się do eksperymentów.
 
 Sklepy z backendu mają kontener i wolumen `shop-<id>` oraz bazę `shop_<id>`.
@@ -97,3 +98,34 @@ Kroki odpowiadają `BaseProvisioner.STEPS` w backendzie. Czasy są orientacyjne,
 - **Dostęp do Dockera:** Traefik i worker backendu używają `docker.sock` (na systemach z SELinux z `label=disable`).
   Dla workera to w praktyce uprawnienia roota; przed produkcją trzeba go odseparować
   ([docs/ograniczenia-i-plan.md](../../docs/ograniczenia-i-plan.md)).
+
+## PrestaShop
+
+Sklepy PrestaShop działają na oficjalnym obrazie `prestashop/prestashop:9.2.1-apache` (`SHOPS_PRESTASHOP_IMAGE`),
+bez własnego Dockerfile. Pierwsze zakładanie pobiera obraz (~1 GB), jeśli go nie ma: `docker pull prestashop/prestashop:9.2.1-apache`.
+
+| Krok | Co robi | Czas |
+|---|---|---|
+| Uruchomienie sklepu | kontener z `PS_INSTALL_AUTO=0`, wolumen na `/var/www/html`; gotowy, gdy Apache odpowiada | ~5 s |
+| Sklep, język i konto administratora | `install/index_cli.php` z językiem, krajem, strefą czasową, motywem, bez danych demo (`--fixtures=0`); zapis losowego folderu panelu w `Shop.admin_path`; login (e-mail) i hasło pracownika | ~80 s |
+| Waluta, koszyk i zamówienia | waluta (import z `localization/<kraj>.xml`, gdy jej nie ma), nazwa i e-mail sklepu, zakupy bez konta, stany magazynowe; wyłączenie płatności czekiem, przelewem i przy odbiorze oraz treści demo na stronie głównej (`ps_imageslider`, `ps_customtext`, `ps_banner`) | ~15 s |
+| Kategorie produktów | kategorie pod „Strona główna” i opcjonalnie 6 przykładowych produktów (też na stronie głównej) | ~2 s |
+| Menu, wyszukiwarka i filtry | menu górne z kategorii (`MOD_BLOCKTOPMENU_ITEMS`), szablon filtrów `ps_facetedsearch` (kategorie, cena, dostępność), indeks cen | ~3 s |
+| Końcowe sprawdzenie | strona główna i strona logowania panelu (`/<folder>/login`) przez proxy, obie 200 | ~6 s |
+
+Uwagi techniczne:
+
+- **Panel** dostaje przy instalacji losową nazwę folderu (`admin` + znaki), co chroni go przed botami.
+  Pracownik loguje się e-mailem; backend zapisuje go w `ShopCredentials.admin_login`.
+- **Skrypty PHP** (`PrestaShopProvisioner._php`) ładują `config/config.inc.php` z kontekstem sklepu, języka i pierwszego
+  superadministratora, jako `www-data`, żeby pliki pamięci podręcznej należały do serwera WWW. Każdy trwa ~1 s.
+- **Waluta:** `new Currency()` zostawia pustą nazwę, symbol i format. Waluta musi przyjść z pakietu lokalizacji,
+  a ten potrzebuje jądra Symfony panelu (`AdminKernel`), co kosztuje ~12 s. Dlatego jądro uruchamia tylko ten krok.
+- **Motyw:** `bin/console prestashop:theme:enable` w 9.2 kończy się błędem kontekstu języka.
+  Działa `ThemeManagerBuilder(...)->build()->enable()` i czyszczenie pamięci podręcznej.
+- **Filtry:** `ps_facetedsearch::createDefaultTemplate()` tworzy szablon tylko z produktów z kombinacjami
+  (łączy tabelę kombinacji przez `INNER JOIN`), więc przy prostych produktach nic nie powstaje. Szablon zapisujemy sami.
+- **Adres** sklepu jest w tabeli `ps_shop_url` i w `PS_SHOP_DOMAIN`; `update_shop_addresses` podmienia oba
+  i odtwarza `.htaccess`.
+- **Braki:** logo „my store” z motywu zostaje do wymiany w panelu; część napisów motywu Hummingbird
+  nie ma polskiego tłumaczenia („Search products…”, stopka).

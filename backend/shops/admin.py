@@ -10,7 +10,8 @@ class ServerAdmin(admin.ModelAdmin):
 
 @admin.register(ShopTemplate)
 class ShopTemplateAdmin(admin.ModelAdmin):
-    list_display = ["name", "slug", "wp_theme", "is_active", "sort_order"]
+    list_display = ["name", "slug", "platform", "theme", "is_active", "sort_order"]
+    list_filter = ["platform"]
     list_editable = ["is_active", "sort_order"]
 
 
@@ -21,13 +22,13 @@ class ShopConfigInline(admin.StackedInline):
 
 @admin.register(Shop)
 class ShopAdmin(admin.ModelAdmin):
-    list_display = ["name", "slug", "owner", "status", "server", "created_at"]
-    list_filter = ["status", "server"]
+    list_display = ["name", "slug", "owner", "platform", "status", "server", "created_at"]
+    list_filter = ["platform", "status", "server"]
     search_fields = ["name", "slug", "owner__email"]
     raw_id_fields = ["owner"]
     inlines = [ShopConfigInline]
     # Status changes go through the state machine in services, not the admin form.
-    readonly_fields = ["status"]
+    readonly_fields = ["status", "platform", "admin_path"]
 
 
 class ProvisioningStepInline(admin.TabularInline):

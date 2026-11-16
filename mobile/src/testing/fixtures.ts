@@ -37,6 +37,8 @@ export function shopSettings(overrides: Overrides = {}, extra: Partial<ShopSetti
   }
   return {
     values,
+    sections: ['general', 'availability', 'shopping', 'payments', 'shipping', 'taxes', 'region', 'appearance'],
+    panel_name: 'panel WordPressa',
     synced_at: '2026-11-05T10:42:00Z',
     operation: null,
     busy: false,
@@ -80,11 +82,20 @@ export function shopDetail(overrides: Partial<ShopDetail> = {}): ShopDetail {
     status_display:
       { active: 'Aktywny', provisioning: 'Zakładanie', failed: 'Błąd', pending: 'Oczekuje' }[status as string] ??
       status,
+    platform: 'woocommerce',
+    platform_display: 'WooCommerce',
+    panel_name: 'panel WordPressa',
     is_test: false,
     created_at: '2026-11-05T10:00:00Z',
     config: {
       industry: 'food',
-      template: { slug: 'storefront', name: 'Storefront', description: '', preview_image_url: '' },
+      template: {
+        slug: 'storefront',
+        platform: 'woocommerce',
+        name: 'Storefront',
+        description: '',
+        preview_image_url: '',
+      },
       category_count: 3,
       language: 'pl_PL',
       currency: 'PLN',

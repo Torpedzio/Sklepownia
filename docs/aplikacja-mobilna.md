@@ -34,13 +34,13 @@ Zasada: w `app/` są tylko ekrany. Komponenty, hooki i narzędzia są poza tym k
 | `/shops` | `app/(tabs)/shops.tsx` | Zalogowani z potwierdzonym e-mailem. Lista sklepów. |
 | `/help` | `app/(tabs)/help.tsx` | jw. Porady dotyczące prowadzenia sklepu. |
 | `/account` | `app/(tabs)/account.tsx` | jw. Wizytówka konta (zdjęcie profilowe zmieniane kliknięciem, potwierdzony e-mail, plan, staż), konto w skrócie (sklepy względem limitu, plan z następną płatnością, dane do faktury), dane profilu, bezpieczeństwo (zmiana hasła, wylogowanie wszędzie), skróty i wylogowanie. |
-| `/shops/new` | `app/shops/new.tsx` | jw. Formularz nowego sklepu (na telefonie jako okno modalne). Bez planu zamiast formularza „Najpierw wybierz plan”. |
+| `/shops/new` | `app/shops/new.tsx` | jw. Formularz nowego sklepu (na telefonie jako okno modalne): najpierw system sklepu (WooCommerce, PrestaShop), pod nim motywy tej platformy. Bez planu zamiast formularza „Najpierw wybierz plan”. |
 | `/billing` | `app/billing/index.tsx` | jw. Plan i płatności: stan planu, karta, anulowanie i wznowienie, dane do faktury, historia płatności. |
 | `/billing/change` | `app/billing/change.tsx` | jw. Zmiana planu: podgląd dopłaty albo kwoty na saldo, wybór sklepów, które zostają aktywne, potwierdzenie. |
 | `/billing/checkout` | `app/billing/checkout.tsx` | jw. Wybór planu, dane do faktury, zgody i przejście do płatności. |
 | `/billing/return` | `app/billing/return.tsx` | jw. Powrót ze strony płatności (`?payment=<id>`): czeka na wynik i prowadzi do zakładania sklepu. |
-| `/shops/[id]` | `app/shops/[id].tsx` | jw. Sklep: w trakcie zakładania postęp na paragonie; działający sklep ma kartę z przyciskami (sklep, ustawienia, panel WordPressa) na całą szerokość, pod nią „Ustawienia w skrócie” z kafelkami prowadzącymi do sekcji ustawień i paragon obok, dalej porady i usuwanie. W przeglądarce strzałka przy tytule cofa także po odświeżeniu strony (`backArrowOptions`). |
-| `/shops/[id]/settings` | `app/shops/[id]/settings.tsx` | jw. Ustawienia działającego sklepu: menu sekcji i jedna wybrana sekcja (`?section=platnosci`), nowe hasło, usunięcie produktów przykładowych, ustawienia ręczne (logowanie do wp-admin), ostatnie zmiany. |
+| `/shops/[id]` | `app/shops/[id].tsx` | jw. Sklep: w trakcie zakładania postęp na paragonie; działający sklep ma kartę z przyciskami (sklep, ustawienia, panel sklepu nazwany jak na jego platformie) na całą szerokość, pod nią „Ustawienia w skrócie” z kafelkami prowadzącymi do sekcji ustawień i paragon obok, dalej porady (tylko sklepy WooCommerce, bo prowadzą po jego panelu) i usuwanie. W przeglądarce strzałka przy tytule cofa także po odświeżeniu strony (`backArrowOptions`). |
+| `/shops/[id]/settings` | `app/shops/[id]/settings.tsx` | jw. Ustawienia działającego sklepu: menu sekcji, które platforma sklepu pozwala zmieniać (`sections` z API), i jedna wybrana sekcja (`?section=platnosci`), nowe hasło, usunięcie produktów przykładowych, ustawienia ręczne (logowanie do panelu sklepu), ostatnie zmiany. |
 
 Dostęp do ekranów pilnuje `Stack.Protected` w [app/_layout.tsx](../mobile/src/app/_layout.tsx):
 - niezalogowany trafia na stronę główną, zalogowany bez potwierdzonego e-maila na `/verify-email`;
@@ -116,7 +116,7 @@ Ruch na ekranie (Reanimated) respektuje systemowe ograniczenie ruchu.
 | `CtaBand` | Zielony pas z wezwaniem do działania na końcu strony |
 | `FaqList` | Pytania i odpowiedzi; odpowiedź rozsuwa się płynnie, strzałka obraca się razem z nią, otwarte jest jedno pytanie naraz |
 | `SectionHeader` | Tytuł i wstęp sekcji strony głównej (używany przez sekcje przyklejane) |
-| `ShopLoginSteps`, `ShopGuidesPanel` | Kroki logowania do panelu WordPressa w „Ustawieniach ręcznych”: przycisk do panelu, adres, na który wysłano login i hasło, i „Wyślij dane ponownie”. Danych logowania aplikacja nie pokazuje. Obok porady jako slajdy. |
+| `ShopLoginSteps`, `ShopGuidesPanel` | Kroki logowania do panelu sklepu w „Ustawieniach ręcznych”: przycisk do panelu, adres, na który wysłano login i hasło, i „Wyślij dane ponownie”. Danych logowania aplikacja nie pokazuje. Obok porady jako slajdy. |
 | `ShopOverview` | Kafelki ze stanem ustawień sklepu; brak płatności lub wysyłki jest wyróżniony (`missingForSales`), kafelek otwiera swoją sekcję ustawień |
 
 Hook `useFullBleed` pozwala sekcji wyjść z wyśrodkowanej kolumny na całą szerokość strony.

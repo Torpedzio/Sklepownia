@@ -158,6 +158,8 @@ describe('shop list', () => {
     url: `http://sklep-${id}.localhost`,
     status,
     status_display: status,
+    platform: 'woocommerce',
+    platform_display: 'WooCommerce',
     is_test: false,
     created_at: '2026-11-01T10:00:00Z',
   });
@@ -356,6 +358,8 @@ describe('account overview and security', () => {
     url: '',
     status,
     status_display: status,
+    platform: 'woocommerce',
+    platform_display: 'WooCommerce',
     is_test: isTest,
     created_at: '2026-11-01T10:00:00Z',
   });

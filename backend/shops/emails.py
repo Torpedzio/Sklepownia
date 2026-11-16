@@ -4,6 +4,8 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
+from .platforms import Platform
+
 # Why the e-mail goes out; each one says it in its own words.
 REASONS = {
     "ready": {
@@ -26,8 +28,15 @@ REASONS = {
 }
 
 
+# What the owner sets up where: the app covers different settings on each platform.
+SETTINGS_NOTES = {
+    Platform.WOOCOMMERCE: "Płatności, wysyłkę i podatki ustawisz w aplikacji, w ustawieniach sklepu.",
+    Platform.PRESTASHOP: "Płatności ustawisz w aplikacji, w ustawieniach sklepu. Wysyłkę i podatki w panelu sklepu.",
+}
+
+
 def admin_access_message(shop, reason):
-    """The e-mail with the shop's details and its WordPress admin login, ready to send."""
+    """The e-mail with the shop's details and its admin panel login, ready to send."""
     texts = REASONS[reason]
     config = shop.config
     credentials = shop.credentials
@@ -39,8 +48,10 @@ def admin_access_message(shop, reason):
         "credentials": credentials,
         "recipient": shop.owner.email,
         "subheading": shop.name,
+        "settings_note": SETTINGS_NOTES[Platform(shop.platform)],
         "details": [
             ("Adres sklepu", shop.url),
+            ("Platforma", shop.get_platform_display()),
             ("Branża", config.get_industry_display()),
             ("Motyw", config.template.name),
             ("Język", config.get_language_display()),

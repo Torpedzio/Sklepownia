@@ -17,7 +17,7 @@ from .models import (
     ShopOperation,
     ShopSettings,
 )
-from .provisioning import get_provisioner
+from .platforms import platform_info
 from .tasks import provision_shop, resume_shop_container, run_shop_operation, suspend_shop, teardown_shop
 
 # An operation older than this no longer blocks new ones (e.g. the worker died while running it).
@@ -46,7 +46,9 @@ class OperationInProgress(Exception):
     pass
 
 
-def create_shop(owner, *, name, slug, **config):
+def create_shop(owner, *, name, slug, platform=None, **config):
+    """`platform` defaults to the template's; the serializer makes sure they match."""
+    platform = platform or config["template"].platform
     try:
         with transaction.atomic():
             # Lock the owner so concurrent requests can't both pass the limit check.
@@ -56,7 +58,7 @@ def create_shop(owner, *, name, slug, **config):
                 raise PlanRequired()
             if paid_shop_count(owner) >= plan.max_shops:
                 raise ShopLimitReached(plan.max_shops)
-            shop = Shop.objects.create(owner=owner, name=name, slug=slug)
+            shop = Shop.objects.create(owner=owner, name=name, slug=slug, platform=platform)
             ShopConfig.objects.create(shop=shop, **config)
             _enqueue_provisioning(shop)
     except IntegrityError as exc:
@@ -160,7 +162,7 @@ def _enqueue_provisioning(shop):
     job = ProvisioningJob.objects.create(shop=shop)
     ProvisioningStep.objects.bulk_create(
         ProvisioningStep(job=job, key=key, label=label, order=order)
-        for order, (key, label) in enumerate(get_provisioner().STEPS)
+        for order, (key, label) in enumerate(platform_info(shop.platform).steps)
     )
     transaction.on_commit(lambda: provision_shop.delay(job.pk))
     return job

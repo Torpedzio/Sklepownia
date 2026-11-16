@@ -147,12 +147,17 @@ export default function ShopScreen() {
               ? 'Klienci widzą stronę „Wkrótce otwarcie”. Otworzysz sklep w ustawieniach, gdy będzie gotowy.'
               : missing.length
                 ? `Zanim ogłosisz sklep, ustaw ${missing.join(' i ')}. Bez tego klienci nie złożą zamówienia.`
-                : 'Klienci mogą już kupować. Produkty dodasz w panelu WordPressa, a resztę zmienisz w ustawieniach.'}
+                : `Klienci mogą już kupować. Produkty dodasz w ${shop.panel_name.replace(/^panel\b/, 'panelu')}, a resztę zmienisz w ustawieniach.`}
           </ThemedText>
           <View style={styles.actions}>
             <Button title="Otwórz sklep" icon="external" onPress={() => Linking.openURL(shop.url)} />
             <Button title="Ustawienia sklepu" icon="filter" variant="secondary" onPress={() => openSettings()} />
-            <Button title="Panel WordPressa" icon="admin" variant="secondary" onPress={() => openSettings('reczne')} />
+            <Button
+              title={shop.panel_name.charAt(0).toUpperCase() + shop.panel_name.slice(1)}
+              icon="admin"
+              variant="secondary"
+              onPress={() => openSettings('reczne')}
+            />
           </View>
         </View>
       ) : null}
@@ -224,7 +229,8 @@ export default function ShopScreen() {
         {receipt}
       </View>
 
-      <ShopGuidesPanel shopUrl={active ? shop.url : undefined} />
+      {/* The guides walk through the WooCommerce panel. */}
+      {shop.platform === 'woocommerce' ? <ShopGuidesPanel shopUrl={active ? shop.url : undefined} /> : null}
 
       {!inProgress ? (
         <Button title="Usuń sklep" variant="danger" onPress={handleDelete} disabled={busy} style={styles.delete} />

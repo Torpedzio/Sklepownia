@@ -30,8 +30,8 @@ def test_finished_shop_sends_its_details_and_admin_login(shop, verified_user, ma
     assert message.subject == "Sklep „Mój Sklep” jest gotowy"
     for body in (message.body, html_of(message)):
         assert shop.admin_url in body
-        assert credentials.wp_admin_username in body
-        assert credentials.wp_admin_password in body
+        assert credentials.admin_login in body
+        assert credentials.admin_password in body
         assert "Odzież i moda" in body
         assert "Storefront" in body
     assert 'href="https://moj-sklep.localhost"' in html_of(message)
@@ -67,7 +67,7 @@ def test_login_can_be_sent_again(shop, auth_client, verified_user, mailoutbox):
     assert response.status_code == 202
     assert response.data["sent_to"] == verified_user.email
     assert mailoutbox[-1].subject == "Dane logowania do sklepu „Mój Sklep”"
-    assert shop.credentials.wp_admin_password in mailoutbox[-1].body
+    assert shop.credentials.admin_password in mailoutbox[-1].body
 
 
 def test_sending_again_is_limited(shop, auth_client):
@@ -93,13 +93,13 @@ def test_someone_elses_login_cannot_be_requested(shop, api_client, mailoutbox):
 
 
 def test_new_password_comes_by_e_mail(shop, auth_client, django_capture_on_commit_callbacks, mailoutbox):
-    old_password = shop.credentials.wp_admin_password
+    old_password = shop.credentials.admin_password
 
     with django_capture_on_commit_callbacks(execute=True):
         auth_client.post(f"/api/shops/{shop.pk}/reset-admin-password/")
 
     message = mailoutbox[-1]
-    new_password = Shop.objects.get(pk=shop.pk).credentials.wp_admin_password
+    new_password = Shop.objects.get(pk=shop.pk).credentials.admin_password
     assert message.subject == "Nowe hasło do panelu sklepu „Mój Sklep”"
     assert new_password in message.body
     assert old_password not in message.body

@@ -29,7 +29,7 @@ def run_operation(operation_id):
         operation.save(update_fields=["status", "started_at"])
 
     shop = operation.shop
-    provisioner = get_provisioner()
+    provisioner = get_provisioner(shop.platform)
     try:
         if operation.kind == Kind.UPDATE_SETTINGS:
             _update_settings(provisioner, shop, operation.changes)

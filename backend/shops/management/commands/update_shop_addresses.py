@@ -11,10 +11,9 @@ class Command(BaseCommand):
     )
 
     def handle(self, *args, **options):
-        provisioner = get_provisioner()
         for shop in Shop.objects.filter(status=Shop.Status.ACTIVE).order_by("pk"):
             try:
-                previous = provisioner.update_address(shop)
+                previous = get_provisioner(shop.platform).update_address(shop)
             except Exception as exc:
                 self.stderr.write(f"{shop.slug}: nie udało się przenieść ({exc})")
                 continue

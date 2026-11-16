@@ -364,11 +364,11 @@ def test_turning_reviews_off_rebuilds_the_sidebar_without_the_rating_filter(prov
 
 
 def test_reset_admin_password_changes_it_in_wordpress_and_logs_everyone_out(provisioner, shell, shop):
-    ShopCredentials.objects.create(shop=shop, wp_admin_username="admin", wp_admin_password="stare")
+    ShopCredentials.objects.create(shop=shop, admin_login="admin", admin_password="stare")
 
     provisioner.reset_admin_password(shop)
 
-    password = ShopCredentials.objects.get(shop=shop).wp_admin_password
+    password = ShopCredentials.objects.get(shop=shop).admin_password
     assert password != "stare"
     assert ["user", "update", "admin", f"--user_pass={password}", "--skip-email"] in shell.wp()
     assert shell.ran("user", "session", "destroy", "admin", "--all")
@@ -448,7 +448,7 @@ def test_start_container_replaces_one_with_outdated_settings(provisioner, shop):
 
 
 def test_start_container_gives_up_when_wordpress_never_starts(provisioner, shop, monkeypatch):
-    monkeypatch.setattr("shops.provisioning.docker_provisioner.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("shops.provisioning.container.time.sleep", lambda seconds: None)
     provisioner.client.containers.get.side_effect = NotFound("brak")
     provisioner.client.containers.run.return_value.exec_run.return_value.exit_code = 1
 
@@ -463,9 +463,9 @@ def test_install_wordpress_on_a_fresh_container(provisioner, shell, shop):
     provisioner.step_install_wordpress(shop)
 
     credentials = ShopCredentials.objects.get(shop=shop)
-    assert credentials.wp_admin_password
+    assert credentials.admin_password
     install = next(args for args in shell.wp() if args[:2] == ["core", "install"])
-    assert f"--admin_password={credentials.wp_admin_password}" in install
+    assert f"--admin_password={credentials.admin_password}" in install
     assert ["post", "delete", "1", "2", "--force"] in shell.wp()
     assert ["option", "update", "blogdescription", "Kawa z małych palarni"] in shell.wp()
 
@@ -473,7 +473,7 @@ def test_install_wordpress_on_a_fresh_container(provisioner, shell, shop):
 def test_install_wordpress_fixes_a_password_that_was_never_stored(provisioner, shell, shop):
     provisioner.step_install_wordpress(shop)
 
-    password = ShopCredentials.objects.get(shop=shop).wp_admin_password
+    password = ShopCredentials.objects.get(shop=shop).admin_password
     assert ["user", "update", "admin", f"--user_pass={password}", "--skip-email"] in shell.wp()
     assert not shell.ran("core", "install")
 
@@ -537,7 +537,7 @@ def test_create_categories_keeps_existing_products(provisioner, shell, shop):
 
 
 def test_configure_navigation_skips_unknown_themes(provisioner, shell, shop):
-    shop.config.template = ShopTemplate(slug="inny", name="Inny", wp_theme="inny")
+    shop.config.template = ShopTemplate(slug="inny", name="Inny", theme="inny")
 
     provisioner.step_configure_navigation(shop)
 
@@ -545,7 +545,7 @@ def test_configure_navigation_skips_unknown_themes(provisioner, shell, shop):
 
 
 def test_generate_api_keys_replaces_the_old_one(provisioner, shell, shop):
-    ShopCredentials.objects.create(shop=shop, wp_admin_username="admin")
+    ShopCredentials.objects.create(shop=shop, admin_login="admin")
     shell.on("user", "application-password", "list", output="uuid-1")
     shell.on("user", "application-password", "create", output="nowe-haslo")
 
@@ -691,6 +691,6 @@ def test_a_new_memory_limit_recreates_the_container(provisioner, shop, settings)
 
 @pytest.mark.parametrize(("limit", "expected"), [("512m", 512 * 1024 ** 2), ("1g", 1024 ** 3), ("1048576", 1048576)])
 def test_memory_limits_in_bytes(limit, expected):
-    from shops.provisioning.docker_provisioner import _memory_bytes
+    from shops.provisioning.container import memory_bytes as _memory_bytes
 
     assert _memory_bytes(limit) == expected

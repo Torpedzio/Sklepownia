@@ -163,8 +163,19 @@ class SettingsUpdateSerializer(serializers.Serializer):
         return {name: section(required=False) for name, section in SECTIONS.items()}
 
     def validate(self, attrs):
-        merged = merge(self.context["current"], normalize(attrs))
         errors = {}
+        # The platform's sections (context["sections"]); themes belong to one platform too.
+        sections = self.context.get("sections", SECTIONS)
+        for section in attrs:
+            if section not in sections:
+                errors[section] = ["Tę część ustawień zmienisz w panelu sklepu."]
+        theme = attrs.get("appearance", {}).get("theme")
+        platform = self.context.get("platform")
+        if theme is not None and platform and theme.platform != platform:
+            errors["appearance"] = {"theme": ["Ten motyw nie pasuje do platformy sklepu."]}
+        if errors:
+            raise serializers.ValidationError(errors)
+        merged = merge(self.context["current"], normalize(attrs))
         payments = merged["payments"]
         if payments["bank_transfer_enabled"]:
             missing = {

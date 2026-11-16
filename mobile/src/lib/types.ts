@@ -18,6 +18,8 @@ export type Tokens = { access: string; refresh: string };
 
 export type ShopStatus = 'pending' | 'provisioning' | 'active' | 'failed' | 'suspended' | 'deleted';
 
+export type Platform = 'woocommerce' | 'prestashop';
+
 export type Shop = {
   id: number;
   name: string;
@@ -25,6 +27,9 @@ export type Shop = {
   url: string;
   status: ShopStatus;
   status_display: string;
+  /** The e-commerce system the shop runs on. */
+  platform: Platform;
+  platform_display: string;
   /** From before paid plans: works without a plan and doesn't count towards its limit. */
   is_test: boolean;
   created_at: string;
@@ -32,6 +37,7 @@ export type Shop = {
 
 export type ShopTemplate = {
   slug: string;
+  platform: Platform;
   name: string;
   description: string;
   preview_image_url: string;
@@ -45,6 +51,8 @@ export type ProvisioningStep = {
 };
 
 export type ShopDetail = Shop & {
+  /** The admin panel as owners know it, e.g. "panel WordPressa". */
+  panel_name: string;
   config: {
     industry: string;
     template: ShopTemplate;
@@ -66,7 +74,7 @@ export type ShopDetail = Shop & {
   } | null;
 };
 
-/** Where the WordPress panel is. The login and password only ever go by e-mail, to `sent_to`. */
+/** Where the admin panel is. The login and password only ever go by e-mail, to `sent_to`. */
 export type ShopAdminAccess = {
   admin_url: string;
   sent_to: string;
@@ -75,6 +83,7 @@ export type ShopAdminAccess = {
 export type Choice = { value: string; label: string };
 
 export type FormOptions = {
+  platforms: (Choice & { value: Platform; description: string })[];
   industries: Choice[];
   languages: Choice[];
   currencies: Choice[];
@@ -87,6 +96,7 @@ export type FormOptions = {
 export type NewShop = {
   name: string;
   slug: string;
+  platform: Platform;
   industry: string;
   template: string;
   category_count: number;
@@ -148,6 +158,10 @@ export type ShopOperation = {
 
 export type ShopSettings = {
   values: ShopSettingsValues;
+  /** Sections the app can change on the shop's platform; the rest is set in the admin panel. */
+  sections: SettingsSection[];
+  /** The admin panel as owners know it, e.g. "panel WordPressa". */
+  panel_name: string;
   synced_at: string | null;
   operation: ShopOperation | null;
   busy: boolean;

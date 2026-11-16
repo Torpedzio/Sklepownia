@@ -268,3 +268,18 @@ test('a settings page that fails to load says why', async () => {
 
   expect(await screen.findByText('Sklep jeszcze się zakłada.')).toBeTruthy();
 });
+
+test('the menu has only the sections the shop platform lets the app change', async () => {
+  const presta = shopSettings({}, {
+    ...fresh,
+    sections: ['general', 'availability', 'payments', 'appearance'],
+    panel_name: 'panel PrestaShop',
+  });
+  await open('wysylka', { [SETTINGS]: presta, 'GET /shops/7/admin-access/': { admin_url: 'x', sent_to: 'a@b.pl' } });
+
+  expect(await screen.findByRole('tab', { name: 'Płatności' })).toBeTruthy();
+  expect(screen.queryByRole('tab', { name: 'Wysyłka' })).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Region' })).toBeNull();
+  // An address pointing at a missing section opens the first one.
+  expect(screen.getByDisplayValue('Palarnia')).toBeTruthy();
+});

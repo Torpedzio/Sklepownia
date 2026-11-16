@@ -5,6 +5,7 @@ from django.conf import settings
 
 from .. import shop_settings
 from ..models import Server, ShopCredentials, ShopSettings
+from ..platforms import platform_info
 from .base import BaseProvisioner, ProvisioningError
 
 
@@ -23,12 +24,20 @@ class FakeProvisioner(BaseProvisioner):
         shop.server = Server.objects.filter(is_active=True).first()
         shop.save(update_fields=["server", "updated_at"])
 
+    def step_install_prestashop(self, shop):
+        shop.admin_path = "admin-demo"
+        shop.save(update_fields=["admin_path", "updated_at"])
+        ShopCredentials.objects.update_or_create(
+            shop=shop,
+            defaults={"admin_login": shop.config.contact_email, "admin_password": secrets.token_urlsafe(24)},
+        )
+
     def step_generate_api_keys(self, shop):
         ShopCredentials.objects.update_or_create(
             shop=shop,
             defaults={
-                "wp_admin_username": "admin",
-                "wp_admin_password": secrets.token_urlsafe(24),
+                "admin_login": "admin",
+                "admin_password": secrets.token_urlsafe(24),
                 "wp_application_password": secrets.token_urlsafe(24),
             },
         )
@@ -37,14 +46,16 @@ class FakeProvisioner(BaseProvisioner):
 
     def read_settings(self, shop):
         stored = ShopSettings.objects.filter(shop=shop).first()
-        return stored.values if stored else shop_settings.default_settings(shop)
+        values = stored.values if stored else shop_settings.default_settings(shop)
+        # Like a real shop: only what the platform has.
+        return {section: values[section] for section in platform_info(shop.platform).settings_sections}
 
     def apply_settings(self, shop, changes, values):
         self._simulate("apply_settings")
 
     def reset_admin_password(self, shop):
         self._simulate("reset_admin_password")
-        ShopCredentials.objects.filter(shop=shop).update(wp_admin_password=secrets.token_urlsafe(18))
+        ShopCredentials.objects.filter(shop=shop).update(admin_password=secrets.token_urlsafe(18))
 
     def remove_sample_products(self, shop):
         self._simulate("remove_sample_products")

@@ -3,23 +3,19 @@ import json
 import logging
 import re
 import secrets
-import time
 from decimal import Decimal, InvalidOperation
-from functools import cached_property
 
-import docker
 from django.conf import settings
-from django.db.models import Count, F, Q
-from docker.errors import NotFound
 
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
-from ..models import Server, Shop, ShopCredentials, ShopTemplate
-from .base import BaseProvisioner, ProvisioningError
+from ..models import ShopTemplate
+from ..platforms import Platform
+from .container import FILES_PATH, CommandError, ContainerProvisioner, container_env, container_name, db_name
 
 logger = logging.getLogger(__name__)
 
-WP_PATH = "/var/www/html"
+WP_PATH = FILES_PATH
 ADMIN_USERNAME = "admin"
 SAMPLE_PRODUCT_CATEGORIES = 3
 SAMPLE_PRODUCTS_PER_CATEGORY = 2
@@ -205,125 +201,63 @@ NAVIGATION_TITLES = {
               "price": "Preis", "rating": "Bewertung"},
 }
 
+# Environment of the WordPress image; a change means the container gets replaced.
+WORDPRESS_ENV_KEYS = (
+    "WORDPRESS_DB_HOST", "WORDPRESS_DB_NAME", "WORDPRESS_DB_USER", "WORDPRESS_DB_PASSWORD", "WORDPRESS_CONFIG_EXTRA",
+)
 
-class CommandError(Exception):
-    """A command inside a container failed. The message is for logs only: it may contain internals."""
 
-
-class DockerProvisioner(BaseProvisioner):
+class DockerProvisioner(ContainerProvisioner):
     """
-    Runs every shop as its own WordPress container on the shop node from infra/shops,
-    behind its Traefik proxy, with a separate database in its shared MariaDB.
+    WooCommerce: every shop is its own WordPress container (see ContainerProvisioner).
     Mirrors infra/shops/provision-shop.sh step by step.
     """
 
-    @cached_property
-    def client(self):
-        # Lazy: the web process only reads STEPS and has no access to the Docker socket.
-        return docker.from_env()
+    ENV_KEYS = WORDPRESS_ENV_KEYS
+    START_FAILED = "WordPress nie wystartował."
 
-    # --- steps ---
+    def image(self):
+        return settings.SHOPS_WORDPRESS_IMAGE
 
-    def step_allocate_server(self, shop):
-        if shop.server_id:
-            return
-        server = (
-            Server.objects.filter(is_active=True)
-            .annotate(live_shops=Count("shops", filter=~Q(shops__status=Shop.Status.DELETED)))
-            .filter(live_shops__lt=F("max_shops"))
-            .first()
-        )
-        if server is None:
-            raise ProvisioningError("Brak wolnego serwera. Spróbuj ponownie później.")
-        shop.server = server
-        shop.save(update_fields=["server", "updated_at"])
-
-    def step_create_database(self, shop):
-        credentials = self._credentials(shop)
-        if not credentials.db_password:
-            credentials.db_password = secrets.token_urlsafe(24)
-            credentials.save(update_fields=["db_password", "updated_at"])
-        name, password = _db_name(shop), credentials.db_password
-        # Safe to interpolate: name comes from the shop id, password from token_urlsafe.
-        self._sql(
-            f"CREATE DATABASE IF NOT EXISTS `{name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-            f"CREATE USER IF NOT EXISTS '{name}'@'%' IDENTIFIED BY '{password}';"
-            f"ALTER USER '{name}'@'%' IDENTIFIED BY '{password}';"
-            f"GRANT ALL PRIVILEGES ON `{name}`.* TO '{name}'@'%';"
-        )
-
-    def step_start_container(self, shop):
-        name = _container_name(shop)
-        environment = {
+    def container_environment(self, shop):
+        return {
             "WORDPRESS_DB_HOST": settings.SHOPS_DB_CONTAINER,
-            "WORDPRESS_DB_NAME": _db_name(shop),
-            "WORDPRESS_DB_USER": _db_name(shop),
+            "WORDPRESS_DB_NAME": db_name(shop),
+            "WORDPRESS_DB_USER": db_name(shop),
             "WORDPRESS_DB_PASSWORD": self._credentials(shop).db_password,
             "WORDPRESS_CONFIG_EXTRA": (
                 f"define('WP_ENVIRONMENT_TYPE', '{settings.SHOPS_WP_ENVIRONMENT}');"
                 "define('DISALLOW_FILE_EDIT', true);"
             ),
         }
-        labels = {
-            "traefik.enable": "true",
-            f"traefik.http.routers.{name}.rule": f"Host(`{shop.domain}`)",
-            f"traefik.http.routers.{name}.entrypoints": "web",
-            f"traefik.http.services.{name}.loadbalancer.server.port": "80",
-            "shops.id": str(shop.pk),
-            "shops.slug": shop.slug,
-        }
-        container = self._find_container(shop)
-        # The official image reads DB settings from env at runtime, so a container with outdated
-        # env or Traefik labels (a new domain) can be replaced without touching the files in the volume.
-        memory = _container_memory(shop)
-        outdated = container is not None and (
-            _env(container) != environment
-            or not labels.items() <= container.labels.items()
-            # A different plan means a different memory limit.
-            or container.attrs.get("HostConfig", {}).get("Memory") != _memory_bytes(memory)
-        )
-        if outdated:
-            container.remove(force=True)
-            container = None
-        if container is None:
-            container = self.client.containers.run(
-                settings.SHOPS_WORDPRESS_IMAGE,
-                name=name,
-                detach=True,
-                network=settings.SHOPS_NETWORK,
-                restart_policy={"Name": "unless-stopped"},
-                mem_limit=memory,
-                nano_cpus=1_000_000_000,
-                volumes={name: {"bind": WP_PATH, "mode": "rw"}},
-                environment=environment,
-                labels=labels,
-            )
-        container.start()
+
+    def ready_command(self):
         # The entrypoint copies WordPress into the volume and writes wp-config.php.
-        for _ in range(60):
-            if container.exec_run(["test", "-f", f"{WP_PATH}/wp-config.php"]).exit_code == 0:
-                return
-            time.sleep(1)
-        raise ProvisioningError("WordPress nie wystartował.")
+        return ["test", "-f", f"{WP_PATH}/wp-config.php"]
+
+    def default_admin_login(self, shop):
+        return ADMIN_USERNAME
+
+    # --- steps ---
 
     def step_install_wordpress(self, shop):
         credentials = self._credentials(shop)
         installed = self._wp_succeeds(shop, "core", "is-installed")
-        if not credentials.wp_admin_password:
-            credentials.wp_admin_username = ADMIN_USERNAME
-            credentials.wp_admin_password = secrets.token_urlsafe(18)
-            credentials.save(update_fields=["wp_admin_username", "wp_admin_password", "updated_at"])
+        if not credentials.admin_password:
+            credentials.admin_login = ADMIN_USERNAME
+            credentials.admin_password = secrets.token_urlsafe(18)
+            credentials.save(update_fields=["admin_login", "admin_password", "updated_at"])
             if installed:
                 # Installed by an earlier attempt whose password never got stored.
                 self._wp(shop, "user", "update", ADMIN_USERNAME,
-                         f"--user_pass={credentials.wp_admin_password}", "--skip-email")
+                         f"--user_pass={credentials.admin_password}", "--skip-email")
         if not installed:
             self._wp(
                 shop, "core", "install",
                 f"--url={shop.url}",
                 f"--title={shop.name}",
-                f"--admin_user={credentials.wp_admin_username}",
-                f"--admin_password={credentials.wp_admin_password}",
+                f"--admin_user={credentials.admin_login}",
+                f"--admin_password={credentials.admin_password}",
                 f"--admin_email={shop.config.contact_email}",
                 "--skip-email",
             )
@@ -378,7 +312,7 @@ class DockerProvisioner(BaseProvisioner):
         self._wp(shop, "option", "update", "page_on_front", shop_page)
 
     def step_install_theme(self, shop):
-        theme = shop.config.template.wp_theme
+        theme = shop.config.template.theme
         if self._wp(shop, "option", "get", "stylesheet") != theme:
             self._wp(shop, "theme", "activate", theme)
             # Drop the default blog widgets the theme picked up. Block themes have no sidebars.
@@ -420,7 +354,7 @@ class DockerProvisioner(BaseProvisioner):
                 number += 1
 
     def step_configure_navigation(self, shop):
-        navigation = THEME_NAVIGATION.get(shop.config.template.wp_theme)
+        navigation = THEME_NAVIGATION.get(shop.config.template.theme)
         if navigation is None:
             return
         titles = NAVIGATION_TITLES.get(shop.config.language, NAVIGATION_TITLES["en_US"])
@@ -446,7 +380,7 @@ class DockerProvisioner(BaseProvisioner):
 
     def step_generate_api_keys(self, shop):
         credentials = self._credentials(shop)
-        username = credentials.wp_admin_username
+        username = credentials.admin_login
         existing = self._wp(shop, "user", "application-password", "list", username,
                             "--name=platform", "--field=uuid").split()
         for uuid in existing:
@@ -457,22 +391,12 @@ class DockerProvisioner(BaseProvisioner):
         credentials.save(update_fields=["wp_application_password", "updated_at"])
 
     def step_health_check(self, shop):
-        # Goes through the proxy like a visitor would, so routing gets checked too.
-        host = shop.url.split("://", 1)[1]
-        base = f"http://{settings.SHOPS_PROXY_CONTAINER}"
         credentials = self._credentials(shop)
-        checks = [
-            ("strona sklepu", [base + "/"]),
-            ("API sklepu", ["-u", f"{credentials.wp_admin_username}:{credentials.wp_application_password}",
-                            base + "/wp-json/wc/v3/system_status"]),
-        ]
-        for label, args in checks:
-            status = self._exec(
-                _container_name(shop),
-                ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "-H", f"Host: {host}", *args],
-            )
-            if status != "200":
-                raise ProvisioningError(f"Sklep nie odpowiada poprawnie ({label}: HTTP {status}).")
+        self._check_pages(shop, [
+            ("strona sklepu", [self.proxy_url("/")]),
+            ("API sklepu", ["-u", f"{credentials.admin_login}:{credentials.wp_application_password}",
+                            self.proxy_url("/wp-json/wc/v3/system_status")]),
+        ])
 
     # --- running shops ---
 
@@ -489,7 +413,7 @@ class DockerProvisioner(BaseProvisioner):
         account = data["bacs_account"] or {}
         courier = methods.get("flat_rate", {})
         free = methods.get("free_shipping", {})
-        theme = ShopTemplate.objects.filter(wp_theme=text("stylesheet")).first()
+        theme = ShopTemplate.objects.filter(platform=Platform.WOOCOMMERCE, theme=text("stylesheet")).first()
         return {
             "general": {
                 "name": text("blogname"),
@@ -600,10 +524,10 @@ class DockerProvisioner(BaseProvisioner):
     def reset_admin_password(self, shop):
         credentials = self._credentials(shop)
         password = secrets.token_urlsafe(18)
-        username = credentials.wp_admin_username
+        username = credentials.admin_login
         self._wp(shop, "user", "update", username, f"--user_pass={password}", "--skip-email")
-        credentials.wp_admin_password = password
-        credentials.save(update_fields=["wp_admin_password", "updated_at"])
+        credentials.admin_password = password
+        credentials.save(update_fields=["admin_password", "updated_at"])
         # Whoever was logged in with the old password is logged out.
         self._wp_succeeds(shop, "user", "session", "destroy", username, "--all")
 
@@ -616,7 +540,7 @@ class DockerProvisioner(BaseProvisioner):
         if language != "en_US":
             self._wp(shop, "language", "core", "install", language)
             self._wp(shop, "language", "plugin", "install", "woocommerce", language)
-            self._wp_succeeds(shop, "language", "theme", "install", shop.config.template.wp_theme, language)
+            self._wp_succeeds(shop, "language", "theme", "install", shop.config.template.theme, language)
         self._wp(shop, "site", "switch-language", language)
         self._php(shop, RENAME_PAGES_PHP, SHOP_PAGE_TITLES.get(language, SHOP_PAGE_TITLES["en_US"]))
 
@@ -650,34 +574,6 @@ class DockerProvisioner(BaseProvisioner):
 
     # --- lifecycle ---
 
-    def cleanup(self, shop):
-        # Keep everything: a retry continues from what's already there.
-        pass
-
-    def teardown(self, shop):
-        name = _container_name(shop)
-        container = self._find_container(shop)
-        if container is not None:
-            container.remove(force=True)
-        try:
-            self.client.volumes.get(name).remove(force=True)
-        except NotFound:
-            pass
-        db = _db_name(shop)
-        self._sql(f"DROP DATABASE IF EXISTS `{db}`; DROP USER IF EXISTS '{db}'@'%';")
-
-    def suspend(self, shop):
-        container = self._find_container(shop)
-        if container is not None:
-            container.stop()
-
-    def resume(self, shop):
-        self.step_start_container(shop)
-
-    def refresh_resources(self, shop):
-        if self._find_container(shop) is not None:
-            self.step_start_container(shop)
-
     def update_address(self, shop):
         if self._find_container(shop) is None:
             return None
@@ -691,29 +587,8 @@ class DockerProvisioner(BaseProvisioner):
 
     # --- helpers ---
 
-    def _credentials(self, shop):
-        credentials, _ = ShopCredentials.objects.get_or_create(
-            shop=shop, defaults={"wp_admin_username": ADMIN_USERNAME},
-        )
-        return credentials
-
-    def _find_container(self, shop):
-        try:
-            return self.client.containers.get(_container_name(shop))
-        except NotFound:
-            return None
-
-    def _exec(self, container_name, command, user="", environment=None):
-        container = self.client.containers.get(container_name)
-        result = container.exec_run(command, user=user, environment=environment)
-        output = result.output.decode(errors="replace").strip()
-        if result.exit_code != 0:
-            # Only the command name: arguments may contain passwords.
-            raise CommandError(f"{' '.join(command[:4])}… exited with {result.exit_code}: {output[-2000:]}")
-        return output
-
     def _wp(self, shop, *args):
-        return self._exec(_container_name(shop), ["wp", f"--path={WP_PATH}", *args], user="www-data")
+        return self._exec(container_name(shop), ["wp", f"--path={WP_PATH}", *args], user="www-data")
 
     def _wp_succeeds(self, shop, *args):
         try:
@@ -737,31 +612,9 @@ class DockerProvisioner(BaseProvisioner):
     def _set_options(self, shop, options):
         self._php(shop, SET_OPTIONS_PHP, options)
 
-    def _sql(self, statement):
-        if not settings.SHOPS_DB_ROOT_PASSWORD:
-            raise CommandError("SHOPS_DB_ROOT_PASSWORD is not set")
-        self._exec(
-            settings.SHOPS_DB_CONTAINER,
-            ["mariadb", "-uroot", "-e", statement],
-            environment={"MYSQL_PWD": settings.SHOPS_DB_ROOT_PASSWORD},
-        )
-
-
-def _container_name(shop):
-    # Keyed by id, not slug: a deleted shop's leftovers never clash with a new shop using the same slug.
-    return f"shop-{shop.pk}"
-
-
-def _db_name(shop):
-    return f"shop_{shop.pk}"
-
 
 def _env(container):
-    pairs = (item.split("=", 1) for item in container.attrs["Config"]["Env"])
-    current = dict(pair for pair in pairs if len(pair) == 2)
-    return {key: current.get(key) for key in (
-        "WORDPRESS_DB_HOST", "WORDPRESS_DB_NAME", "WORDPRESS_DB_USER", "WORDPRESS_DB_PASSWORD", "WORDPRESS_CONFIG_EXTRA",
-    )}
+    return container_env(container, WORDPRESS_ENV_KEYS)
 
 
 def _currency_options(currency):
@@ -794,22 +647,3 @@ def _money(value):
         return str(Decimal(str(value).replace(",", ".").replace(" ", "")).quantize(Decimal("0.01")))
     except (InvalidOperation, ValueError):
         return "0.00"
-
-
-def _container_memory(shop):
-    """The owner's plan sets how much memory a shop gets; test shops and shops without a plan get the default."""
-    from billing.models import Subscription
-
-    subscription = Subscription.objects.select_related("plan").filter(user_id=shop.owner_id).first()
-    if shop.is_test or subscription is None or subscription.status not in (
-        Subscription.Status.ACTIVE, Subscription.Status.PAST_DUE,
-    ):
-        return settings.SHOPS_CONTAINER_MEMORY
-    return f"{subscription.plan.shop_memory_mb}m"
-
-
-def _memory_bytes(limit):
-    """Docker's memory limit in bytes for "512m" / "1g"."""
-    units = {"k": 1024, "m": 1024 ** 2, "g": 1024 ** 3}
-    limit = str(limit).lower()
-    return int(limit[:-1]) * units[limit[-1]] if limit[-1] in units else int(limit)

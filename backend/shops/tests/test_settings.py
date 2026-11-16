@@ -100,7 +100,7 @@ def test_time_zone_and_vat_rate_chosen_with_the_country_are_kept(
 
 
 def test_new_theme_is_written_to_the_shop_config(auth_client, shop, django_capture_on_commit_callbacks):
-    ShopTemplate.objects.get_or_create(slug="astra", defaults={"name": "Astra", "wp_theme": "astra"})
+    ShopTemplate.objects.get_or_create(slug="astra", defaults={"name": "Astra", "theme": "astra"})
 
     patch(auth_client, shop, django_capture_on_commit_callbacks, {"appearance": {"theme": "astra"}})
 
@@ -203,14 +203,14 @@ def test_refresh_reads_the_shop(auth_client, shop, django_capture_on_commit_call
 
 
 def test_reset_admin_password_gives_a_new_one(auth_client, shop, django_capture_on_commit_callbacks):
-    before = shop.credentials.wp_admin_password
+    before = shop.credentials.admin_password
 
     with django_capture_on_commit_callbacks(execute=True):
         response = auth_client.post(f"/api/shops/{shop.pk}/reset-admin-password/")
 
     assert response.status_code == 202
     assert response.data["kind"] == "reset_admin_password"
-    assert Shop.objects.get(pk=shop.pk).credentials.wp_admin_password != before
+    assert Shop.objects.get(pk=shop.pk).credentials.admin_password != before
 
 
 def test_remove_sample_products_reports_how_many(auth_client, shop, django_capture_on_commit_callbacks):

@@ -29,6 +29,22 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
 - **Porady w innych językach.** Instrukcja logowania i porady podają polskie nazwy z panelu WordPressa,
   także dla sklepów założonych w innym języku.
 
+## Inne platformy sklepów
+
+Działają WooCommerce i PrestaShop ([architektura.md](architektura.md#platformy-sklepów)). Kandydaci na kolejne:
+
+| System | Jak by działał | Uwagi |
+|---|---|---|
+| Magento Open Source / Adobe Commerce | własny kontener, jak PrestaShop | ciężki: potrzebuje OpenSearch i ~2 GB pamięci na sklep, brak oficjalnego obrazu; raczej dla wyższych planów |
+| Shopware 6 | własny kontener | obraz bazowy wymaga zbudowania projektu przez Composer; popularny w Niemczech |
+| Sylius | własny kontener | framework na Symfony, bardziej dla programistów niż małych firm |
+| OpenCart | własny kontener | lekki i prosty, mniejszy ekosystem |
+| Shoper, IdoSell, Sky-Shop | konto u dostawcy przez API partnerskie | SaaS: sklepu nie da się postawić u nas; potrzebna umowa partnerska, a sklep i płatność za niego są u dostawcy |
+| Shopify, BigCommerce | jw. | jw.; Shopify ma program partnerski i sklepy rozwojowe |
+
+W PrestaShop aplikacja nie zmienia jeszcze zakupów (konto klienta, opinie, stany), wysyłki, podatków ani regionu.
+Właściciel ustawia je w panelu. Zmiana języka po założeniu sklepu wymagałaby pobrania pakietu językowego i tłumaczenia kategorii.
+
 ## Droga do produkcji
 
 Projekt działa dziś tylko lokalnie. Przed uruchomieniem dla użytkowników trzeba:

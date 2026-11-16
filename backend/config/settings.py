@@ -233,6 +233,8 @@ FIELD_ENCRYPTION_KEY = os.environ["FIELD_ENCRYPTION_KEY"]
 SHOPS_BASE_DOMAIN = os.environ.get("SHOPS_BASE_DOMAIN", "localhost")
 SHOPS_URL_SCHEME = os.environ.get("SHOPS_URL_SCHEME", "https")
 SHOPS_HTTP_PORT = int(os.environ.get("SHOPS_HTTP_PORT", "443"))
+# "docker" for real shops on the shop node (each platform gets its provisioner, see shops/provisioning/__init__.py)
+# or one class for every platform, e.g. the simulated shops.provisioning.fake.FakeProvisioner.
 SHOP_PROVISIONER = os.environ.get("SHOP_PROVISIONER", "shops.provisioning.fake.FakeProvisioner")
 # Seconds each fake provisioning step takes, so the app can show real progress.
 FAKE_PROVISIONER_STEP_DELAY = float(os.environ.get("FAKE_PROVISIONER_STEP_DELAY", "2"))
@@ -241,6 +243,7 @@ FAKE_PROVISIONER_FAIL_AT_STEP = os.environ.get("FAKE_PROVISIONER_FAIL_AT_STEP", 
 
 # Docker provisioner: talks to the shop node from infra/shops through the Docker socket.
 SHOPS_WORDPRESS_IMAGE = os.environ.get("SHOPS_WORDPRESS_IMAGE", "shops/wordpress:7.1")
+SHOPS_PRESTASHOP_IMAGE = os.environ.get("SHOPS_PRESTASHOP_IMAGE", "prestashop/prestashop:9.2.1-apache")
 SHOPS_NETWORK = os.environ.get("SHOPS_NETWORK", "shops")
 SHOPS_DB_CONTAINER = os.environ.get("SHOPS_DB_CONTAINER", "shops-db")
 SHOPS_PROXY_CONTAINER = os.environ.get("SHOPS_PROXY_CONTAINER", "shops-proxy")

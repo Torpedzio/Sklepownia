@@ -18,17 +18,20 @@ def provision_shop(job_id):
 
 @shared_task
 def teardown_shop(shop_id):
-    get_provisioner().teardown(Shop.objects.get(pk=shop_id))
+    shop = Shop.objects.get(pk=shop_id)
+    get_provisioner(shop.platform).teardown(shop)
 
 
 @shared_task
 def suspend_shop(shop_id):
-    get_provisioner().suspend(Shop.objects.get(pk=shop_id))
+    shop = Shop.objects.get(pk=shop_id)
+    get_provisioner(shop.platform).suspend(shop)
 
 
 @shared_task
 def resume_shop_container(shop_id):
-    get_provisioner().resume(Shop.objects.get(pk=shop_id))
+    shop = Shop.objects.get(pk=shop_id)
+    get_provisioner(shop.platform).resume(shop)
 
 
 @shared_task
@@ -36,7 +39,7 @@ def refresh_shop_resources(shop_id):
     """After a plan change: e.g. a new memory limit for the shop's container."""
     shop = Shop.objects.get(pk=shop_id)
     if shop.status == Shop.Status.ACTIVE:
-        get_provisioner().refresh_resources(shop)
+        get_provisioner(shop.platform).refresh_resources(shop)
 
 
 @shared_task
