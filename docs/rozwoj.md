@@ -31,7 +31,7 @@ Dokumentacja to zwykłe pliki Markdown w repozytorium i zmienia się razem z kod
 
 - Nowa zmienna środowiskowa: dopisz ją do [.env.example](../.env.example) z komentarzem i do tabeli w [uruchomienie.md](uruchomienie.md).
 - Nowy endpoint: opisz go w [api.md](api.md). Pełny opis pól generuje się sam (`/api/docs/`) z serializerów i `@extend_schema`.
-- Nowy krok zakładania sklepu: dopisz go do `BaseProvisioner.STEPS` i do tabeli w [infra/shops/README.md](../infra/shops/README.md).
+- Nowy krok zakładania sklepu: dopisz go do kroków platformy w [platforms/\_\_init\_\_.py](../backend/shops/platforms/__init__.py) i do tabeli w README platformy w [infra/shops/](../infra/shops/README.md).
 - Nowy ekran albo komponent współdzielony: dopisz go do [aplikacja-mobilna.md](aplikacja-mobilna.md).
 - Zrobiona pozycja z [ograniczenia-i-plan.md](ograniczenia-i-plan.md): usuń ją stamtąd.
 - Nowy plik dokumentacji: dopisz go do tabeli w [README.md](../README.md) i do `PAGES`

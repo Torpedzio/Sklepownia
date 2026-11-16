@@ -123,7 +123,7 @@ function NewShopForm({ options }: { options: FormOptions }) {
     setSubmitting(true);
     try {
       const shop = await api<ShopDetail>('/shops/', { method: 'POST', body: form });
-      notify.success(`Zakładamy sklep „${shop.name}”. To potrwa około dwóch minut.`);
+      notify.success(`Zakładamy sklep „${shop.name}”. To potrwa ${shop.setup_time}.`);
       router.back();
       router.push({ pathname: '/shops/[id]', params: { id: shop.id } });
     } catch (e) {

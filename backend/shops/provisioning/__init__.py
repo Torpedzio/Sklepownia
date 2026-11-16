@@ -5,18 +5,21 @@ from ..platforms import Platform
 
 # Real shops on the shop node from infra/shops, one provisioner per platform.
 DOCKER_PROVISIONERS = {
-    Platform.WOOCOMMERCE: "shops.provisioning.docker_provisioner.DockerProvisioner",
-    Platform.PRESTASHOP: "shops.provisioning.prestashop.PrestaShopProvisioner",
+    Platform.WOOCOMMERCE: "shops.platforms.woocommerce.WooCommerceProvisioner",
+    Platform.PRESTASHOP: "shops.platforms.prestashop.PrestaShopProvisioner",
+    Platform.MAGENTO: "shops.platforms.magento.MagentoProvisioner",
 }
+# What SHOP_PROVISIONER said for real shops before there were several platforms.
+LEGACY_DOCKER_SETTING = "shops.provisioning.docker_provisioner.DockerProvisioner"
 
 
 def get_provisioner(platform=Platform.WOOCOMMERCE):
     """
     The provisioner for shops on `platform` (a shop's `platform`). SHOP_PROVISIONER is "docker" for real shops
-    (the WooCommerce class path works too, as in older .env files) or one class used for every platform,
+    (the old DockerProvisioner path from older .env files works too) or one class used for every platform,
     e.g. the simulated FakeProvisioner.
     """
     path = settings.SHOP_PROVISIONER
-    if path in ("docker", DOCKER_PROVISIONERS[Platform.WOOCOMMERCE]):
+    if path in ("docker", LEGACY_DOCKER_SETTING):
         path = DOCKER_PROVISIONERS[Platform(platform)]
     return import_string(path)()

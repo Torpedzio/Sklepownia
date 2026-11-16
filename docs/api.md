@@ -44,7 +44,7 @@ Limity zapytań: logowanie i rejestracja 10 na minutę, potwierdzanie e-maila 10
 |---|---|
 | `GET shops/` | Sklepy użytkownika (bez usuniętych): `id, name, slug, url, status, status_display, platform, platform_display, is_test, created_at`. `platform`: `woocommerce` albo `prestashop`. `is_test`: sklep sprzed płatnych planów |
 | `POST shops/` | Założenie sklepu (wymaga potwierdzonego e-maila i aktywnego planu). `201` ze szczegółami sklepu. `402` bez planu, `400` przy zajętym adresie albo osiągniętym limicie planu (sklepy testowe się nie liczą). |
-| `GET shops/{id}/` | Szczegóły: pola z listy plus `panel_name` (np. „panel PrestaShop”), `config` (wybory z formularza) i `provisioning` (ostatnie zadanie z krokami; kroki zależą od platformy) |
+| `GET shops/{id}/` | Szczegóły: pola z listy plus `panel_name` (np. „panel PrestaShop”), `setup_time` (ile trwa zakładanie, np. „około dwóch minut”), `config` (wybory z formularza) i `provisioning` (ostatnie zadanie z krokami; kroki zależą od platformy) |
 | `DELETE shops/{id}/` | Usunięcie, `204`. W trakcie zakładania `409`. |
 | `POST shops/{id}/resume/` | Przywrócenie sklepu zawieszonego przez plan, gdy plan ma na niego miejsce, `200` ze szczegółami. `400`: brak miejsca, `402`: brak planu, `409`: sklep nie jest zawieszony. |
 | `POST shops/{id}/retry/` | Ponowienie po błędzie (wymaga potwierdzonego e-maila, a poza sklepami testowymi aktywnego planu: inaczej `402`), `202`. W innym stanie `409`. |

@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+    <default>
+        <carriers>
+            <sklepowniapickup>
+                <active>0</active>
+                <model>Sklepownia\Provisioning\Model\Carrier\Pickup</model>
+                <title>Odbiór osobisty</title>
+                <name>Odbiór osobisty</name>
+                <price>0</price>
+                <sallowspecific>0</sallowspecific>
+                <sort_order>30</sort_order>
+            </sklepowniapickup>
+        </carriers>
+    </default>
+</config>

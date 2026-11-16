@@ -9,8 +9,9 @@ backend/
 ├── config/            ustawienia, główne URL-e, konfiguracja Celery
 ├── accounts/          użytkownicy, rejestracja, logowanie JWT, potwierdzanie e-maila
 ├── shops/             sklepy: modele, API, zakładanie (provisioning), polecenia
-│   ├── provisioning/  base.py (kroki), runner.py (zakładanie), operations.py (operacje na działającym sklepie),
-│   │                  fake.py, docker_provisioner.py
+│   ├── platforms/     __init__.py (platformy: kroki, sekcje ustawień, panel), woocommerce.py, prestashop.py, magento.py
+│   ├── provisioning/  base.py (kroki), container.py (wspólne dla kontenerów), runner.py (zakładanie),
+│   │                  operations.py (operacje na działającym sklepie), fake.py (symulacja)
 │   ├── management/    polecenie update_shop_addresses
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
@@ -64,7 +65,7 @@ bez adresów zarezerwowanych dla platformy ([slugs.py](../backend/shops/slugs.py
 
 Przebieg i stany: [architektura.md](architektura.md#przebieg-zakładania-sklepu).
 
-- Kroki każdej platformy to lista par `(klucz, etykieta)` w [platforms.py](../backend/shops/platforms.py).
+- Kroki każdej platformy to lista par `(klucz, etykieta)` w [platforms/\_\_init\_\_.py](../backend/shops/platforms/__init__.py).
   Etykiety widzi właściciel sklepu na paragonie, więc mówią, co sklep dostaje, a nie jak to jest robione.
 - Provisioner implementuje metodę `step_<klucz>(shop)` dla każdego kroku. **Każdy krok musi być idempotentny**:
   ponowienie uruchamia wszystkie kroki od nowa.
@@ -72,17 +73,23 @@ Przebieg i stany: [architektura.md](architektura.md#przebieg-zakładania-sklepu)
   Pozostałe wyjątki zastępuje ogólny komunikat, a pełny opis ląduje w logach workera.
 - `ContainerProvisioner` ([container.py](../backend/shops/provisioning/container.py)) tworzy kontener `shop-<id>`,
   wolumen `shop-<id>` i bazę `shop_<id>`. Na nim stoją:
-  - `DockerProvisioner` (WooCommerce): WordPressa konfiguruje przez WP-CLI w kontenerze. Ustawienia zależne od motywu
-    (pasek boczny) są w `THEME_NAVIGATION`.
-  - `PrestaShopProvisioner` ([prestashop.py](../backend/shops/provisioning/prestashop.py)): instaluje sklep
+  - `WooCommerceProvisioner` ([woocommerce.py](../backend/shops/platforms/woocommerce.py)): WordPressa konfiguruje
+    przez WP-CLI w kontenerze. Ustawienia zależne od motywu (pasek boczny) są w `THEME_NAVIGATION`.
+    Szczegóły i pułapki: [infra/shops/woocommerce/README.md](../infra/shops/woocommerce/README.md).
+  - `PrestaShopProvisioner` ([prestashop.py](../backend/shops/platforms/prestashop.py)): instaluje sklep
     instalatorem `install/index_cli.php`, a resztę robi skryptami PHP uruchamianymi w sklepie (`_php`, dane w `$d` jak w WordPressie).
-    Szczegóły i pułapki: [infra/shops/README.md](../infra/shops/README.md#prestashop).
+    Szczegóły i pułapki: [infra/shops/prestashop/README.md](../infra/shops/prestashop/README.md).
+  - `MagentoProvisioner` ([magento.py](../backend/shops/platforms/magento.py)): instaluje sklep `bin/magento setup:install`,
+    a resztę robi poleceniem `sklepownia:run <akcja>` z naszego modułu w obrazie (dane jako base64 w zmiennej
+    środowiskowej `SKLEPOWNIA_DATA`, wynik JSON po znaczniku). Kod Magento jest w obrazie, w wolumenie tylko dane sklepu
+    (`VOLUME_PATH`), a pamięci dostaje co najmniej `SHOPS_MAGENTO_MEMORY` (`memory()`).
+    Szczegóły i pułapki: [infra/shops/magento/README.md](../infra/shops/magento/README.md).
 
 Jak dodać nowy krok:
 
 1. Dopisz `("klucz", "Etykieta dla użytkownika")` do kroków platformy w `platforms.py` we właściwym miejscu.
 2. Dodaj `step_klucz(self, shop)` w provisionerze tej platformy. Krok ma działać także przy ponownym uruchomieniu.
-3. Opisz krok w tabeli w [infra/shops/README.md](../infra/shops/README.md#kroki-i-czasy).
+3. Opisz krok w tabeli kroków w README platformy w [infra/shops/](../infra/shops/README.md).
 4. Jeśli etykieta ma się pokazać na paragonie na stronie głównej, dopisz ją też do `SetupSteps`
    w [mobile/src/constants/content.ts](../mobile/src/constants/content.ts).
 
@@ -92,7 +99,7 @@ Przebieg: [architektura.md](architektura.md#ustawienia-działającego-sklepu). S
 
 - Schemat ustawień to serializery sekcji w [shop_settings.py](../backend/shops/shop_settings.py). Etykiety pól
   trafiają do historii zmian, więc piszemy je językiem właściciela sklepu.
-- `DockerProvisioner.read_settings` czyta wszystko jednym `wp eval` (`READ_SETTINGS_PHP`) i zamienia na sekcje.
+- `WooCommerceProvisioner.read_settings` czyta wszystko jednym `wp eval` (`READ_SETTINGS_PHP`) i zamienia na sekcje.
   Zapis idzie sekcjami: opcje WordPressa, płatności (`woocommerce_bacs_*`, `woocommerce_cod_settings`),
   stawka VAT i strefa wysyłki przez klasy WooCommerce. Dane do PHP trafiają jako base64 w `$d`, więc nic ich nie przerwie.
 - Platforma zapamiętuje w opcjach WordPressa identyfikatory swojej strefy wysyłki (`sklepownia_shipping_zone_id`)
@@ -210,8 +217,9 @@ Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od
 | `accounts/tests/test_auth.py` | Rejestracja, logowanie, potwierdzanie e-maila, limity prób, `/me` |
 | `shops/tests/test_shops.py` | Zakładanie, limit sklepów, adresy, ponawianie, usuwanie, dostęp do panelu, opcje formularza, polecenia |
 | `shops/tests/test_settings.py` | Ustawienia sklepu: odczyt, walidacja, zapis przez operacje, kolejka jednej operacji, błędy, nowe hasło, produkty przykładowe |
-| `shops/tests/test_docker_provisioner.py` | Polecenia, które `DockerProvisioner` wysyła do kontenerów (WP-CLI, MariaDB, curl), na podstawionej powłoce bez Dockera |
-| `shops/tests/test_prestashop_provisioner.py` | To samo dla `PrestaShopProvisioner`: instalator, skrypty PHP i ich dane, sprawdzenie sklepu i panelu |
+| `shops/tests/test_woocommerce.py` | Polecenia, które `WooCommerceProvisioner` wysyła do kontenerów (WP-CLI, MariaDB, curl), na podstawionej powłoce bez Dockera |
+| `shops/tests/test_prestashop.py` | To samo dla `PrestaShopProvisioner`: instalator, skrypty PHP i ich dane, sprawdzenie sklepu i panelu |
+| `shops/tests/test_magento.py` | To samo dla `MagentoProvisioner`: `setup:install`, akcje `sklepownia:run` i ich dane, pamięć, indeksy OpenSearch |
 | `shops/tests/test_platforms.py` | Platformy przez API: wybór motywu i platformy, kroki, panel, sekcje ustawień, wybór provisionera |
 | `billing/tests/test_billing.py`, `billing/tests/test_tpay.py` | Płatności i bramka Tpay ([platnosci.md](platnosci.md#testy)) |
 | `shops/tests/test_emails.py` | E-mail z danymi logowania: po założeniu i ponowieniu, ponowne wysłanie i jego limit, nowe hasło, brak danych w API |
@@ -219,8 +227,8 @@ Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od
 | `support/tests/test_contact.py` | Formularz kontaktowy i powiadomienie |
 | `handbook/tests/test_handbook.py` | Strony dokumentacji, odnośniki, kotwice, dostęp, kompletność menu |
 
-`test_docker_provisioner.py` zastępuje `_exec` atrapą (`Shell`), która zapisuje polecenia i odpowiada
-przygotowanym wynikiem. Sprawdza więc, co provisioner wysyła i jak czyta odpowiedzi, ale nie to, czy WordPress
+Testy platform (`test_woocommerce.py`, `test_prestashop.py`, `test_magento.py`) zastępują `_exec` atrapą (`Shell`), która zapisuje polecenia i odpowiada
+przygotowanym wynikiem. Sprawdzają więc, co provisioner wysyła i jak czyta odpowiedzi, ale nie to, czy sklep
 się z nimi zgodzi. Zmiany w provisioningu trzeba dodatkowo sprawdzić na prawdziwym sklepie.
 
 Zmiany w API sprawdzaj też walidacją schematu: `python manage.py spectacular --validate --fail-on-warn`.

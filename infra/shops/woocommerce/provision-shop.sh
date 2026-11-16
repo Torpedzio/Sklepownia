@@ -3,11 +3,12 @@
 # Every step is idempotent: running the script again for the same slug
 # finishes a half-done shop instead of breaking it.
 #
-#   ./provision-shop.sh --slug ceramika --name "Pracownia Ceramiki" --email ja@example.com \
+#   woocommerce/provision-shop.sh --slug ceramika --name "Pracownia Ceramiki" --email ja@example.com \
 #       [--theme storefront] [--language pl_PL] [--currency PLN] [--country PL] \
 #       [--categories "Kubki,Talerze,Wazony"] [--sample-products]
 set -eEuo pipefail
-cd "$(dirname "$0")"
+# From the shop node folder: its .env and docker-compose.yml.
+cd "$(dirname "$0")/.."
 source .env
 
 SLUG="" NAME="" EMAIL="" THEME="storefront" LANGUAGE="pl_PL" CURRENCY="PLN" COUNTRY="PL"

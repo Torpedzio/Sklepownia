@@ -17,8 +17,9 @@
            │                       Serwer sklepów (infra/shops)
            │                       ┌──────────────────────────────────────────────────────┐
            └─────────────────────▶ │ Traefik :8080 ──Host: <slug>.<domena>──▶ shop-<id>   │
-                                   │                         (WordPress albo PrestaShop) │
-                                   │                       MariaDB shops-db ◀─┘           │
+                                   │             (WooCommerce, PrestaShop albo Magento)   │
+                                   │                       MariaDB shops-db ◀─┤           │
+                                   │            OpenSearch shops-search ◀─┘ (Magento)     │
                                    └──────────────────────────────────────────────────────┘
 ```
 
@@ -34,7 +35,8 @@
 | Mailpit | Lokalny serwer SMTP: przyjmuje całą pocztę i pokazuje ją w przeglądarce. Na produkcji zastępuje go dostawca poczty. | `mail` |
 | Traefik | Kieruje ruch do kontenera sklepu po nazwie hosta | `shops-proxy` w [infra/shops/](../infra/shops/) |
 | MariaDB | Jedna instancja, osobna baza i użytkownik dla każdego sklepu | `shops-db` |
-| Kontener sklepu | Jeden na sklep: WordPress + WooCommerce + motyw albo PrestaShop ([platformy](#platformy-sklepów)) | `shop-<id>`, obraz `shops/wordpress:7.1` albo `prestashop/prestashop:9.2.1-apache` |
+| OpenSearch | Wyszukiwarka sklepów Magento, osobne indeksy dla każdego sklepu | `shops-search` |
+| Kontener sklepu | Jeden na sklep: WordPress + WooCommerce + motyw, PrestaShop albo Magento ([platformy](#platformy-sklepów)) | `shop-<id>`, obraz `shops/wordpress:7.1`, `prestashop/prestashop:9.2.1-apache` albo `shops/magento:4.0.0` |
 
 Backend i worker to ten sam kod. Tylko worker ma dostęp do socketu Dockera, bo tylko on zakłada kontenery.
 Proces API nie dotyka Dockera (klient Dockera jest tworzony leniwie, dopiero przy pierwszym kroku).
@@ -56,7 +58,7 @@ Proces API nie dotyka Dockera (klient Dockera jest tworzony leniwie, dopiero prz
 6. „Spróbuj ponownie” (`POST /api/shops/{id}/retry/`) tworzy nowe zadanie. Każdy krok jest idempotentny,
    więc kroki już wykonane po prostu przechodzą, a praca idzie dalej od miejsca błędu.
 
-Kroki zakładania i ich techniczny opis: [infra/shops/README.md](../infra/shops/README.md#kroki-i-czasy).
+Kroki zakładania i ich techniczny opis: README platform w [infra/shops/](../infra/shops/README.md).
 
 Usuwanie (`DELETE /api/shops/{id}/`) zmienia status na `deleted` od razu, a zadanie `teardown_shop`
 usuwa kontener, wolumen, bazę i użytkownika bazy w tle. Adres (slug) usuniętego sklepu znów jest wolny.
@@ -95,7 +97,7 @@ Niedozwolone przejście rzuca `InvalidTransition`; API zamienia je na `409 Confl
 
 ## Platformy sklepów
 
-Klient wybiera w formularzu system, na którym działa sklep. Platformy opisuje [platforms.py](../backend/shops/platforms.py):
+Klient wybiera w formularzu system, na którym działa sklep. Platformy opisuje [platforms/\_\_init\_\_.py](../backend/shops/platforms/__init__.py), a każda ma swój provisioner obok:
 kroki zakładania widoczne na paragonie, sekcje ustawień, które aplikacja umie zmieniać, i nazwę panelu.
 Motyw (`ShopTemplate`) należy do jednej platformy, a sklep (`Shop.platform`) ma ją na stałe.
 
@@ -103,6 +105,7 @@ Motyw (`ShopTemplate`) należy do jednej platformy, a sklep (`Shop.platform`) ma
 |---|---|---|---|
 | WooCommerce | WordPress + WooCommerce + motyw, konfiguracja przez WP-CLI | `/wp-admin/`, login `admin` | wszystkie sekcje |
 | PrestaShop 9 | oficjalny obraz, instalator wiersza poleceń, konfiguracja przez PHP w sklepie | losowy folder `admin…` (`Shop.admin_path`), login e-mailem | podstawowe, otwarcie sklepu, płatności, wygląd; wysyłka, podatki i region w panelu |
+| Magento (Mage-OS 4) | własny obraz ze skompilowanym kodem, `bin/magento setup:install` i nasz moduł `Sklepownia_Provisioning`; wyszukiwarka w OpenSearch; min. 1,5 GB pamięci | losowy adres `admin_…` (`Shop.admin_path`), login `admin` | podstawowe, płatności, wysyłka, podatki, region; otwarcie sklepu, zakupy i wygląd w panelu |
 
 Inne systemy, które rozważaliśmy, i ich ograniczenia: [ograniczenia-i-plan.md](ograniczenia-i-plan.md#inne-platformy-sklepów).
 
@@ -113,10 +116,10 @@ Sposób zakładania sklepów wybiera zmienna `SHOP_PROVISIONER`:
 | Wartość | Do czego |
 |---|---|
 | `shops.provisioning.fake.FakeProvisioner` | Symulacja bez infrastruktury, dla wszystkich platform: każdy krok czeka `FAKE_PROVISIONER_STEP_DELAY` sekund, opcjonalny błąd w kroku `FAKE_PROVISIONER_FAIL_AT_STEP`. Używany w testach. |
-| `docker` | Prawdziwe sklepy na serwerze z [infra/shops/](../infra/shops/), każda platforma swoim provisionerem: `DockerProvisioner` (WooCommerce) i `PrestaShopProvisioner`. Stara wartość `shops.provisioning.docker_provisioner.DockerProvisioner` znaczy to samo. |
+| `docker` | Prawdziwe sklepy na serwerze z [infra/shops/](../infra/shops/), każda platforma swoim provisionerem: `WooCommerceProvisioner`, `PrestaShopProvisioner` i `MagentoProvisioner`. Stara wartość `shops.provisioning.docker_provisioner.DockerProvisioner` znaczy to samo. |
 
 `get_provisioner(shop.platform)` ([provisioning/\_\_init\_\_.py](../backend/shops/provisioning/__init__.py)) zwraca provisioner dla sklepu.
-Oba prawdziwe dziedziczą po `ContainerProvisioner` ([container.py](../backend/shops/provisioning/container.py)):
+Wszystkie prawdziwe dziedziczą po `ContainerProvisioner` ([container.py](../backend/shops/provisioning/container.py)):
 serwer, baza, kontener z regułą Traefika i limitem pamięci z planu, usuwanie, zawieszanie i wznawianie są wspólne.
 Wszystkie provisionery dziedziczą po `BaseProvisioner`, który definiuje `cleanup`, `teardown` i `update_address`,
 a dla działających sklepów `read_settings`, `apply_settings`, `reset_admin_password` i `remove_sample_products`.

@@ -14,7 +14,7 @@ from accounts.models import User
 from shops.models import Shop, ShopConfig, ShopCredentials, ShopTemplate
 from shops.provisioning.base import ProvisioningError
 from shops.provisioning.container import CommandError
-from shops.provisioning.prestashop import OUTPUT_MARKER, PrestaShopProvisioner
+from shops.platforms.prestashop import OUTPUT_MARKER, PrestaShopProvisioner
 
 pytestmark = pytest.mark.django_db
 

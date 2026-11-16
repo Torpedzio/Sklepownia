@@ -244,9 +244,14 @@ FAKE_PROVISIONER_FAIL_AT_STEP = os.environ.get("FAKE_PROVISIONER_FAIL_AT_STEP", 
 # Docker provisioner: talks to the shop node from infra/shops through the Docker socket.
 SHOPS_WORDPRESS_IMAGE = os.environ.get("SHOPS_WORDPRESS_IMAGE", "shops/wordpress:7.1")
 SHOPS_PRESTASHOP_IMAGE = os.environ.get("SHOPS_PRESTASHOP_IMAGE", "prestashop/prestashop:9.2.1-apache")
+SHOPS_MAGENTO_IMAGE = os.environ.get("SHOPS_MAGENTO_IMAGE", "shops/magento:4.0.0")
+# Magento gets at least this much memory, even when the owner's plan gives less.
+SHOPS_MAGENTO_MEMORY = os.environ.get("SHOPS_MAGENTO_MEMORY", "1536m")
 SHOPS_NETWORK = os.environ.get("SHOPS_NETWORK", "shops")
 SHOPS_DB_CONTAINER = os.environ.get("SHOPS_DB_CONTAINER", "shops-db")
 SHOPS_PROXY_CONTAINER = os.environ.get("SHOPS_PROXY_CONTAINER", "shops-proxy")
+# Search engine of the Magento shops.
+SHOPS_SEARCH_CONTAINER = os.environ.get("SHOPS_SEARCH_CONTAINER", "shops-search")
 SHOPS_DB_ROOT_PASSWORD = os.environ.get("SHOPS_DB_ROOT_PASSWORD", "")
 SHOPS_CONTAINER_MEMORY = os.environ.get("SHOPS_CONTAINER_MEMORY", "512m")
 # "local" lets WordPress accept application passwords over plain HTTP; use "production" with HTTPS.

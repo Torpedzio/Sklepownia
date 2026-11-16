@@ -9,13 +9,13 @@
 
 ## 1. Serwer sklepów
 
-Potrzebny tylko przy `SHOP_PROVISIONER=...DockerProvisioner`. Z symulacją (`FakeProvisioner`) można go pominąć.
+Potrzebny tylko przy `SHOP_PROVISIONER=docker`. Z symulacją (`FakeProvisioner`) można go pominąć.
 
 ```bash
 cd infra/shops
 cp .env.example .env               # wpisz SHOPS_DB_ROOT_PASSWORD
-docker compose build wordpress     # obraz sklepu: WordPress + WP-CLI + WooCommerce + motywy
-docker compose up -d               # Traefik (shops-proxy) i MariaDB (shops-db)
+docker compose build wordpress magento   # obrazy sklepów WooCommerce i Magento (Magento ~10 min)
+docker compose up -d                     # Traefik (shops-proxy), MariaDB (shops-db), OpenSearch (shops-search)
 ```
 
 Szczegóły: [infra/shops/README.md](../infra/shops/README.md).
@@ -116,10 +116,11 @@ Bez ustawień poczty w `.env` backend wypisuje wiadomości w logach (`EMAIL_BACK
 | `SHOPS_URL_SCHEME`, `SHOPS_HTTP_PORT` | `https`, `443` | Lokalnie `http` i `8080` |
 | `SHOPS_WP_ENVIRONMENT` | `production` | `local` pozwala na hasła API WordPressa przez HTTP |
 | `SHOPS_DB_ROOT_PASSWORD` | — | Hasło roota MariaDB sklepów, to samo co w `infra/shops/.env` |
-| `SHOPS_WORDPRESS_IMAGE` | `shops/wordpress:7.1` | Obraz kontenera sklepu |
+| `SHOPS_WORDPRESS_IMAGE`, `SHOPS_PRESTASHOP_IMAGE`, `SHOPS_MAGENTO_IMAGE` | `shops/wordpress:7.1`, `prestashop/prestashop:9.2.1-apache`, `shops/magento:4.0.0` | Obrazy kontenerów sklepów |
 | `SHOPS_NETWORK` | `shops` | Sieć Dockera serwera sklepów |
-| `SHOPS_DB_CONTAINER`, `SHOPS_PROXY_CONTAINER` | `shops-db`, `shops-proxy` | Nazwy kontenerów serwera sklepów |
-| `SHOPS_CONTAINER_MEMORY` | `512m` | Limit pamięci kontenera sklepu |
+| `SHOPS_DB_CONTAINER`, `SHOPS_PROXY_CONTAINER`, `SHOPS_SEARCH_CONTAINER` | `shops-db`, `shops-proxy`, `shops-search` | Nazwy kontenerów serwera sklepów |
+| `SHOPS_CONTAINER_MEMORY` | `512m` | Limit pamięci kontenera sklepu bez planu i sklepu testowego |
+| `SHOPS_MAGENTO_MEMORY` | `1536m` | Najmniejszy limit pamięci sklepu Magento, niezależnie od planu |
 | `FAKE_PROVISIONER_STEP_DELAY` | `2` | Sekundy na krok w symulacji |
 | `FAKE_PROVISIONER_FAIL_AT_STEP` | puste | Klucz kroku, na którym symulacja ma się wysypać |
 

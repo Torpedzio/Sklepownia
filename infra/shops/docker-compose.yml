@@ -1,5 +1,5 @@
-# Shop node: reverse proxy + shared database for all shop containers.
-# Shop containers themselves are created by provision-shop.sh (later: the backend).
+# Shop node: reverse proxy, shared database and search engine for all shop containers.
+# Shop containers themselves are created by the backend (see backend/shops/platforms/).
 name: shops
 
 services:
@@ -40,14 +40,43 @@ services:
         aliases:
           - shops-db
 
-  # Not a running service: `docker compose build wordpress` builds the shop image.
+  # Search engine Magento requires; every Magento shop has its own indexes (prefix shop_<id>).
+  search:
+    image: opensearchproject/opensearch:2.19.4
+    container_name: shops-search
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+      # Removing a shop deletes its indexes by wildcard.
+      action.destructive_requires_name: "false"
+    volumes:
+      - searchdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health"]
+      interval: 10s
+      retries: 30
+    networks:
+      shops:
+        aliases:
+          - shops-search
+
+  # Not running services: `docker compose build wordpress magento` builds the shop images.
   wordpress:
     image: shops/wordpress:7.1
-    build: ./wordpress
+    build: ./woocommerce
+    profiles: ["build"]
+
+  magento:
+    image: shops/magento:4.0.0
+    build: ./magento
     profiles: ["build"]
 
 volumes:
   dbdata:
+  searchdata:
 
 networks:
   shops:

@@ -210,7 +210,7 @@ export default function ShopScreen() {
 
       {inProgress ? (
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <ThemedText type="heading">To potrwa około dwóch minut</ThemedText>
+          <ThemedText type="heading">To potrwa {shop.setup_time}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             Możesz zamknąć ten ekran. Sklep zakłada się dalej, a postęp zobaczysz po powrocie. Ustawienia sklepu będą
             dostępne, gdy skończymy.

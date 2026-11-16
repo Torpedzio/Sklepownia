@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Removes a shop completely: container, files and database.
-#   ./destroy-shop.sh ceramika
+#   woocommerce/destroy-shop.sh ceramika
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 source .env
 
 SLUG="${1:?Podaj slug sklepu}"

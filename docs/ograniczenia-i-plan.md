@@ -31,11 +31,10 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
 
 ## Inne platformy sklepów
 
-Działają WooCommerce i PrestaShop ([architektura.md](architektura.md#platformy-sklepów)). Kandydaci na kolejne:
+Działają WooCommerce, PrestaShop i Magento ([architektura.md](architektura.md#platformy-sklepów)). Kandydaci na kolejne:
 
 | System | Jak by działał | Uwagi |
 |---|---|---|
-| Magento Open Source / Adobe Commerce | własny kontener, jak PrestaShop | ciężki: potrzebuje OpenSearch i ~2 GB pamięci na sklep, brak oficjalnego obrazu; raczej dla wyższych planów |
 | Shopware 6 | własny kontener | obraz bazowy wymaga zbudowania projektu przez Composer; popularny w Niemczech |
 | Sylius | własny kontener | framework na Symfony, bardziej dla programistów niż małych firm |
 | OpenCart | własny kontener | lekki i prosty, mniejszy ekosystem |
@@ -44,6 +43,10 @@ Działają WooCommerce i PrestaShop ([architektura.md](architektura.md#platformy
 
 W PrestaShop aplikacja nie zmienia jeszcze zakupów (konto klienta, opinie, stany), wysyłki, podatków ani regionu.
 Właściciel ustawia je w panelu. Zmiana języka po założeniu sklepu wymagałaby pobrania pakietu językowego i tłumaczenia kategorii.
+
+W Magento aplikacja nie zamyka sklepu (Magento nie ma trybu „wkrótce otwarcie” bez dodatkowego modułu), nie zmienia
+zakupów ani motywu. Magento dostaje co najmniej 1,5 GB pamięci także przy planach, które dają mniej, i wybór platformy
+nie zależy jeszcze od planu.
 
 ## Droga do produkcji
 
@@ -56,11 +59,11 @@ Projekt działa dziś tylko lokalnie. Przed uruchomieniem dla użytkowników trz
    albo osobny agent na serwerze sklepów z własnym API.
 3. **Serwer aplikacji.** Gunicorn lub uvicorn zamiast `runserver`, `DJANGO_DEBUG=0`, konkretne `DJANGO_ALLOWED_HOSTS`
    i `CORS_ALLOWED_ORIGINS`, pliki statyczne, kopie zapasowe PostgreSQL.
-4. **Kopie zapasowe sklepów:** wolumenów WordPressa i baz MariaDB.
+4. **Kopie zapasowe sklepów:** wolumenów sklepów i baz MariaDB (indeksy OpenSearch da się odbudować `indexer:reindex`).
 5. **Poczta:** dostawca SMTP dla platformy (zmienne `EMAIL_*`, zamiast Mailpit) i dla sklepów, z rekordami SPF i DKIM domeny.
 6. **Monitorowanie:** zdrowie sklepów, błędy zakładania, zajętość serwera (`Server.max_shops`).
-7. **Wiele serwerów sklepów.** Model `Server` i krok przydziału serwera są gotowe, ale `DockerProvisioner`
-   rozmawia tylko z lokalnym Dockerem.
+7. **Wiele serwerów sklepów.** Model `Server` i krok przydziału serwera są gotowe, ale provisionery
+   rozmawiają tylko z lokalnym Dockerem.
 8. **Aplikacja w sklepach z aplikacjami:** ikony, ekran startowy, nazwa w `app.json` i build przez EAS.
 9. **Szybsze zakładanie.** Najwięcej czasu zajmuje start WP-CLI przy każdym poleceniu. Zgrupowanie konfiguracji
    w jednym `wp eval-file` i pakiety językowe wbudowane w obraz powinny skrócić zakładanie z około 105 s do około 30 s.

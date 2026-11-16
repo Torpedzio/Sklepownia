@@ -5,9 +5,10 @@ import pytest
 from shops.models import ProvisioningStep, Shop, ShopCredentials
 from shops.platforms import Platform, platform_info
 from shops.provisioning import get_provisioner
-from shops.provisioning.docker_provisioner import DockerProvisioner
+from shops.platforms.woocommerce import WooCommerceProvisioner
 from shops.provisioning.fake import FakeProvisioner
-from shops.provisioning.prestashop import PrestaShopProvisioner
+from shops.platforms.magento import MagentoProvisioner
+from shops.platforms.prestashop import PrestaShopProvisioner
 
 pytestmark = pytest.mark.django_db
 
@@ -94,8 +95,9 @@ def test_supported_settings_change(auth_client, presta, django_capture_on_commit
 
 def test_each_platform_gets_its_provisioner(settings):
     settings.SHOP_PROVISIONER = "docker"
-    assert isinstance(get_provisioner("woocommerce"), DockerProvisioner)
+    assert isinstance(get_provisioner("woocommerce"), WooCommerceProvisioner)
     assert isinstance(get_provisioner("prestashop"), PrestaShopProvisioner)
+    assert isinstance(get_provisioner("magento"), MagentoProvisioner)
     # The class path from older .env files means the same.
     settings.SHOP_PROVISIONER = "shops.provisioning.docker_provisioner.DockerProvisioner"
     assert isinstance(get_provisioner("prestashop"), PrestaShopProvisioner)

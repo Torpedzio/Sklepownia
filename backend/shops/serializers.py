@@ -101,12 +101,16 @@ class ShopDetailSerializer(ShopSerializer):
     config = ShopConfigSerializer()
     provisioning = serializers.SerializerMethodField()
     panel_name = serializers.SerializerMethodField(help_text="Jak właściciel zna panel sklepu, np. „panel WordPressa”.")
+    setup_time = serializers.SerializerMethodField(help_text="Ile trwa zakładanie sklepu, np. „około dwóch minut”.")
 
     class Meta(ShopSerializer.Meta):
-        fields = [*ShopSerializer.Meta.fields, "panel_name", "config", "provisioning"]
+        fields = [*ShopSerializer.Meta.fields, "panel_name", "setup_time", "config", "provisioning"]
 
     def get_panel_name(self, shop) -> str:
         return platform_info(shop.platform).panel_name
+
+    def get_setup_time(self, shop) -> str:
+        return platform_info(shop.platform).setup_time
 
     @extend_schema_field(ProvisioningJobSerializer(allow_null=True))
     def get_provisioning(self, shop):

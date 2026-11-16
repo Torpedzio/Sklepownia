@@ -3,7 +3,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from shops.models import Shop, ShopOperation, ShopTemplate
-from shops.provisioning.docker_provisioner import _money
+from shops.platforms.woocommerce import _money
 
 pytestmark = pytest.mark.django_db
 

@@ -23,7 +23,7 @@ a platforma w około dwie minuty uruchamia działający sklep w osobnym kontener
 |---|---|---|
 | [backend/](backend/) | API, konta, płatności, zakładanie sklepów, panel admina | Django 5.2, DRF, Celery, PostgreSQL, Redis |
 | [mobile/](mobile/) | Aplikacja na iOS, Androida i przeglądarkę | Expo SDK 58, React Native 0.88, Expo Router |
-| [infra/shops/](infra/shops/) | Serwer sklepów: proxy, baza sklepów, obraz WordPressa | Docker, Traefik 3, MariaDB 11, WordPress 7.1 |
+| [infra/shops/](infra/shops/) | Serwer sklepów: proxy, baza i wyszukiwarka sklepów, obrazy platform | Docker, Traefik 3, MariaDB 11, OpenSearch 2, WordPress 7.1, PrestaShop 9, Mage-OS 4 |
 | [docker-compose.yml](docker-compose.yml) | Lokalne uruchomienie backendu | Docker Compose |
 
 ## Szybki start
@@ -65,7 +65,7 @@ Po uruchomieniu:
 | [docs/backend.md](docs/backend.md) | Aplikacje Django, modele, provisioning, zadania Celery, testy, polecenia |
 | [docs/api.md](docs/api.md) | Przegląd endpointów API i zasad uwierzytelniania |
 | [docs/aplikacja-mobilna.md](docs/aplikacja-mobilna.md) | Ekrany, nawigacja, komponenty, wygląd, komunikacja z API |
-| [infra/shops/README.md](infra/shops/README.md) | Serwer sklepów, kroki instalacji WordPressa, uwagi techniczne |
+| [infra/shops/README.md](infra/shops/README.md) | Serwer sklepów i platformy: [WooCommerce](infra/shops/woocommerce/README.md), [PrestaShop](infra/shops/prestashop/README.md), [Magento](infra/shops/magento/README.md) |
 | [docs/platnosci.md](docs/platnosci.md) | Plany, płatności kartą przez Tpay, odnowienia, dane do faktury, symulowana bramka |
 | [docs/obsluga.md](docs/obsluga.md) | Codzienna obsługa: zmiana sieci, restart, logi, typowe problemy |
 | [docs/rozwoj.md](docs/rozwoj.md) | Sprawdzanie zmian, konwencje i utrzymanie dokumentacji |

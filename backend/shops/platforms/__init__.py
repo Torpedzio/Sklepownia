@@ -11,6 +11,7 @@ from django.db import models
 class Platform(models.TextChoices):
     WOOCOMMERCE = "woocommerce", "WooCommerce"
     PRESTASHOP = "prestashop", "PrestaShop"
+    MAGENTO = "magento", "Magento"
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,8 @@ class PlatformInfo:
     settings_sections: tuple
     # Path of the admin panel, when it's the same for every shop (PrestaShop gives each shop its own).
     admin_path: str = ""
+    # How long setting up takes, as the app says it: "To potrwa <setup_time>".
+    setup_time: str = "około dwóch minut"
 
 
 ALL_SECTIONS = ("general", "availability", "shopping", "payments", "shipping", "taxes", "region", "appearance")
@@ -64,6 +67,24 @@ PLATFORMS = {
         ],
         # Shipping, taxes, region and the shopping rules are set in the PrestaShop panel for now.
         settings_sections=("general", "availability", "payments", "appearance"),
+    ),
+    Platform.MAGENTO: PlatformInfo(
+        description="System dla dużych sklepów: rozbudowany katalog, wiele magazynów i wersji językowych. "
+        "Potrzebuje więcej pamięci serwera.",
+        panel_name="panel Magento",
+        steps=[
+            ("allocate_server", "Miejsce na serwerze"),
+            ("create_database", "Baza produktów i zamówień"),
+            ("start_container", "Uruchomienie sklepu"),
+            ("install_magento", "Sklep, język i konto administratora"),
+            ("configure_shop", "Waluta, płatności i dostawa"),
+            ("create_categories", "Kategorie produktów"),
+            ("configure_navigation", "Menu, wyszukiwarka i filtry"),
+            ("health_check", "Końcowe sprawdzenie"),
+        ],
+        # Opening and closing the shop, the shopping rules and the theme are set in the Magento panel.
+        settings_sections=("general", "payments", "shipping", "taxes", "region"),
+        setup_time="około minuty",
     ),
 }
 

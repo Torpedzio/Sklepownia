@@ -18,7 +18,7 @@ export type Tokens = { access: string; refresh: string };
 
 export type ShopStatus = 'pending' | 'provisioning' | 'active' | 'failed' | 'suspended' | 'deleted';
 
-export type Platform = 'woocommerce' | 'prestashop';
+export type Platform = 'woocommerce' | 'prestashop' | 'magento';
 
 export type Shop = {
   id: number;
@@ -53,6 +53,8 @@ export type ProvisioningStep = {
 export type ShopDetail = Shop & {
   /** The admin panel as owners know it, e.g. "panel WordPressa". */
   panel_name: string;
+  /** How long setting up takes, e.g. "około dwóch minut". */
+  setup_time: string;
   config: {
     industry: string;
     template: ShopTemplate;

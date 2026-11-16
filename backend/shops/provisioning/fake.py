@@ -32,6 +32,13 @@ class FakeProvisioner(BaseProvisioner):
             defaults={"admin_login": shop.config.contact_email, "admin_password": secrets.token_urlsafe(24)},
         )
 
+    def step_install_magento(self, shop):
+        shop.admin_path = "admin_demo"
+        shop.save(update_fields=["admin_path", "updated_at"])
+        ShopCredentials.objects.update_or_create(
+            shop=shop, defaults={"admin_login": "admin", "admin_password": secrets.token_urlsafe(24)},
+        )
+
     def step_generate_api_keys(self, shop):
         ShopCredentials.objects.update_or_create(
             shop=shop,

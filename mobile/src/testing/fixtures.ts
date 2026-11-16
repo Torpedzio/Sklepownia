@@ -85,6 +85,7 @@ export function shopDetail(overrides: Partial<ShopDetail> = {}): ShopDetail {
     platform: 'woocommerce',
     platform_display: 'WooCommerce',
     panel_name: 'panel WordPressa',
+    setup_time: 'około dwóch minut',
     is_test: false,
     created_at: '2026-11-05T10:00:00Z',
     config: {

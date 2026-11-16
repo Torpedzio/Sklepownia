@@ -12,9 +12,9 @@ from django.conf import settings
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
-from ..platforms import Platform
-from .base import ProvisioningError
-from .container import FILES_PATH, CommandError, ContainerProvisioner, container_name, db_name
+from . import Platform
+from ..provisioning.base import ProvisioningError
+from ..provisioning.container import FILES_PATH, CommandError, ContainerProvisioner, container_name, db_name
 
 SAMPLE_PRODUCT_CATEGORIES = 3
 SAMPLE_PRODUCTS_PER_CATEGORY = 2

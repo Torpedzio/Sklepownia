@@ -4,7 +4,7 @@ class ProvisioningError(Exception):
 
 class BaseProvisioner:
     """
-    Sets up a shop on one platform step by step: the steps are listed in shops/platforms.py.
+    Sets up a shop on one platform step by step: the steps are listed in shops/platforms/__init__.py.
 
     Every step must be idempotent: a retry creates a new job and runs all steps
     again, so a step has to cope with work left behind by a failed attempt.

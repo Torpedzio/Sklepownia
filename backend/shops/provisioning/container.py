@@ -33,6 +33,10 @@ class ContainerProvisioner(BaseProvisioner):
     ENV_KEYS = ()
     # Shown when the container doesn't get ready in time.
     START_FAILED = "Sklep nie wystartował."
+    # Where the shop's volume is mounted: the platform's files, or only the shop's own data when the code is in the image.
+    VOLUME_PATH = FILES_PATH
+    # Seconds the container gets to become ready.
+    START_TIMEOUT = 60
 
     @cached_property
     def client(self):
@@ -53,6 +57,10 @@ class ContainerProvisioner(BaseProvisioner):
 
     def default_admin_login(self, shop):
         raise NotImplementedError
+
+    def memory(self, shop):
+        """The container's memory limit, e.g. "512m"."""
+        return container_memory(shop)
 
     # --- steps every platform has ---
 
@@ -98,7 +106,7 @@ class ContainerProvisioner(BaseProvisioner):
         container = self._find_container(shop)
         # The files live in the volume, so a container with outdated env or Traefik labels (a new domain)
         # can be replaced without losing anything.
-        memory = container_memory(shop)
+        memory = self.memory(shop)
         outdated = container is not None and (
             container_env(container, self.ENV_KEYS) != environment
             or not labels.items() <= container.labels.items()
@@ -117,12 +125,12 @@ class ContainerProvisioner(BaseProvisioner):
                 restart_policy={"Name": "unless-stopped"},
                 mem_limit=memory,
                 nano_cpus=1_000_000_000,
-                volumes={name: {"bind": FILES_PATH, "mode": "rw"}},
+                volumes={name: {"bind": self.VOLUME_PATH, "mode": "rw"}},
                 environment=environment,
                 labels=labels,
             )
         container.start()
-        for _ in range(60):
+        for _ in range(self.START_TIMEOUT):
             if container.exec_run(self.ready_command()).exit_code == 0:
                 return
             time.sleep(1)
@@ -192,7 +200,9 @@ class ContainerProvisioner(BaseProvisioner):
         output = result.output.decode(errors="replace").strip()
         if result.exit_code != 0:
             # Only the command name: arguments may contain passwords.
-            raise CommandError(f"{' '.join(command[:4])}… exited with {result.exit_code}: {output[-2000:]}")
+            # The start and the end: some tools put the cause first and their usage after it.
+            excerpt = output if len(output) <= 3000 else f"{output[:1500]}\n…\n{output[-1500:]}"
+            raise CommandError(f"{' '.join(command[:4])}… exited with {result.exit_code}: {excerpt}")
         return output
 
     def _sql(self, statement, database=None):

@@ -10,8 +10,8 @@ from django.conf import settings
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
-from ..platforms import Platform
-from .container import FILES_PATH, CommandError, ContainerProvisioner, container_env, container_name, db_name
+from . import Platform
+from ..provisioning.container import FILES_PATH, CommandError, ContainerProvisioner, container_env, container_name, db_name
 
 logger = logging.getLogger(__name__)
 
@@ -207,10 +207,10 @@ WORDPRESS_ENV_KEYS = (
 )
 
 
-class DockerProvisioner(ContainerProvisioner):
+class WooCommerceProvisioner(ContainerProvisioner):
     """
     WooCommerce: every shop is its own WordPress container (see ContainerProvisioner).
-    Mirrors infra/shops/provision-shop.sh step by step.
+    Mirrors infra/shops/woocommerce/provision-shop.sh step by step.
     """
 
     ENV_KEYS = WORDPRESS_ENV_KEYS

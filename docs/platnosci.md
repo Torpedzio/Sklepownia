@@ -126,8 +126,9 @@ pamięć sklepu, wyróżnienie w cenniku, korzyści (lista w JSON), kolejność 
 | Biznes (`business`) | 99 zł / mies. | 10 | 1 GB | priorytetowa, odpowiedź w ciągu 1 dnia roboczego |
 
 - `max_shops` sprawdza backend przy zakładaniu sklepu (sklepy testowe się nie liczą).
-- `shop_memory_mb` to limit pamięci kontenera sklepu, ustawiany przy jego tworzeniu (`DockerProvisioner`).
-  Sklepy testowe i sklepy bez planu dostają `SHOPS_CONTAINER_MEMORY`. Działający kontener zmieni limit
+- `shop_memory_mb` to limit pamięci kontenera sklepu, ustawiany przy jego tworzeniu (`ContainerProvisioner`).
+  Sklepy testowe i sklepy bez planu dostają `SHOPS_CONTAINER_MEMORY`, a sklepy Magento zawsze co najmniej
+  `SHOPS_MAGENTO_MEMORY` (1,5 GB), więcej niż daje dziś którykolwiek plan. Działający kontener zmieni limit
   dopiero po odtworzeniu, np. `update_shop_addresses`.
 - Priorytetowa pomoc to obietnica obsługi, nie funkcja aplikacji: trzeba ją zapewnić w pracy zespołu.
 - Korzyści w cenniku wpisuj tylko takie, które platforma naprawdę daje.

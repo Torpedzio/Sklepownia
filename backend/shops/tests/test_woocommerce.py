@@ -1,5 +1,5 @@
 """
-DockerProvisioner without Docker: commands it would run inside containers go to a fake shell,
+WooCommerceProvisioner without Docker: commands it would run inside containers go to a fake shell,
 which records them and answers with scripted output. The real setup is checked by hand on a live shop.
 """
 
@@ -14,11 +14,11 @@ from docker.errors import NotFound
 from accounts.models import User
 from shops.models import Server, Shop, ShopConfig, ShopCredentials, ShopTemplate
 from shops.provisioning.base import ProvisioningError
-from shops.provisioning.docker_provisioner import (
+from shops.platforms.woocommerce import (
     OUTPUT_MARKER,
     SAMPLE_PRODUCT_META,
     CommandError,
-    DockerProvisioner,
+    WooCommerceProvisioner,
     _currency_options,
     _env,
     _int,
@@ -86,7 +86,7 @@ class Shell:
 def shell(monkeypatch):
     fake = Shell()
     monkeypatch.setattr(
-        DockerProvisioner,
+        WooCommerceProvisioner,
         "_exec",
         lambda self, container, command, user="", environment=None: fake(container, command, user, environment),
     )
@@ -95,7 +95,7 @@ def shell(monkeypatch):
 
 @pytest.fixture
 def provisioner():
-    instance = DockerProvisioner()
+    instance = WooCommerceProvisioner()
     # cached_property: an instance attribute replaces the real Docker client.
     instance.__dict__["client"] = MagicMock()
     return instance
@@ -590,7 +590,7 @@ def test_update_address_skips_shops_without_a_container(provisioner, shop):
 
 
 def test_update_address_replaces_the_old_address(provisioner, shell, shop, monkeypatch):
-    monkeypatch.setattr(DockerProvisioner, "step_start_container", lambda self, shop: None)
+    monkeypatch.setattr(WooCommerceProvisioner, "step_start_container", lambda self, shop: None)
     shell.on("option", "get", "home", output="http://palarnia.stary.example")
 
     previous = provisioner.update_address(shop)
@@ -665,7 +665,7 @@ def test_suspending_a_shop_without_a_container_does_nothing(provisioner, shop):
 
 def test_resuming_starts_the_container_again(provisioner, shop, monkeypatch):
     started = []
-    monkeypatch.setattr(DockerProvisioner, "step_start_container", lambda self, shop: started.append(shop.pk))
+    monkeypatch.setattr(WooCommerceProvisioner, "step_start_container", lambda self, shop: started.append(shop.pk))
 
     provisioner.resume(shop)
     provisioner.refresh_resources(shop)

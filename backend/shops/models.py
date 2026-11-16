@@ -32,7 +32,8 @@ class ShopTemplate(models.Model):
     platform = models.CharField(max_length=20, choices=Platform.choices, default=Platform.WOOCOMMERCE)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
-    # The platform's name for the theme: a WordPress theme slug (`wp theme activate`) or a PrestaShop theme directory.
+    # The platform's name for the theme: a WordPress theme slug (`wp theme activate`), a PrestaShop theme
+    # directory or a Magento theme path (Magento/luma).
     theme = models.CharField(max_length=100)
     preview_image_url = models.URLField(blank=True)
     is_active = models.BooleanField(default=True)

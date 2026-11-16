@@ -217,9 +217,9 @@ def test_form_options(auth_client):
 
     assert [(t["slug"], t["platform"]) for t in data["templates"]] == [
         ("storefront", "woocommerce"), ("astra", "woocommerce"), ("kadence", "woocommerce"),
-        ("hummingbird", "prestashop"), ("classic", "prestashop"),
+        ("hummingbird", "prestashop"), ("classic", "prestashop"), ("luma", "magento"),
     ]
-    assert [p["value"] for p in data["platforms"]] == ["woocommerce", "prestashop"]
+    assert [p["value"] for p in data["platforms"]] == ["woocommerce", "prestashop", "magento"]
     assert all(p["description"] for p in data["platforms"])
     assert {"value": "PLN", "label": "Złoty (PLN)"} in data["currencies"]
     assert data["category_count"] == {"min": 1, "max": 20, "default": 5}

@@ -77,9 +77,10 @@ Ponowne wykonanie jednego kroku zakładania (kroki są idempotentne):
 ```bash
 docker compose exec worker python manage.py shell -c "
 from shops.models import Shop
-from shops.provisioning.docker_provisioner import DockerProvisioner
-DockerProvisioner().step_configure_navigation(Shop.objects.get(slug='nazwa-sklepu'))"
+from shops.provisioning import get_provisioner
+shop = Shop.objects.get(slug='nazwa-sklepu')
+get_provisioner(shop.platform).step_configure_navigation(shop)"
 ```
 
-Sklepy założone ręcznie skryptem `infra/shops/provision-shop.sh` nie są widoczne w aplikacji.
-Usuwa się je skryptem `destroy-shop.sh`.
+Sklepy założone ręcznie skryptem `infra/shops/woocommerce/provision-shop.sh` nie są widoczne w aplikacji.
+Usuwa się je skryptem `woocommerce/destroy-shop.sh`.
