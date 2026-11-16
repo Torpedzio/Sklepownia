@@ -38,6 +38,8 @@ const ICONS = {
   globe: ['globe', 'language'],
   power: ['power', 'power_settings_new'],
   history: ['clock.arrow.circlepath', 'history'],
+  camera: ['camera.fill', 'photo_camera'],
+  trash: ['trash', 'delete'],
 } as const;
 
 export type IconName = keyof typeof ICONS;

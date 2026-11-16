@@ -10,6 +10,8 @@ export type User = {
   /** Name of the active plan, or null. */
   plan: string | null;
   can_create_shops: boolean;
+  /** Profile picture (a 512×512 WebP), or null. */
+  avatar_url: string | null;
 };
 
 export type Tokens = { access: string; refresh: string };

@@ -30,7 +30,7 @@ export default function SignUpScreen() {
   }
 
   return (
-    <AuthLayout title="Załóż konto" subtitle="Potem opiszesz swój sklep, a my go postawimy.">
+    <AuthLayout title="Załóż konto" subtitle="Potem wybierzesz plan i opiszesz swój sklep, a my go postawimy.">
       <TextField
         label="E-mail"
         value={email}
@@ -52,7 +52,13 @@ export default function SignUpScreen() {
         textContentType="newPassword"
         onSubmitEditing={handleSubmit}
       />
-      <Button title="Załóż konto" size="large" onPress={handleSubmit} loading={submitting} disabled={!email || !password} />
+      <Button
+        title="Załóż konto"
+        size="large"
+        onPress={handleSubmit}
+        loading={submitting}
+        disabled={!email || !password}
+      />
       <Link href="/sign-in" asChild>
         <Button title="Masz już konto? Zaloguj się" variant="ghost" />
       </Link>

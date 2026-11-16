@@ -2,6 +2,7 @@ import { createContext, use, useEffect, useState, type PropsWithChildren } from 
 
 import { useNotify } from '@/context/notifications';
 import { api, ApiError, loadTokens, setOnSessionExpired, setTokens } from '@/lib/api';
+import { avatarForm, type AvatarFile } from '@/lib/avatar';
 import type { Tokens, User } from '@/lib/types';
 
 type AuthContextValue = {
@@ -15,6 +16,13 @@ type AuthContextValue = {
   updateProfile: (changes: Pick<User, 'first_name' | 'last_name'>) => Promise<void>;
   /** Loads the account again, e.g. after paying for a plan. */
   refreshUser: () => Promise<void>;
+  /** Uploads a new profile picture; the server crops it to a square. */
+  changeAvatar: (file: AvatarFile) => Promise<void>;
+  removeAvatar: () => Promise<void>;
+  /** New password; other devices are signed out, this one keeps working with fresh tokens. */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  /** Signs out on every device, this one included. */
+  signOutEverywhere: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -76,6 +84,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
     },
     async refreshUser() {
       setUser(await api<User>('/auth/me/'));
+    },
+    async changeAvatar(file) {
+      setUser(await api<User>('/auth/avatar/', { method: 'PUT', body: avatarForm(file) }));
+    },
+    async removeAvatar() {
+      setUser(await api<User>('/auth/avatar/', { method: 'DELETE' }));
+    },
+    async changePassword(currentPassword, newPassword) {
+      const tokens = await api<Tokens>('/auth/change-password/', {
+        method: 'POST',
+        body: { current_password: currentPassword, new_password: newPassword },
+      });
+      await setTokens(tokens);
+    },
+    async signOutEverywhere() {
+      await api('/auth/logout-everywhere/', { method: 'POST' });
+      await setTokens(null);
+      setUser(null);
     },
   };
 

@@ -9,6 +9,7 @@ export const router = {
   push: jest.fn(),
   replace: jest.fn(),
   back: jest.fn(),
+  dismissTo: jest.fn(),
   setParams: jest.fn(),
   canGoBack: jest.fn(() => true),
 };
@@ -30,7 +31,12 @@ type LinkProps = { href: unknown; asChild?: boolean; children?: ReactNode; [prop
 export function Link({ href, asChild, children, ...rest }: LinkProps) {
   const onPress = () => router.push(href);
   if (asChild && isValidElement(children)) {
-    return cloneElement(children as ReactElement<Record<string, unknown>>, { ...rest, onPress });
+    const child = children as ReactElement<Record<string, unknown>>;
+    // Like the real Link: an array of styles on the child is an error (StyleSheet.flatten it).
+    if (Array.isArray(child.props.style)) {
+      throw new Error('expo-router: Link asChild was given an array of styles; flatten them.');
+    }
+    return cloneElement(child, { ...rest, onPress });
   }
   return createElement(Text, { ...rest, onPress, accessibilityRole: 'link' }, children);
 }

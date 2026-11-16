@@ -7,7 +7,7 @@ from config.celery import app as celery_app
 
 
 @pytest.fixture(autouse=True)
-def _test_settings(settings):
+def _test_settings(settings, tmp_path):
     celery_app.conf.task_always_eager = True
     settings.SHOP_PROVISIONER = "shops.provisioning.fake.FakeProvisioner"
     settings.SHOPS_BASE_DOMAIN = "localhost"
@@ -21,6 +21,8 @@ def _test_settings(settings):
     settings.TPAY_CLIENT_ID = ""
     settings.TPAY_CLIENT_SECRET = ""
     settings.TPAY_SECURITY_CODE = ""
+    # Uploaded avatars go to a throwaway folder.
+    settings.MEDIA_ROOT = tmp_path / "media"
     # Throttle counters live in the cache; keep tests independent.
     cache.clear()
 

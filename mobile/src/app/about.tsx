@@ -11,7 +11,7 @@ import { SiteHeader } from '@/components/site-header';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Brand } from '@/constants/brand';
-import { Faq, Features, SetupSteps } from '@/constants/content';
+import { Faq, Features, PricingFaq, SetupSteps } from '@/constants/content';
 import { ReadableWidth, Spacing, WideBreakpoint } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 
@@ -45,7 +45,8 @@ export default function AboutScreen() {
         <ThemedText type="lead" themeColor="textSecondary">
           {Brand.name} zakłada sklepy internetowe dla osób, które chcą sprzedawać, a nie konfigurować serwery.
           Wypełniasz krótki formularz w aplikacji, a my stawiamy sklep na WordPressie z WooCommerce: gotowy do
-          przyjmowania zamówień, w wybranym języku i walucie, z kategoriami dopasowanymi do Twojej branży.
+          przyjmowania zamówień, w wybranym języku i walucie, z kategoriami dopasowanymi do Twojej branży. Płacisz
+          miesięczny abonament za plan, a serwer, aktualizacje i utrzymanie sklepu są po naszej stronie.
         </ThemedText>
       </View>
 
@@ -79,6 +80,14 @@ export default function AboutScreen() {
       <View style={styles.block}>
         <ThemedText type="subtitle">Pytania i odpowiedzi</ThemedText>
         <FaqList items={Faq} />
+      </View>
+
+      <View style={styles.block}>
+        <ThemedText type="subtitle">Plany i płatności</ThemedText>
+        <FaqList items={PricingFaq} />
+        <Link href="/pricing">
+          <ThemedText type="link">Zobacz cennik</ThemedText>
+        </Link>
       </View>
     </Page>
   );

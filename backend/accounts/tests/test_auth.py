@@ -162,3 +162,49 @@ def test_verifying_an_already_verified_email_is_harmless(auth_client):
 
     assert response.status_code == 200
     assert response.data["is_email_verified"] is True
+
+
+def test_changing_the_password_signs_out_other_devices(api_client, verified_user, django_capture_on_commit_callbacks,
+                                                        mailoutbox):
+    login = api_client.post("/api/auth/login/", {"email": verified_user.email, "password": "Sekretne-haslo-123"},
+                            format="json").data
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {login['access']}")
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = api_client.post("/api/auth/change-password/", {
+            "current_password": "Sekretne-haslo-123", "new_password": "Zupelnie-Nowe-Haslo-7",
+        }, format="json")
+
+    assert response.status_code == 200
+    assert set(response.data) == {"access", "refresh"}
+    # The other device's refresh token no longer works; the new one does.
+    assert api_client.post("/api/auth/refresh/", {"refresh": login["refresh"]}, format="json").status_code == 401
+    assert api_client.post("/api/auth/refresh/", {"refresh": response.data["refresh"]}, format="json").status_code == 200
+    verified_user.refresh_from_db()
+    assert verified_user.check_password("Zupelnie-Nowe-Haslo-7")
+    assert mailoutbox[-1].subject == "Hasło do konta zostało zmienione"
+
+
+@pytest.mark.parametrize(("current", "new", "field"), [
+    ("zle-haslo", "Zupelnie-Nowe-Haslo-7", "current_password"),
+    ("Sekretne-haslo-123", "Sekretne-haslo-123", "new_password"),
+    ("Sekretne-haslo-123", "12345678", "new_password"),
+])
+def test_password_change_is_checked(auth_client, verified_user, current, new, field):
+    response = auth_client.post("/api/auth/change-password/", {"current_password": current, "new_password": new},
+                                format="json")
+
+    assert response.status_code == 400
+    assert field in response.data
+    verified_user.refresh_from_db()
+    assert verified_user.check_password("Sekretne-haslo-123")
+
+
+def test_signing_out_everywhere(api_client, verified_user):
+    tokens = [api_client.post("/api/auth/login/", {"email": verified_user.email, "password": "Sekretne-haslo-123"},
+                              format="json").data for _ in range(2)]
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens[0]['access']}")
+
+    assert api_client.post("/api/auth/logout-everywhere/").status_code == 205
+    for pair in tokens:
+        assert api_client.post("/api/auth/refresh/", {"refresh": pair["refresh"]}, format="json").status_code == 401

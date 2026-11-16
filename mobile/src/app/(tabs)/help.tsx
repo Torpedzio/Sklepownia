@@ -8,7 +8,7 @@ import { ShopGuidesPanel } from '@/components/shop-guides';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Brand } from '@/constants/brand';
-import { Faq } from '@/constants/content';
+import { Faq, PricingFaq } from '@/constants/content';
 import { Radius, ReadableWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -16,7 +16,9 @@ export default function HelpScreen() {
   const theme = useTheme();
 
   return (
-    <SafeAreaView style={[styles.flex, { backgroundColor: theme.background }]} edges={Platform.OS === 'web' ? [] : ['top']}>
+    <SafeAreaView
+      style={[styles.flex, { backgroundColor: theme.background }]}
+      edges={Platform.OS === 'web' ? [] : ['top']}>
       <Page>
         <View style={styles.intro}>
           <ThemedText type="title">Pomoc</ThemedText>
@@ -31,6 +33,11 @@ export default function HelpScreen() {
         <View style={styles.block}>
           <ThemedText type="subtitle">Pytania i odpowiedzi</ThemedText>
           <FaqList items={Faq} />
+        </View>
+
+        <View style={styles.block}>
+          <ThemedText type="subtitle">Plany i płatności</ThemedText>
+          <FaqList items={PricingFaq} />
         </View>
 
         <View style={[styles.contact, { backgroundColor: theme.primaryMuted }]}>

@@ -29,10 +29,14 @@ services:
       args:
         DEV: "1"
     env_file: .env
+    environment:
+      MEDIA_ROOT: /media
     volumes:
       - ./backend:/app:Z
       # Read-only repository for the documentation pages under /docs/ (HANDBOOK_ROOT).
       - .:/project:ro
+      # Uploaded files (avatars), kept outside the code checkout.
+      - media:/media
     # SELinux (Fedora) would otherwise need the whole repository relabelled for the mount above.
     security_opt:
       - label=disable
@@ -80,3 +84,4 @@ services:
 
 volumes:
   pgdata:
+  media:

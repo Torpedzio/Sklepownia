@@ -257,6 +257,16 @@ describe('return from the payment page', () => {
     expect(router.push).toHaveBeenCalledWith('/shops/new');
   });
 
+  test('after paying the shop list is one tap away, not a step back to the gateway', async () => {
+    returnTo('5');
+    mockApi({ 'GET /billing/payments/5/': payment() });
+    await renderScreen(<PaymentReturnScreen />);
+
+    await fireEvent.press(await screen.findByRole('button', { name: 'Przejdź do sklepów' }));
+    expect(router.dismissTo).toHaveBeenCalledWith('/shops');
+    expect(router.back).not.toHaveBeenCalled();
+  });
+
   test('waits while the payment is pending', async () => {
     returnTo('5');
     mockApi({ 'GET /billing/payments/5/': payment({ status: 'pending' }) });
@@ -274,6 +284,8 @@ describe('return from the payment page', () => {
     expect(await screen.findByText(/Karta odrzucona\. Nie pobraliśmy pieniędzy\./)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Spróbuj ponownie' }));
     expect(router.push).toHaveBeenCalledWith('/billing/checkout');
+    await fireEvent.press(screen.getByRole('button', { name: 'Przejdź do sklepów' }));
+    expect(router.dismissTo).toHaveBeenCalledWith('/shops');
   });
 
   test('without a payment it goes to the billing page', async () => {

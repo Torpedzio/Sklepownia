@@ -26,13 +26,20 @@ export function SiteFooter() {
         <View style={styles.column}>
           <ThemedText type="smallBold">Kontakt</ThemedText>
           <ContactLine icon="mail" text={contact.email} onPress={() => Linking.openURL(`mailto:${contact.email}`)} />
-          <ContactLine icon="phone" text={contact.phone} onPress={() => Linking.openURL(`tel:${contact.phone.replace(/\s/g, '')}`)} />
+          <ContactLine
+            icon="phone"
+            text={contact.phone}
+            onPress={() => Linking.openURL(`tel:${contact.phone.replace(/\s/g, '')}`)}
+          />
           <ContactLine icon="clock" text={contact.hours} />
         </View>
         <View style={styles.column}>
           <ThemedText type="smallBold">Na skróty</ThemedText>
           <Link href="/about">
             <ThemedText type="small">Jak to działa</ThemedText>
+          </Link>
+          <Link href="/pricing">
+            <ThemedText type="small">Cennik</ThemedText>
           </Link>
           <Link href="/contact">
             <ThemedText type="small">Formularz kontaktowy</ThemedText>

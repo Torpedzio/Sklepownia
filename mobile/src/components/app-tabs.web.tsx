@@ -11,7 +11,7 @@ import { useTheme } from '@/hooks/use-theme';
 
 export default function AppTabs() {
   return (
-    <Tabs style={styles.flex}>
+    <Tabs style={styles.flex} options={{ backBehavior: 'fullHistory' }}>
       <TabList asChild>
         <NavBar>
           <TabTrigger name="shops" href="/shops" asChild>

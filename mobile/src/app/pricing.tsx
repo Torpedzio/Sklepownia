@@ -1,19 +1,18 @@
-import { Link } from 'expo-router';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 
+import { FaqList } from '@/components/faq-list';
 import { Page } from '@/components/page';
+import { PlanAction } from '@/components/plan-action';
 import { PlanCard } from '@/components/plan-card';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { ThemedText } from '@/components/themed-text';
-import { Button } from '@/components/ui/button';
+import { PricingFaq } from '@/constants/content';
 import { Spacing } from '@/constants/theme';
-import { useAuth } from '@/context/auth';
 import { useApiQuery } from '@/hooks/use-api-query';
 import type { Plan } from '@/lib/types';
 
 export default function PricingScreen() {
-  const { user } = useAuth();
   const { data: plans, error } = useApiQuery<Plan[]>('/billing/plans/');
   const web = Platform.OS === 'web';
 
@@ -22,8 +21,8 @@ export default function PricingScreen() {
       <View style={styles.intro}>
         <ThemedText type="title">Cennik</ThemedText>
         <ThemedText type="lead" themeColor="textSecondary">
-          Jedna opłata za sklepy, serwer, aktualizacje i pomoc. Ceny zawierają VAT. Płacisz kartą co miesiąc i anulujesz
-          w każdej chwili.
+          Jedna opłata za sklepy, serwer, aktualizacje i pomoc. Ceny zawierają VAT. Płacisz kartą co miesiąc, a plan
+          zmieniasz albo anulujesz w każdej chwili.
         </ThemedText>
       </View>
 
@@ -33,23 +32,7 @@ export default function PricingScreen() {
       <View style={styles.plans}>
         {plans?.map((plan) => (
           <PlanCard key={plan.code} plan={plan}>
-            {!user ? (
-              <Link href="/sign-up" asChild>
-                <Button title="Załóż konto" size="large" />
-              </Link>
-            ) : !user.is_email_verified ? (
-              <Link href="/verify-email" asChild>
-                <Button title="Potwierdź e-mail, żeby wybrać plan" size="large" />
-              </Link>
-            ) : user.plan ? (
-              <Link href="/billing" asChild>
-                <Button title="Plan i płatności" variant="secondary" size="large" />
-              </Link>
-            ) : (
-              <Link href={{ pathname: '/billing/checkout', params: { plan: plan.code } }} asChild>
-                <Button title="Wybierz plan" size="large" />
-              </Link>
-            )}
+            <PlanAction plan={plan} />
           </PlanCard>
         ))}
       </View>
@@ -58,6 +41,11 @@ export default function PricingScreen() {
         Faktury wystawiamy dla firm i osób prywatnych. Płatności obsługuje Tpay: dane karty wpisujesz na stronie
         operatora i nie trafiają do nas.
       </ThemedText>
+
+      <View style={styles.faq}>
+        <ThemedText type="subtitle">Pytania o plany i płatności</ThemedText>
+        <FaqList items={PricingFaq} />
+      </View>
     </Page>
   );
 }
@@ -77,5 +65,9 @@ const styles = StyleSheet.create({
   },
   note: {
     maxWidth: 640,
+  },
+  faq: {
+    gap: Spacing.three,
+    marginTop: Spacing.four,
   },
 });

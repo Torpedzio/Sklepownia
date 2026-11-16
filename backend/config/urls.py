@@ -7,6 +7,8 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from accounts.views import avatar_file
+
 
 @extend_schema(responses=inline_serializer("Health", {"status": serializers.CharField()}))
 @api_view(["GET"])
@@ -26,4 +28,5 @@ urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='docs'),
     path('docs/', include('handbook.urls')),
+    path('media/avatars/<str:name>', avatar_file, name='avatar-file'),
 ]

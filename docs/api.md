@@ -27,12 +27,16 @@ Ten plik jest przeglądem: co jest gdzie i jakie obowiązują zasady.
 | `POST login/` | nie | `{email, password}` → `{access, refresh}`. Wielkość liter w e-mailu nie ma znaczenia. |
 | `POST refresh/` | nie | `{refresh}` → `{access, refresh}` |
 | `POST logout/` | tak | `{refresh}` → `205`. Unieważnia token odświeżania. |
-| `GET me/` | tak | Dane konta: `id, email, first_name, last_name, is_email_verified, date_joined, shop_limit` |
+| `POST logout-everywhere/` | tak | `205`. Unieważnia wszystkie tokeny odświeżania konta: wylogowanie na każdym urządzeniu. |
+| `POST change-password/` | tak | `{current_password, new_password}` → `{access, refresh}`. Inne urządzenia są wylogowane, to dostaje nowe tokeny, a właściciel e-mail o zmianie. `400` przy złym obecnym albo słabym nowym haśle. |
+| `GET me/` | tak | Dane konta: `id, email, first_name, last_name, is_email_verified, date_joined, shop_limit, plan, can_create_shops, avatar_url` |
 | `PATCH me/` | tak | Zmiana `first_name`, `last_name` |
+| `PUT avatar/` | tak | `multipart/form-data` z polem `avatar` (JPG, PNG, WebP albo GIF do 10 MB) → dane konta. Serwer przycina zdjęcie do kwadratu 512×512, zapisuje jako WebP bez metadanych (EXIF, GPS) i usuwa poprzednie. `400` z `{avatar: [...]}`, gdy plik nie jest obsługiwanym zdjęciem. |
+| `DELETE avatar/` | tak | Usuwa zdjęcie profilowe → dane konta z `avatar_url: null`. |
 | `POST verify-email/` | tak | `{code}` (6 cyfr) → dane konta z `is_email_verified: true` |
 | `POST resend-verification/` | tak | `204`. Nowy kod najwcześniej po 60 s, inaczej `429`. |
 
-Limity zapytań: logowanie i rejestracja 10 na minutę, potwierdzanie e-maila 10 na godzinę.
+Limity zapytań: logowanie i rejestracja 10 na minutę, potwierdzanie e-maila 10 na godzinę, zmiana zdjęcia profilowego 30 na godzinę.
 
 ## Sklepy: `/api/shops/`
 
@@ -112,6 +116,7 @@ Plany, dane do faktury, płatność kartą, anulowanie i powiadomienia od operat
 |---|---|---|
 | `GET health/` | nie | `{"status": "OK"}`: czy API działa |
 | `GET schema/`, `GET docs/` | nie | Schemat OpenAPI i Swagger |
+| `GET /media/avatars/<nazwa>.webp` | nie | Plik zdjęcia profilowego (poza `/api/`). Każde wgranie dostaje nową losową nazwę, więc odpowiedź ma `Cache-Control: immutable`. Pliki leżą w `MEDIA_ROOT`, w Dockerze na wolumenie `media`. |
 
 ## Dodawanie endpointu
 

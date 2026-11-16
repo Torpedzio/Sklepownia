@@ -25,7 +25,7 @@ Zasada: w `app/` są tylko ekrany. Komponenty, hooki i narzędzia są poza tym k
 
 | Ścieżka | Plik | Kto widzi |
 |---|---|---|
-| `/` | `app/index.tsx` | Wszyscy. Strona główna z pokazem slajdów, krokami, motywami i FAQ. |
+| `/` | `app/index.tsx` | Wszyscy. Strona główna z ceną „od” (najtańszy plan), pokazem slajdów, czterema krokami (z wyborem planu), motywami, planami i FAQ. |
 | `/about` | `app/about.tsx` | Wszyscy. „Jak to działa”, cała lista funkcji i pytań. |
 | `/contact` | `app/contact.tsx` | Wszyscy. Dane kontaktowe i formularz. |
 | `/pricing` | `app/pricing.tsx` | Wszyscy. Cennik z planami i przejściem do wyboru planu. |
@@ -33,7 +33,7 @@ Zasada: w `app/` są tylko ekrany. Komponenty, hooki i narzędzia są poza tym k
 | `/verify-email` | `app/verify-email.tsx` | Zalogowani bez potwierdzonego e-maila |
 | `/shops` | `app/(tabs)/shops.tsx` | Zalogowani z potwierdzonym e-mailem. Lista sklepów. |
 | `/help` | `app/(tabs)/help.tsx` | jw. Porady dotyczące prowadzenia sklepu. |
-| `/account` | `app/(tabs)/account.tsx` | jw. Profil i wylogowanie. |
+| `/account` | `app/(tabs)/account.tsx` | jw. Wizytówka konta (zdjęcie profilowe zmieniane kliknięciem, potwierdzony e-mail, plan, staż), konto w skrócie (sklepy względem limitu, plan z następną płatnością, dane do faktury), dane profilu, bezpieczeństwo (zmiana hasła, wylogowanie wszędzie), skróty i wylogowanie. |
 | `/shops/new` | `app/shops/new.tsx` | jw. Formularz nowego sklepu (na telefonie jako okno modalne). Bez planu zamiast formularza „Najpierw wybierz plan”. |
 | `/billing` | `app/billing/index.tsx` | jw. Plan i płatności: stan planu, karta, anulowanie i wznowienie, dane do faktury, historia płatności. |
 | `/billing/change` | `app/billing/change.tsx` | jw. Zmiana planu: podgląd dopłaty albo kwoty na saldo, wybór sklepów, które zostają aktywne, potwierdzenie. |
@@ -56,6 +56,7 @@ na telefonie są natywnym paskiem zakładek (`app-tabs.tsx`), a w przeglądarce 
   - Gdy odświeżenie się nie uda, wylogowuje i pokazuje komunikat o wygaśnięciu sesji.
   - Błędy rzuca jako `ApiError` z polskim komunikatem (`message`) i błędami pól (`fieldErrors`).
 - **Adres API** to `http://<host Metro>:8000/api`, więc na telefonie w tej samej sieci działa bez konfiguracji. Inny adres można wymusić przez `EXPO_PUBLIC_API_URL`.
+- **Pliki** (zdjęcie profilowe) `api` wysyła jako `FormData`, bez nagłówka JSON. Zdjęcie wybiera `expo-image-picker` z kadrowaniem do kwadratu ([lib/avatar.ts](../mobile/src/lib/avatar.ts)), a wgrywa `useAuth().changeAvatar()`.
 - **[lib/token-storage.ts](../mobile/src/lib/token-storage.ts):** tokeny trzyma w `expo-secure-store` na telefonie i w `localStorage` w przeglądarce.
 - **[hooks/use-api-query.ts](../mobile/src/hooks/use-api-query.ts)** to `useApiQuery<T>(ścieżka, {refetchInterval, enabled})`.
   - Pobiera dane przy każdym wejściu na ekran i odświeża je w odstępach zależnych od danych. Tak lista i szczegóły śledzą zakładanie sklepu.
@@ -78,7 +79,7 @@ Motyw graficzny nawiązuje do sklepu przy ulicy. Są w nim trzy elementy:
 |---|---|
 | [constants/theme.ts](../mobile/src/constants/theme.ts) | `Colors` (jasny i ciemny motyw), `Fonts`, `Spacing`, `Radius`, `MaxContentWidth`, `WideBreakpoint` |
 | [constants/brand.ts](../mobile/src/constants/brand.ts) | Nazwa i dane kontaktowe. **To wartości tymczasowe do podmiany przed startem.** |
-| [constants/content.ts](../mobile/src/constants/content.ts) | Teksty strony głównej: kroki na paragonie, funkcje (slajdy), motywy, FAQ |
+| [constants/content.ts](../mobile/src/constants/content.ts) | Teksty strony głównej: kroki na paragonie, funkcje (slajdy), motywy, FAQ o sklepach (`Faq`) i o planach (`PricingFaq`, też w cenniku, „Jak to działa” i Pomocy). Liczby sklepów i ceny w odpowiedziach trzeba poprawić przy zmianie planów. |
 | [constants/shop-guides.ts](../mobile/src/constants/shop-guides.ts) | Porady w szczegółach sklepu i w zakładce Pomoc |
 
 Markiza (`Awning`) wygląda wszędzie tak samo: paski 40×16 px, liczba pasków zależy od szerokości, pierwszy zawsze zielony.
@@ -166,6 +167,9 @@ Pomocnicze pliki w `src/testing/`:
 Testy sprawdzają to, co widzi użytkownik: szukają elementów po roli i nazwie (`getByRole('button', {name: 'Zapisz'})`),
 nie po identyfikatorach. Dlatego pola formularzy mają `accessibilityLabel` z widocznej etykiety.
 React Native Testing Library 14 renderuje asynchronicznie: `await render(...)` i `await fireEvent.press(...)`.
+
+Atrapa `Link` zgłasza błąd, gdy element owinięty przez `asChild` dostaje tablicę stylów, tak jak prawdziwy
+Expo Router. Taki element dostaje jeden obiekt stylów (`StyleSheet.flatten`); funkcji stylu `asChild` też nie przekazuje.
 
 Nietestowane zostają głównie animacje strony głównej (przyklejane sekcje, pokaz slajdów), układy nawigacji
 i pliki tylko dla przeglądarki.

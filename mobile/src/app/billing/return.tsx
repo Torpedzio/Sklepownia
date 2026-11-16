@@ -1,7 +1,8 @@
-import { Link, Redirect, useLocalSearchParams } from 'expo-router';
+import { Link, Redirect, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { exitArrowOptions } from '@/components/back-link';
 import { Icon } from '@/components/icon';
 import { Page } from '@/components/page';
 import { ThemedText } from '@/components/themed-text';
@@ -14,6 +15,10 @@ import { formatDate } from '@/lib/format';
 import type { Payment } from '@/lib/types';
 
 const POLL_MS = 2000;
+
+// Going back would reopen the gateway or the order form, so leaving always leads to the shops.
+const toShops = () => router.dismissTo('/shops');
+const screenOptions = { title: 'Płatność', ...exitArrowOptions('/shops', 'Przejdź do sklepów') };
 
 /** Where the payment gateway sends the payer back. Waits for the payment's outcome. */
 export default function PaymentReturnScreen() {
@@ -38,13 +43,16 @@ function PaymentOutcome({ paymentId }: { paymentId: string }) {
   if (error) {
     return (
       <Page maxWidth={640}>
+        <Stack.Screen options={screenOptions} />
         <ThemedText themeColor="danger">{error.message}</ThemedText>
+        <Button title="Przejdź do sklepów" variant="secondary" onPress={toShops} />
       </Page>
     );
   }
   if (!payment || payment.status === 'pending') {
     return (
       <Page maxWidth={640}>
+        <Stack.Screen options={screenOptions} />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.primary} />
           <ThemedText type="subtitle">Sprawdzamy płatność…</ThemedText>
@@ -58,6 +66,7 @@ function PaymentOutcome({ paymentId }: { paymentId: string }) {
   if (paid) {
     return (
       <Page maxWidth={640}>
+        <Stack.Screen options={screenOptions} />
         <View style={[styles.card, { backgroundColor: theme.primaryMuted, borderColor: theme.primary }]}>
           <View style={[styles.icon, { backgroundColor: theme.primary }]}>
             <Icon name="check" size={28} tintColor={theme.onPrimary} />
@@ -72,6 +81,7 @@ function PaymentOutcome({ paymentId }: { paymentId: string }) {
           <Link href="/shops/new" asChild>
             <Button title="Załóż sklep" icon="plus" size="large" />
           </Link>
+          <Button title="Przejdź do sklepów" icon="store" variant="secondary" onPress={toShops} />
           <Link href="/billing" asChild>
             <Button title="Plan i płatności" variant="ghost" />
           </Link>
@@ -81,12 +91,14 @@ function PaymentOutcome({ paymentId }: { paymentId: string }) {
   }
   return (
     <Page maxWidth={640}>
+      <Stack.Screen options={screenOptions} />
       <View style={[styles.card, { backgroundColor: theme.dangerMuted, borderColor: theme.danger }]}>
         <ThemedText type="title">Płatność się nie udała</ThemedText>
         <ThemedText>{payment.error || 'Operator płatności jej nie zrealizował.'} Nie pobraliśmy pieniędzy.</ThemedText>
         <Link href="/billing/checkout" asChild>
           <Button title="Spróbuj ponownie" icon="refresh" size="large" />
         </Link>
+        <Button title="Przejdź do sklepów" variant="ghost" onPress={toShops} />
       </View>
     </Page>
   );

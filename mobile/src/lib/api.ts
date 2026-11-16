@@ -77,13 +77,15 @@ export async function api<T>(path: string, { method = 'GET', body, auth = true }
 
 async function send(path: string, method: string, body: unknown, auth: boolean) {
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // A FormData upload sets its own multipart Content-Type with the boundary.
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
   if (auth && tokens) headers.Authorization = `Bearer ${tokens.access}`;
   try {
     return await fetch(`${API_URL}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(0, null);

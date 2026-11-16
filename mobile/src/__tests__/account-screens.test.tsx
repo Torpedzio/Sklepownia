@@ -9,6 +9,8 @@ import VerifyEmailScreen from '@/app/verify-email';
 import { useAuth } from '@/context/auth';
 import { NotificationsProvider } from '@/context/notifications';
 import { ApiError } from '@/lib/api';
+import { pickAvatar } from '@/lib/avatar';
+import { confirm } from '@/lib/confirm';
 import type { Shop, User } from '@/lib/types';
 import { mockApi } from '@/testing/api';
 import { router } from '@/testing/router';
@@ -16,6 +18,8 @@ import { router } from '@/testing/router';
 jest.mock('expo-router', () => require('@/testing/router'));
 jest.mock('@/lib/api', () => ({ ...jest.requireActual('@/lib/api'), api: jest.fn() }));
 jest.mock('@/context/auth', () => ({ useAuth: jest.fn() }));
+jest.mock('@/lib/confirm', () => ({ confirm: jest.fn(async () => true) }));
+jest.mock('@/lib/avatar', () => ({ pickAvatar: jest.fn() }));
 
 const anna: User = {
   id: 1,
@@ -27,6 +31,7 @@ const anna: User = {
   shop_limit: 3,
   plan: 'Standard',
   can_create_shops: true,
+  avatar_url: null,
 };
 
 function signedIn(user: User | null, actions: Record<string, jest.Mock> = {}) {
@@ -250,6 +255,163 @@ describe('account', () => {
     expect(router.push).toHaveBeenCalledWith('/contact');
     expect(signOut).toHaveBeenCalled();
     expect(await screen.findByText('Wylogowano.')).toBeTruthy();
+  });
+});
+
+describe('profile picture', () => {
+  const photo = { uri: 'file:///photo.jpg', name: 'photo.jpg', type: 'image/jpeg' };
+
+  test('tapping the initial picks a photo and uploads it', async () => {
+    const changeAvatar = jest.fn(async () => {});
+    (pickAvatar as jest.Mock).mockResolvedValue(photo);
+    signedIn(anna, { changeAvatar, removeAvatar: jest.fn() });
+    await renderScreen(<AccountScreen />);
+
+    expect(screen.queryByRole('button', { name: 'Usuń zdjęcie profilowe' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Dodaj zdjęcie profilowe' }));
+
+    expect(changeAvatar).toHaveBeenCalledWith(photo);
+    expect(await screen.findByText('Zdjęcie profilowe zmienione.')).toBeTruthy();
+  });
+
+  test('closing the photo library changes nothing', async () => {
+    const changeAvatar = jest.fn();
+    (pickAvatar as jest.Mock).mockResolvedValue(null);
+    signedIn(anna, { changeAvatar, removeAvatar: jest.fn() });
+    await renderScreen(<AccountScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Dodaj zdjęcie profilowe' }));
+
+    expect(changeAvatar).not.toHaveBeenCalled();
+  });
+
+  test('says why the server refused the photo', async () => {
+    (pickAvatar as jest.Mock).mockResolvedValue(photo);
+    const refused = new ApiError(400, { avatar: ['Wybierz zdjęcie JPG, PNG, WebP albo GIF.'] });
+    signedIn(anna, { changeAvatar: jest.fn(async () => Promise.reject(refused)), removeAvatar: jest.fn() });
+    await renderScreen(<AccountScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Dodaj zdjęcie profilowe' }));
+
+    expect(await screen.findByText('Wybierz zdjęcie JPG, PNG, WebP albo GIF.')).toBeTruthy();
+  });
+
+  test('a set photo is shown and can be removed after asking', async () => {
+    const removeAvatar = jest.fn(async () => {});
+    signedIn({ ...anna, avatar_url: 'http://localhost:8000/media/avatars/a.webp' }, { removeAvatar });
+    await renderScreen(<AccountScreen />);
+
+    expect(screen.getByLabelText('Zdjęcie profilowe')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Zmień zdjęcie profilowe' })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Usuń zdjęcie profilowe' }));
+
+    expect(confirm).toHaveBeenCalledWith('Usunąć zdjęcie profilowe?', expect.any(String), 'Usuń');
+    expect(removeAvatar).toHaveBeenCalled();
+    expect(await screen.findByText('Zdjęcie profilowe usunięte.')).toBeTruthy();
+  });
+});
+
+describe('account overview and security', () => {
+  const billing = {
+    subscription: {
+      plan: {
+        code: 'standard',
+        name: 'Standard',
+        description: '',
+        price: '49.00',
+        currency: 'PLN',
+        vat_rate: '23.00',
+        interval_months: 1,
+        max_shops: 3,
+        shop_memory_mb: 512,
+        is_featured: true,
+        features: [],
+      },
+      status: 'active',
+      status_display: 'Aktywny',
+      current_period_start: '2026-11-05T10:00:00Z',
+      current_period_end: '2026-12-05T10:00:00Z',
+      cancel_at_period_end: false,
+      next_attempt_at: null,
+      card: null,
+      credit: '10.00',
+      allows_new_shops: true,
+    },
+    profile: {
+      kind: 'company',
+      full_name: 'Anna Nowak',
+      company_name: 'Palarnia sp. z o.o.',
+      tax_id: '5260001246',
+      street: 'Kwiatowa 1',
+      postal_code: '00-001',
+      city: 'Warszawa',
+      country: 'PL',
+    },
+    payments: [],
+  };
+  const shopOf = (id: number, status: Shop['status'], isTest = false): Shop => ({
+    id,
+    name: `Sklep ${id}`,
+    slug: `sklep-${id}`,
+    url: '',
+    status,
+    status_display: status,
+    is_test: isTest,
+    created_at: '2026-11-01T10:00:00Z',
+  });
+
+  async function open(actions: Record<string, jest.Mock> = {}) {
+    signedIn(anna, { updateProfile: jest.fn(), signOut: jest.fn(), ...actions });
+    mockApi({
+      'GET /shops/': [[shopOf(1, 'active'), shopOf(2, 'suspended'), shopOf(3, 'active', true)]],
+      'GET /billing/': billing,
+    });
+    await renderScreen(<AccountScreen />);
+  }
+
+  test('shows the account at a glance', async () => {
+    await open();
+
+    expect(screen.getByText('E-mail potwierdzony')).toBeTruthy();
+    expect(screen.getByText('Plan Standard')).toBeTruthy();
+    expect(await screen.findByText('1 z 3 w planie')).toBeTruthy();
+    expect(screen.getByText('1 zawieszony, 1 testowy poza planem')).toBeTruthy();
+    expect(await screen.findByText('Następna płatność 5 grudnia 2026: 39,00 zł')).toBeTruthy();
+    expect(screen.getByText('NIP 5260001246')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('link', { name: /^Plan: Standard/ }));
+    expect(router.push).toHaveBeenCalledWith('/billing');
+  });
+
+  test('changes the password and reports field errors', async () => {
+    const changePassword = jest
+      .fn()
+      .mockRejectedValueOnce(new ApiError(400, { current_password: ['Obecne hasło jest nieprawidłowe.'] }))
+      .mockResolvedValueOnce(undefined);
+    await open({ changePassword });
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Zmień hasło' }));
+    await fireEvent.changeText(screen.getByLabelText('Obecne hasło'), 'zle');
+    await fireEvent.changeText(screen.getByLabelText('Nowe hasło'), 'Zupelnie-Nowe-Haslo-7');
+    await fireEvent.press(screen.getByRole('button', { name: 'Zapisz nowe hasło' }));
+    expect(await screen.findByText('Obecne hasło jest nieprawidłowe.')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('Obecne hasło'), 'Sekretne-haslo-123');
+    await fireEvent.press(screen.getByRole('button', { name: 'Zapisz nowe hasło' }));
+
+    expect(changePassword).toHaveBeenLastCalledWith('Sekretne-haslo-123', 'Zupelnie-Nowe-Haslo-7');
+    expect(await screen.findByText(/Hasło zmienione\./)).toBeTruthy();
+    expect(screen.queryByLabelText('Obecne hasło')).toBeNull();
+  });
+
+  test('signs out everywhere after asking', async () => {
+    const signOutEverywhere = jest.fn(async () => {});
+    await open({ signOutEverywhere });
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Wyloguj wszędzie' }));
+
+    expect(signOutEverywhere).toHaveBeenCalled();
+    expect(await screen.findByText('Wylogowano ze wszystkich urządzeń.')).toBeTruthy();
   });
 });
 

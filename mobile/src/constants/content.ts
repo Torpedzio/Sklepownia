@@ -96,30 +96,36 @@ export const Themes = [
 /** Width divided by height of the theme preview screenshots. */
 export const ThemePreviewAspectRatio = 1200 / 750;
 
+/** About the shops themselves; plans and payments are in PricingFaq. */
 export const Faq = [
   {
     question: 'Ile trwa założenie sklepu?',
-    answer: 'Zwykle niecałe dwie minuty. Każdy krok widzisz na żywo w aplikacji, a gdy sklep jest gotowy, od razu możesz go otworzyć.',
+    answer:
+      'Zwykle niecałe dwie minuty. Każdy krok widzisz na żywo w aplikacji, a gdy sklep jest gotowy, od razu możesz go otworzyć.',
   },
   {
     question: 'Na czym działa mój sklep?',
-    answer: 'Na WordPressie z wtyczką WooCommerce, najpopularniejszym rozwiązaniu do sprzedaży w internecie. Dostajesz pełny panel administracyjny.',
+    answer:
+      'Na WordPressie z wtyczką WooCommerce, najpopularniejszym rozwiązaniu do sprzedaży w internecie. Dostajesz pełny panel administracyjny, a login i hasło do niego przychodzą e-mailem.',
+  },
+  {
+    question: 'Ile sklepów mogę założyć?',
+    answer:
+      'Tyle, ile pozwala Twój plan: Start to jeden sklep, Standard do trzech, Biznes do dziesięciu. Usunięty sklep zwalnia miejsce, a większy plan wybierzesz w każdej chwili.',
   },
   {
     question: 'Jak dodać własne produkty?',
-    answer: 'Otwórz panel sklepu z poziomu aplikacji i wybierz Produkty → Dodaj nowy. Kategorie są już przygotowane, a przykładowe produkty możesz usunąć.',
+    answer:
+      'Otwórz panel sklepu z poziomu aplikacji i wybierz Produkty → Dodaj nowy. Kategorie są już przygotowane, a przykładowe produkty usuniesz jednym przyciskiem w ustawieniach sklepu.',
   },
   {
-    question: 'Jak przyjmować płatności?',
-    answer: 'W panelu sklepu przejdź do WooCommerce → Ustawienia → Płatności i włącz przelew, płatność przy odbiorze albo bramkę płatniczą.',
+    question: 'Jak mój sklep przyjmie płatności od klientów?',
+    answer:
+      'Przelew i płatność przy odbiorze włączysz w aplikacji, w ustawieniach sklepu. Płatności online, np. BLIK i karty, dodasz w panelu sklepu wtyczką wybranego operatora.',
   },
   {
     question: 'Czy mogę zmienić wygląd sklepu później?',
     answer: 'Tak. W panelu sklepu, w sekcji Wygląd, zmienisz motyw, kolory, logo i menu.',
-  },
-  {
-    question: 'Ile sklepów mogę założyć?',
-    answer: 'Na jednym koncie możesz mieć do trzech sklepów jednocześnie. Usunięty sklep zwalnia miejsce.',
   },
   {
     question: 'Czy mogę podpiąć własną domenę?',
@@ -127,6 +133,41 @@ export const Faq = [
   },
   {
     question: 'Co, jeśli zakładanie się nie powiedzie?',
-    answer: 'Na ekranie sklepu pojawi się przycisk „Spróbuj ponownie”. Zakładanie ruszy od miejsca, w którym się zatrzymało.',
+    answer:
+      'Na ekranie sklepu pojawi się przycisk „Spróbuj ponownie”. Zakładanie ruszy od miejsca, w którym się zatrzymało.',
+  },
+];
+
+/** Plans and paying for them: on the pricing page, and after the shop questions elsewhere. */
+export const PricingFaq = [
+  {
+    question: 'Ile to kosztuje?',
+    answer:
+      'Od 29 do 99 zł miesięcznie, zależnie od planu. Ceny zawierają VAT. W cenie są serwer, aktualizacje i pomoc, bez dodatkowych opłat za zakładanie sklepów.',
+  },
+  {
+    question: 'Jak płacę za plan?',
+    answer:
+      'Kartą, przez Tpay. Dane karty wpisujesz na stronie operatora, więc do nas nie trafiają. Kolejne płatności pobierają się same co miesiąc z zapisanej karty, a potwierdzenie każdej dostajesz e-mailem.',
+  },
+  {
+    question: 'Czy mogę zmienić plan?',
+    answer:
+      'Tak, w każdej chwili w zakładce Plan i płatności, a data płatności się nie zmienia. Za wyższy plan dopłacasz tylko za dni do końca opłaconego okresu. Przy niższym niewykorzystana kwota pomniejszy kolejne płatności, a sklepy ponad limit planu zostaną zawieszone. Nic z nich nie zniknie i przywrócisz je, gdy zrobi się miejsce.',
+  },
+  {
+    question: 'Jak zrezygnować?',
+    answer:
+      'Anulujesz plan jednym przyciskiem w zakładce Plan i płatności. Działa do końca opłaconego okresu i nie pobierzemy już kolejnej płatności. Zmienisz zdanie przed końcem okresu? Wznowisz go tam samo.',
+  },
+  {
+    question: 'Co, jeśli płatność się nie uda?',
+    answer:
+      'Spróbujemy ponownie po jednym, trzech i pięciu dniach i za każdym razem napiszemy e-mail. Jeśli żadna próba się nie uda, plan wygaśnie, a nowe sklepy założysz dopiero po wybraniu planu.',
+  },
+  {
+    question: 'Czy dostanę fakturę?',
+    answer:
+      'Tak. Przy wyborze planu podajesz dane do faktury: osoby prywatnej albo firmy z NIP-em. Zmienisz je później w zakładce Plan i płatności.',
   },
 ];

@@ -7,30 +7,58 @@ import { FaqList } from '@/components/faq-list';
 import { FeatureSlides } from '@/components/feature-slides';
 import { NewShopButton, paidShopCount } from '@/components/new-shop-button';
 import { Page } from '@/components/page';
+import { PlanAction } from '@/components/plan-action';
+import { PlanCard } from '@/components/plan-card';
 import { Receipt } from '@/components/receipt';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { ThemeShowcase } from '@/components/theme-showcase';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { Faq, Features, SetupSteps } from '@/constants/content';
+import { Faq, Features, PricingFaq, SetupSteps } from '@/constants/content';
 import { useAuth } from '@/context/auth';
 import { Spacing, WideBreakpoint } from '@/constants/theme';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
-import type { Shop } from '@/lib/types';
+import { formatMoney } from '@/lib/format';
+import type { Plan, Shop } from '@/lib/types';
 
 const HOME_SLIDES = Features.filter((feature) => feature.homeSlide !== false);
 
 const STEPS = [
   { title: 'Załóż konto', text: 'Wystarczy e-mail i hasło. Potwierdzasz adres kodem z wiadomości.' },
+  {
+    title: 'Wybierz plan',
+    text: 'Płacisz kartą przez Tpay. Kolejne miesiące pobierają się same, a zrezygnować możesz zawsze.',
+  },
   { title: 'Opisz swój sklep', text: 'Nazwa, adres, branża, motyw i liczba kategorii. Zajmuje to minutę.' },
-  { title: 'Otwórz sklep', text: 'Po niecałych dwóch minutach sklep działa, a Ty dostajesz dostęp do panelu.' },
+  { title: 'Otwórz sklep', text: 'Po niecałych dwóch minutach sklep działa, a login do panelu przychodzi e-mailem.' },
 ];
+
+// Two questions about the shop and two about paying; the rest are on the about and pricing pages.
+const HOME_FAQ = [Faq[0], Faq[1], PricingFaq[1], PricingFaq[3]];
+
+/** "od 29 zł miesięcznie", from the cheapest monthly plan. */
+function fromPrice(plans: Plan[] | undefined) {
+  const monthly = plans?.filter((plan) => plan.interval_months === 1) ?? [];
+  if (!monthly.length) return null;
+  const cheapest = monthly.reduce((min, plan) => (Number(plan.price) < Number(min.price) ? plan : min));
+  const amount = Number(cheapest.price);
+  const money = Number.isInteger(amount)
+    ? new Intl.NumberFormat('pl-PL', {
+        style: 'currency',
+        currency: cheapest.currency,
+        maximumFractionDigits: 0,
+      }).format(amount)
+    : formatMoney(amount, cheapest.currency);
+  return `od ${money} miesięcznie`;
+}
 
 export default function HomeScreen() {
   const { user } = useAuth();
   const { data: shops } = useApiQuery<Shop[]>('/shops/', { enabled: !!user });
+  const { data: plans } = useApiQuery<Plan[]>('/billing/plans/');
+  const price = fromPrice(plans);
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const wide = width >= WideBreakpoint;
@@ -53,8 +81,13 @@ export default function HomeScreen() {
             </ThemedText>
             <ThemedText type="lead" themeColor="textSecondary" style={styles.lead}>
               Podajesz nazwę, branżę i wygląd. My stawiamy sklep WooCommerce z kategoriami, wyszukiwarką i panelem
-              administracyjnym. Ty dodajesz produkty.
+              administracyjnym, i dbamy o serwer. Ty dodajesz produkty.
             </ThemedText>
+            {price ? (
+              <ThemedText type="smallBold" themeColor="primary">
+                Plany {price}, z VAT. Płatność kartą, rezygnujesz kiedy chcesz.
+              </ThemedText>
+            ) : null}
             <View style={styles.actions}>
               {user ? (
                 <>
@@ -95,7 +128,7 @@ export default function HomeScreen() {
 
         <FeatureSlides features={HOME_SLIDES} title="Co dostajesz w każdym sklepie" />
 
-        <Section title="Trzy kroki do otwarcia">
+        <Section title="Cztery kroki do otwarcia">
           <View style={[styles.steps, wide && styles.stepsWide]}>
             {STEPS.map((step, index) => (
               <View key={step.title} style={styles.step}>
@@ -114,8 +147,25 @@ export default function HomeScreen() {
           text="Każdy motyw ma lewy pasek z wyszukiwarką, kategoriami i filtrem ceny."
         />
 
+        {plans?.length ? (
+          <Section
+            title="Plany i ceny"
+            text="W każdym planie ten sam sklep WooCommerce. Plany różnią się liczbą sklepów i zasobami serwera.">
+            <View style={styles.plans}>
+              {plans.map((plan) => (
+                <PlanCard key={plan.code} plan={plan}>
+                  <PlanAction plan={plan} />
+                </PlanCard>
+              ))}
+            </View>
+            <Link href="/pricing">
+              <ThemedText type="link">Cennik i pytania o płatności</ThemedText>
+            </Link>
+          </Section>
+        ) : null}
+
         <Section title="Częste pytania">
-          <FaqList items={Faq.slice(0, 4)} />
+          <FaqList items={HOME_FAQ} />
           <Link href="/about">
             <ThemedText type="link">Wszystkie pytania i odpowiedzi</ThemedText>
           </Link>
@@ -220,5 +270,10 @@ const styles = StyleSheet.create({
   step: {
     flex: 1,
     gap: Spacing.two,
+  },
+  plans: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.three,
   },
 });

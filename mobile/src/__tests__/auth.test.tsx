@@ -100,6 +100,53 @@ test('signing out forgets the session on the server and here', async () => {
   expect(screen.getByText('wylogowany')).toBeTruthy();
 });
 
+test('a new password keeps this device signed in with fresh tokens', async () => {
+  const { api } = await start(
+    { access: 'a', refresh: 'r' },
+    {
+      'GET /auth/me/': anna,
+      'POST /auth/change-password/': { access: 'a2', refresh: 'r2' },
+      'POST /auth/logout-everywhere/': null,
+    },
+  );
+  await screen.findByText('anna@example.com');
+
+  await act(() => auth().changePassword('stare', 'nowe-haslo-123'));
+
+  expect(api.sent('POST /auth/change-password/')).toEqual([
+    { current_password: 'stare', new_password: 'nowe-haslo-123' },
+  ]);
+  expect(setTokens).toHaveBeenCalledWith({ access: 'a2', refresh: 'r2' });
+  expect(screen.getByText('anna@example.com')).toBeTruthy();
+
+  await act(() => auth().signOutEverywhere());
+
+  expect(setTokens).toHaveBeenLastCalledWith(null);
+  expect(screen.getByText('wylogowany')).toBeTruthy();
+});
+
+test('a new profile picture goes up as a file and the user keeps it', async () => {
+  const withPhoto = { ...anna, avatar_url: 'http://localhost:8000/media/avatars/a.webp' };
+  const { api } = await start(
+    { access: 'a', refresh: 'r' },
+    { 'GET /auth/me/': anna, 'PUT /auth/avatar/': withPhoto, 'DELETE /auth/avatar/': anna },
+  );
+  await screen.findByText('anna@example.com');
+  // On the web the picker hands over a File; on phones React Native's FormData takes { uri, name, type }.
+  const photo = new File(['jpeg'], 'photo.jpg', { type: 'image/jpeg' });
+
+  await act(() => auth().changeAvatar(photo));
+
+  const [form] = api.sent('PUT /auth/avatar/') as FormData[];
+  expect(form).toBeInstanceOf(FormData);
+  expect(form.get('avatar')).toMatchObject({ name: 'photo.jpg', type: 'image/jpeg' });
+  expect(auth().user?.avatar_url).toBe(withPhoto.avatar_url);
+
+  await act(() => auth().removeAvatar());
+
+  expect(auth().user?.avatar_url).toBeUndefined();
+});
+
 test('an expired session signs out with a message', async () => {
   await start({ access: 'a', refresh: 'r' }, { 'GET /auth/me/': anna });
   await screen.findByText('anna@example.com');
