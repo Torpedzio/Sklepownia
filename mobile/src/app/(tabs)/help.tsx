@@ -24,7 +24,9 @@ export default function HelpScreen() {
           <ThemedText type="title">Pomoc</ThemedText>
           <ThemedText type="lead" themeColor="textSecondary">
             Najczęstsze sprawy załatwisz w panelu sklepu. Jak się do niego zalogować, znajdziesz na ekranie swojego
-            sklepu. Tam też każda porada ma przycisk, który otwiera od razu właściwe miejsce w panelu.
+            sklepu. Porady poniżej prowadzą po panelu WooCommerce, a na ekranie sklepu każda ma przycisk, który
+            otwiera od razu właściwe miejsce. W PrestaShop i Magento te same ustawienia znajdziesz w panelu pod
+            podobnymi nazwami.
           </ThemedText>
         </View>
 

@@ -20,7 +20,7 @@ export function SiteFooter() {
         <View style={styles.column}>
           <Logo />
           <ThemedText type="small" themeColor="textSecondary" style={styles.tagline}>
-            {Brand.tagline}. Zakładamy i utrzymujemy sklepy WooCommerce dla małych firm.
+            {Brand.tagline}. Zakładamy i utrzymujemy sklepy WooCommerce, PrestaShop i Magento dla małych i średnich firm.
           </ThemedText>
         </View>
         <View style={styles.column}>

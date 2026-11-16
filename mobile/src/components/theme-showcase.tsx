@@ -128,7 +128,7 @@ function WideBand({
     <View style={[styles.band, { width, height }]}>
       <Image
         source={item.preview}
-        accessibilityLabel={`Podgląd sklepu z motywem ${item.name}`}
+        accessibilityLabel={`Podgląd sklepu ${item.platform} z motywem ${item.name}`}
         style={[styles.preview, { width: previewWidth, height }, side === 'right' ? { right: 0 } : { left: 0 }]}
       />
       <LinearGradient
@@ -158,7 +158,7 @@ function NarrowBand({ theme: item, width, inset, onHeight }: BandProps & { onHei
       <View style={{ height }}>
         <Image
           source={item.preview}
-          accessibilityLabel={`Podgląd sklepu z motywem ${item.name}`}
+          accessibilityLabel={`Podgląd sklepu ${item.platform} z motywem ${item.name}`}
           style={[styles.preview, { width, height }]}
         />
         <LinearGradient
@@ -177,6 +177,9 @@ function NarrowBand({ theme: item, width, inset, onHeight }: BandProps & { onHei
 function Description({ theme: item }: { theme: Theme }) {
   return (
     <>
+      <ThemedText type="smallBold" themeColor="primary">
+        {item.platform}
+      </ThemedText>
       <ThemedText type="title">{item.name}</ThemedText>
       <ThemedText type="lead" themeColor="textSecondary">
         {item.text}

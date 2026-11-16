@@ -30,7 +30,7 @@ const HISTORY_LENGTH = 10;
 // These take about a minute and change how the shop looks, so they're confirmed first.
 const SLOW_SECTIONS: Partial<Record<Section, string>> = {
   region: 'Zmiana języka, waluty albo kraju potrwa około minuty.',
-  appearance: 'Zmiana motywu potrwa około minuty. Pasek boczny z filtrami ustawimy od nowa.',
+  appearance: 'Zmiana motywu potrwa do minuty i zmieni układ stron sklepu.',
 };
 
 type MenuKey = Section | 'security' | 'manual' | 'history';

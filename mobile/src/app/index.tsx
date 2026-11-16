@@ -31,12 +31,12 @@ const STEPS = [
     title: 'Wybierz plan',
     text: 'Płacisz kartą przez Tpay. Kolejne miesiące pobierają się same, a zrezygnować możesz zawsze.',
   },
-  { title: 'Opisz swój sklep', text: 'Nazwa, adres, branża, motyw i liczba kategorii. Zajmuje to minutę.' },
-  { title: 'Otwórz sklep', text: 'Po niecałych dwóch minutach sklep działa, a login do panelu przychodzi e-mailem.' },
+  { title: 'Opisz swój sklep', text: 'Nazwa, adres, branża, system sklepu i motyw. Zajmuje to minutę.' },
+  { title: 'Otwórz sklep', text: 'Najpóźniej po dwóch minutach sklep działa, a login do panelu przychodzi e-mailem.' },
 ];
 
-// Two questions about the shop and two about paying; the rest are on the about and pricing pages.
-const HOME_FAQ = [Faq[0], Faq[1], PricingFaq[1], PricingFaq[3]];
+// Three questions about the shop and one about paying; the rest are on the about and pricing pages.
+const HOME_FAQ = [Faq[0], Faq[1], Faq[2], PricingFaq[3]];
 
 /** "od 29 zł miesięcznie", from the cheapest monthly plan. */
 function fromPrice(plans: Plan[] | undefined) {
@@ -80,8 +80,8 @@ export default function HomeScreen() {
               Twój sklep internetowy, otwarty w dwie minuty.
             </ThemedText>
             <ThemedText type="lead" themeColor="textSecondary" style={styles.lead}>
-              Podajesz nazwę, branżę i wygląd. My stawiamy sklep WooCommerce z kategoriami, wyszukiwarką i panelem
-              administracyjnym, i dbamy o serwer. Ty dodajesz produkty.
+              Podajesz nazwę, branżę i wygląd, a my stawiamy sklep na WooCommerce, PrestaShop albo Magento: z
+              kategoriami, wyszukiwarką i panelem administracyjnym. Dbamy o serwer, Ty dodajesz produkty.
             </ThemedText>
             {price ? (
               <ThemedText type="smallBold" themeColor="primary">
@@ -144,13 +144,13 @@ export default function HomeScreen() {
 
         <ThemeShowcase
           title="Wybierz wygląd"
-          text="Każdy motyw ma lewy pasek z wyszukiwarką, kategoriami i filtrem ceny."
+          text="Motywy dla każdego z trzech systemów. W każdym są kategorie, wyszukiwarka i filtr ceny."
         />
 
         {plans?.length ? (
           <Section
             title="Plany i ceny"
-            text="W każdym planie ten sam sklep WooCommerce. Plany różnią się liczbą sklepów i zasobami serwera.">
+            text="W każdym planie te same systemy sklepu i motywy. Plany różnią się liczbą sklepów i zasobami serwera.">
             <View style={styles.plans}>
               {plans.map((plan) => (
                 <PlanCard key={plan.code} plan={plan}>

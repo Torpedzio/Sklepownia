@@ -8,7 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { ChipSelect } from '@/components/ui/chip-select';
 import { TextField } from '@/components/ui/text-field';
-import { Themes } from '@/constants/content';
+import { ThemeColors } from '@/constants/content';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 import { useNotify } from '@/context/notifications';
@@ -223,7 +223,7 @@ function NewShopForm({ options }: { options: FormOptions }) {
       <Section title="Wygląd">
         <View style={styles.templates} accessibilityRole="radiogroup">
           {templates.map((template) => {
-            const colors = Themes.find((t) => t.name === template.name)?.colors ?? [];
+            const colors = ThemeColors[template.name] ?? [];
             return (
               <Choice
                 key={template.slug}

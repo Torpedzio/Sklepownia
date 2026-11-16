@@ -47,7 +47,8 @@ test('the home page invites visitors to sign up', async () => {
   expect(screen.getByText('Wybierz plan')).toBeTruthy();
   expect(await screen.findByText('Plany i ceny')).toBeTruthy();
   expect(await screen.findByText(/^Plany od 29\s+zł miesięcznie, z VAT\./)).toBeTruthy();
-  expect(screen.getByText(PricingFaq[1].question)).toBeTruthy();
+  expect(screen.getByText('Który system wybrać?')).toBeTruthy();
+  expect(screen.getByText(PricingFaq[3].question)).toBeTruthy();
   await fireEvent.press(screen.getAllByRole('button', { name: 'Załóż konto' })[0]);
   await fireEvent.press(screen.getByRole('button', { name: 'Zobacz, jak to działa' }));
 

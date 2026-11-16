@@ -40,6 +40,11 @@ export const Features: Feature[] = [
     image: { source: require('@/assets/images/features/store.jpg'), aspectRatio: 1264 / 846 },
   },
   {
+    icon: 'cart',
+    title: 'Trzy systemy do wyboru',
+    text: 'WooCommerce z tysiącami wtyczek, PrestaShop popularny w Polsce albo Magento dla dużych katalogów. Wybierasz przy zakładaniu sklepu.',
+  },
+  {
     icon: 'category',
     title: 'Kategorie dopasowane do branży',
     text: 'Sprzedajesz ceramikę? Dostajesz kategorie dla ceramiki, nie „Kategoria 1”. Nazwy zmienisz w każdej chwili.',
@@ -48,19 +53,19 @@ export const Features: Feature[] = [
   {
     icon: 'filter',
     title: 'Wyszukiwarka i filtry',
-    text: 'Klienci szukają produktów, przeglądają kategorie z boku i zawężają wyniki suwakiem ceny.',
+    text: 'Klienci szukają produktów, przeglądają kategorie i zawężają wyniki filtrem ceny.',
     homeSlide: false,
   },
   {
     icon: 'palette',
-    title: 'Trzy sprawdzone motywy',
-    text: 'Storefront, Astra albo Kadence. Wybierasz przy zakładaniu, zmieniasz kiedy chcesz.',
+    title: 'Sprawdzone motywy',
+    text: 'Storefront, Astra i Kadence w WooCommerce, Hummingbird i Classic w PrestaShop, Luma w Magento. Wybierasz przy zakładaniu.',
     image: { source: require('@/assets/images/features/themes.jpg'), aspectRatio: 1600 / 900, focus: 'right' },
   },
   {
     icon: 'admin',
-    title: 'Pełny panel WooCommerce',
-    text: 'Produkty, zamówienia, płatności i wysyłka w panelu, którego używają miliony sklepów.',
+    title: 'Pełny panel sklepu',
+    text: 'Produkty, zamówienia, płatności i wysyłka w oryginalnym panelu WooCommerce, PrestaShop albo Magento.',
     image: { source: require('@/assets/images/features/admin.jpg'), aspectRatio: 1385 / 880, focus: 'right' },
   },
   {
@@ -75,23 +80,47 @@ export const Features: Feature[] = [
 export const Themes = [
   {
     name: 'Storefront',
+    platform: 'WooCommerce',
     text: 'Motyw od twórców WooCommerce. Klasyczny i czytelny: wyszukiwarka i koszyk w nagłówku, kategorie z boku.',
     colors: ['#333333', '#96588A', '#F8F8F8'],
     preview: require('@/assets/images/themes/storefront.jpg'),
   },
   {
     name: 'Astra',
+    platform: 'WooCommerce',
     text: 'Lekki i szybki. Pod każdym produktem wyraźny przycisk „Dodaj do koszyka”, wyszukiwarka nad listą kategorii.',
     colors: ['#0170B9', '#1E293B', '#F1F5F9'],
     preview: require('@/assets/images/themes/astra.jpg'),
   },
   {
     name: 'Kadence',
+    platform: 'WooCommerce',
     text: 'Nowoczesny, z kartami produktów i banerem nad listą. Klienci przełączają widok między siatką a listą.',
     colors: ['#2B6CB0', '#1A202C', '#EDF2F7'],
     preview: require('@/assets/images/themes/kadence.jpg'),
   },
+  {
+    name: 'Hummingbird',
+    platform: 'PrestaShop',
+    text: 'Nowy motyw PrestaShop 9. Kategorie w menu i obok listy, filtry ceny i dostępności, koszyk przy każdym produkcie.',
+    colors: ['#0D6EFD', '#212529', '#F5F6F8'],
+    preview: require('@/assets/images/themes/hummingbird.jpg'),
+  },
+  {
+    name: 'Luma',
+    platform: 'Magento',
+    text: 'Motyw Magento z kategoriami w menu, filtrami obok listy, porównywaniem produktów i listą życzeń.',
+    colors: ['#1979C3', '#333333', '#F0F0F0'],
+    preview: require('@/assets/images/themes/luma.jpg'),
+  },
 ];
+
+/** Colours of every theme a shop can start with, for the swatches in the new shop form. */
+export const ThemeColors: Record<string, string[]> = {
+  ...Object.fromEntries(Themes.map((theme) => [theme.name, theme.colors])),
+  // PrestaShop's older theme, without a preview on the home page.
+  Classic: ['#24B9D7', '#232323', '#F6F6F6'],
+};
 
 /** Width divided by height of the theme preview screenshots. */
 export const ThemePreviewAspectRatio = 1200 / 750;
@@ -101,12 +130,17 @@ export const Faq = [
   {
     question: 'Ile trwa założenie sklepu?',
     answer:
-      'Zwykle niecałe dwie minuty. Każdy krok widzisz na żywo w aplikacji, a gdy sklep jest gotowy, od razu możesz go otworzyć.',
+      'Od minuty do dwóch, zależnie od systemu sklepu. Każdy krok widzisz na żywo w aplikacji, a gdy sklep jest gotowy, od razu możesz go otworzyć.',
   },
   {
     question: 'Na czym działa mój sklep?',
     answer:
-      'Na WordPressie z wtyczką WooCommerce, najpopularniejszym rozwiązaniu do sprzedaży w internecie. Dostajesz pełny panel administracyjny, a login i hasło do niego przychodzą e-mailem.',
+      'Na systemie, który wybierzesz przy zakładaniu: WooCommerce, PrestaShop albo Magento. Każdy sklep ma pełny panel administracyjny, a login i hasło do niego przychodzą e-mailem. Systemu nie zmienisz po założeniu sklepu.',
+  },
+  {
+    question: 'Który system wybrać?',
+    answer:
+      'Jeśli nie wiesz, wybierz WooCommerce. To WordPress z wtyczką sklepu: ma najwięcej wtyczek, motywów i poradników, a w aplikacji zmienisz w nim najwięcej ustawień. PrestaShop to samodzielny system sklepowy, popularny w Polsce, z rozbudowanym katalogiem i obsługą zamówień. Magento jest dla większych sklepów: z dużym katalogiem, kilkoma magazynami albo wersjami językowymi.',
   },
   {
     question: 'Ile sklepów mogę założyć?',
@@ -116,16 +150,17 @@ export const Faq = [
   {
     question: 'Jak dodać własne produkty?',
     answer:
-      'Otwórz panel sklepu z poziomu aplikacji i wybierz Produkty → Dodaj nowy. Kategorie są już przygotowane, a przykładowe produkty usuniesz jednym przyciskiem w ustawieniach sklepu.',
+      'Otwórz panel sklepu z poziomu aplikacji. W WooCommerce wybierz Produkty → Dodaj nowy, w PrestaShop i Magento Katalog → Produkty. Kategorie są już przygotowane, a przykładowe produkty usuniesz jednym przyciskiem w ustawieniach sklepu.',
   },
   {
     question: 'Jak mój sklep przyjmie płatności od klientów?',
     answer:
-      'Przelew i płatność przy odbiorze włączysz w aplikacji, w ustawieniach sklepu. Płatności online, np. BLIK i karty, dodasz w panelu sklepu wtyczką wybranego operatora.',
+      'Przelew i płatność przy odbiorze włączysz w aplikacji, w ustawieniach sklepu. Płatności online, np. BLIK i karty, dodasz w panelu sklepu wtyczką albo modułem wybranego operatora.',
   },
   {
     question: 'Czy mogę zmienić wygląd sklepu później?',
-    answer: 'Tak. W panelu sklepu, w sekcji Wygląd, zmienisz motyw, kolory, logo i menu.',
+    answer:
+      'Tak. Motyw sklepu WooCommerce i PrestaShop zmienisz w aplikacji, w ustawieniach sklepu. Kolory, logo i menu ustawisz w panelu sklepu, tak samo jak wygląd sklepu Magento.',
   },
   {
     question: 'Czy mogę podpiąć własną domenę?',

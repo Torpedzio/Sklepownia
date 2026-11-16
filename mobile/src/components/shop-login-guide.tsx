@@ -11,7 +11,7 @@ import { api, ApiError } from '@/lib/api';
 import type { ShopAdminAccess } from '@/lib/types';
 
 /**
- * Step-by-step sign-in to the shop's WordPress panel. The login and password are never shown here:
+ * Step-by-step sign-in to the shop's admin panel (WordPress, PrestaShop or Magento). The login and password are never shown here:
  * they go to the owner's e-mail, and this offers to send them again.
  */
 export function ShopLoginSteps({ shopId }: { shopId: number }) {

@@ -44,8 +44,9 @@ export default function AboutScreen() {
         <ThemedText type="title">Jak to działa</ThemedText>
         <ThemedText type="lead" themeColor="textSecondary">
           {Brand.name} zakłada sklepy internetowe dla osób, które chcą sprzedawać, a nie konfigurować serwery.
-          Wypełniasz krótki formularz w aplikacji, a my stawiamy sklep na WordPressie z WooCommerce: gotowy do
-          przyjmowania zamówień, w wybranym języku i walucie, z kategoriami dopasowanymi do Twojej branży. Płacisz
+          Wypełniasz krótki formularz w aplikacji, a my stawiamy sklep na wybranym systemie: WooCommerce, PrestaShop
+          albo Magento. Sklep jest gotowy do przyjmowania zamówień, w wybranym języku i walucie, z kategoriami
+          dopasowanymi do Twojej branży. Płacisz
           miesięczny abonament za plan, a serwer, aktualizacje i utrzymanie sklepu są po naszej stronie.
         </ThemedText>
       </View>
@@ -54,9 +55,8 @@ export default function AboutScreen() {
         <View style={[styles.splitText, wide && styles.flex]}>
           <ThemedText type="subtitle">Co dzieje się po kliknięciu „Załóż sklep”</ThemedText>
           <ThemedText themeColor="textSecondary">
-            Twój sklep dostaje własną bazę danych i własne środowisko. Instalujemy WordPressa i WooCommerce, ustawiamy
-            język, walutę i strefę czasową, włączamy wybrany motyw, tworzymy kategorie i pasek z wyszukiwarką oraz
-            filtrami.
+            Twój sklep dostaje własną bazę danych i własne środowisko. Instalujemy wybrany system, ustawiamy język,
+            walutę i strefę czasową, włączamy motyw, tworzymy kategorie, menu, wyszukiwarkę i filtry.
           </ThemedText>
           <ThemedText themeColor="textSecondary">
             Na końcu sprawdzamy, czy sklep odpowiada. Każdy krok widzisz w aplikacji na bieżąco. Jeśli któryś się nie
@@ -65,7 +65,7 @@ export default function AboutScreen() {
         </View>
         <View style={[styles.receipt, wide && styles.receiptWide]}>
           <Receipt
-            title="Zakładanie sklepu"
+            title="Zakładanie sklepu WooCommerce"
             rows={SetupSteps.map((step) => ({ label: step.label }))}
             total={{ label: 'Razem', value: 'ok. 2 min' }}
           />

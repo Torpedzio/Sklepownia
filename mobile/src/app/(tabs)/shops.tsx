@@ -80,7 +80,7 @@ export default function DashboardScreen() {
               Twój pierwszy sklep czeka na otwarcie
             </ThemedText>
             <ThemedText themeColor="textSecondary" style={[styles.center, styles.emptyText]}>
-              Podaj nazwę, branżę i wygląd. Po niecałych dwóch minutach sklep będzie gotowy do dodawania produktów.
+              Wybierz system, podaj nazwę, branżę i wygląd. Najpóźniej po dwóch minutach sklep będzie gotowy do dodawania produktów.
             </ThemedText>
             <Link href={user?.plan ? '/shops/new' : '/billing/checkout'} asChild>
               <Button
