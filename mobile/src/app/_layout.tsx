@@ -78,6 +78,7 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
       <Stack.Protected guard={!user} redirectTo={afterSignIn}>
         <Stack.Screen name="sign-in" options={{ headerShown: false, title: 'Logowanie' }} />
         <Stack.Screen name="sign-up" options={{ headerShown: false, title: 'Załóż konto' }} />
+        <Stack.Screen name="reset-password" options={{ headerShown: false, title: 'Nowe hasło' }} />
       </Stack.Protected>
       <Stack.Protected guard={!!user && !user.is_email_verified} redirectTo={user ? '/shops' : '/'}>
         <Stack.Screen name="verify-email" options={{ headerShown: false, title: 'Potwierdź e-mail' }} />

@@ -186,6 +186,8 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'auth': '10/min',
         'email_verification': '10/hour',
+        # Asking for a code to set a forgotten password, per IP address.
+        'password_reset': '5/hour',
         'contact': '5/hour',
         # Resending a shop's admin login by e-mail.
         'admin_access_email': '5/hour',

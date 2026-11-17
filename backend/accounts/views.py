@@ -1,5 +1,6 @@
 import re
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.storage import default_storage
 from django.db import transaction
 from django.http import FileResponse, Http404
@@ -12,7 +13,6 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -25,6 +25,8 @@ from .serializers import (
     ChangePasswordSerializer,
     EmailTokenObtainPairSerializer,
     LogoutSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetSerializer,
     RegisterResponseSerializer,
     RegisterSerializer,
     UserSerializer,
@@ -45,12 +47,8 @@ class RegisterView(APIView):
         with transaction.atomic():
             user = serializer.save()
             services.send_verification_code(user)
-        refresh = RefreshToken.for_user(user)
         return Response(
-            {
-                "user": UserSerializer(user, context={"request": request}).data,
-                "tokens": {"access": str(refresh.access_token), "refresh": str(refresh)},
-            },
+            {"user": UserSerializer(user, context={"request": request}).data, "tokens": _tokens(user)},
             status=status.HTTP_201_CREATED,
         )
 
@@ -73,10 +71,9 @@ class LogoutView(APIView):
         return Response(status=status.HTTP_205_RESET_CONTENT)
 
 
-def _sign_out_everywhere(user):
-    """Every refresh token of the user stops working, so other devices are signed out at their next refresh."""
-    for token in OutstandingToken.objects.filter(user=user):
-        BlacklistedToken.objects.get_or_create(token=token)
+def _tokens(user):
+    refresh = RefreshToken.for_user(user)
+    return {"access": str(refresh.access_token), "refresh": str(refresh)}
 
 
 class ChangePasswordView(APIView):
@@ -91,18 +88,53 @@ class ChangePasswordView(APIView):
         user = request.user
         user.set_password(serializer.validated_data["new_password"])
         user.save(update_fields=["password"])
-        _sign_out_everywhere(user)
+        services.sign_out_everywhere(user)
         transaction.on_commit(lambda: send_password_changed_email.delay(user.pk))
-        refresh = RefreshToken.for_user(user)
-        return Response({"access": str(refresh.access_token), "refresh": str(refresh)})
+        return Response(_tokens(user))
 
 
 class LogoutEverywhereView(APIView):
     @extend_schema(request=None, responses={205: None})
     def post(self, request):
         """Signs the user out on every device, this one included."""
-        _sign_out_everywhere(request.user)
+        services.sign_out_everywhere(request.user)
         return Response(status=status.HTTP_205_RESET_CONTENT)
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
+
+    @extend_schema(request=PasswordResetRequestSerializer, responses={204: None})
+    def post(self, request):
+        """E-mails a code for a new password. The answer is the same whether the address has an account or not."""
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        services.request_password_reset(serializer.validated_data["email"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PasswordResetView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    @extend_schema(request=PasswordResetSerializer, responses={200: AuthTokensSerializer})
+    def post(self, request):
+        """Sets the new password with the code from the e-mail and signs in; other devices are signed out."""
+        serializer = PasswordResetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            user = services.reset_password(data["email"], data["code"], data["new_password"])
+        except services.VerificationError as exc:
+            return Response({"code": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        except DjangoValidationError as exc:
+            return Response({"new_password": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(_tokens(user))
 
 
 class MeView(generics.RetrieveUpdateAPIView):

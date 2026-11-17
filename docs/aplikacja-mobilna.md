@@ -30,6 +30,7 @@ Zasada: w `app/` są tylko ekrany. Komponenty, hooki i narzędzia są poza tym k
 | `/contact` | `app/contact.tsx` | Wszyscy. Dane kontaktowe i formularz. |
 | `/pricing` | `app/pricing.tsx` | Wszyscy. Cennik z planami i przejściem do wyboru planu. |
 | `/sign-in`, `/sign-up` | `app/sign-in.tsx`, `app/sign-up.tsx` | Tylko niezalogowani |
+| `/reset-password` | `app/reset-password.tsx` | Tylko niezalogowani. „Nie pamiętasz hasła?”: adres (podpowiedziany z logowania), potem kod z e-maila i nowe hasło; po zmianie od razu zalogowany |
 | `/verify-email` | `app/verify-email.tsx` | Zalogowani bez potwierdzonego e-maila |
 | `/shops` | `app/(tabs)/shops.tsx` | Zalogowani z potwierdzonym e-mailem. Lista sklepów. |
 | `/help` | `app/(tabs)/help.tsx` | jw. Porady dotyczące prowadzenia sklepu. |
@@ -103,7 +104,7 @@ Ruch na ekranie (Reanimated) respektuje systemowe ograniczenie ruchu.
 | `KeyboardArea` | Na Androidzie zmniejsza obszar, gdy otwiera się klawiatura (aplikacja zajmuje cały ekran, więc system tego nie robi) |
 | `SiteHeader`, `SiteFooter` | Nagłówek i stopka stron publicznych w przeglądarce |
 | `AuthLayout` | Układ logowania, rejestracji i potwierdzania e-maila |
-| `ui/Button`, `ui/TextField`, `ui/ChipSelect`, `ui/SwitchRow`, `ui/Tooltip` | Podstawowe kontrolki. `SwitchRow` to ustawienie włącz/wyłącz z opisem; przełącza je cały wiersz. `Button` delikatnie powiększa się po najechaniu i zapada przy wciśnięciu. |
+| `ui/Button`, `ui/TextField`, `ui/CodeField`, `ui/ChipSelect`, `ui/SwitchRow`, `ui/Tooltip` | Podstawowe kontrolki. `CodeField` to pole na 6-cyfrowy kod z e-maila (potwierdzenie adresu, nowe hasło). `SwitchRow` to ustawienie włącz/wyłącz z opisem; przełącza je cały wiersz. `Button` delikatnie powiększa się po najechaniu i zapada przy wciśnięciu. |
 | `Receipt` | Paragon z wierszami, sumą i pieczątką; po najechaniu unosi się i obraca |
 | `ShopSign`, `StatusBadge`, `TestBadge` | Karta sklepu na liście (sklepy zawieszone przez plan wyszarzone i na końcu listy), znacznik statusu i znacznik „Testowy” sklepów sprzed płatnych planów |
 | `NewShopButton` | Przycisk nowego sklepu; bez planu prowadzi do wyboru planu, po osiągnięciu limitu planu wyszarzony z dymkiem. Sklepy testowe nie liczą się do limitu (`paidShopCount`). |

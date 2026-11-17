@@ -23,6 +23,10 @@ type AuthContextValue = {
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   /** Signs out on every device, this one included. */
   signOutEverywhere: () => Promise<void>;
+  /** E-mails a code for a new password; the server answers the same for addresses without an account. */
+  requestPasswordReset: (email: string) => Promise<void>;
+  /** Sets the new password with the code from the e-mail and signs in. */
+  resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -102,6 +106,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
       await api('/auth/logout-everywhere/', { method: 'POST' });
       await setTokens(null);
       setUser(null);
+    },
+    async requestPasswordReset(email) {
+      await api('/auth/password-reset/', { method: 'POST', body: { email }, auth: false });
+    },
+    async resetPassword(email, code, newPassword) {
+      const tokens = await api<Tokens>('/auth/password-reset/confirm/', {
+        method: 'POST',
+        body: { email, code, new_password: newPassword },
+        auth: false,
+      });
+      await setTokens(tokens);
+      setUser(await api<User>('/auth/me/'));
     },
   };
 

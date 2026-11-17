@@ -40,9 +40,23 @@ class User(AbstractUser):
         return self.email
 
 
-class EmailVerificationCode(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="email_verification_code")
+class OneTimeCode(models.Model):
+    """A 6-digit code sent by e-mail. Only its hash is kept; wrong guesses are counted."""
+
     code_hash = models.CharField(max_length=64)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     attempts = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        abstract = True
+
+
+class EmailVerificationCode(OneTimeCode):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="email_verification_code")
+
+
+class PasswordResetCode(OneTimeCode):
+    """Lets someone who forgot the password set a new one."""
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="password_reset_code")

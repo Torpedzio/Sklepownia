@@ -125,6 +125,25 @@ test('a new password keeps this device signed in with fresh tokens', async () =>
   expect(screen.getByText('wylogowany')).toBeTruthy();
 });
 
+test('a forgotten password: a code by e-mail, then signed in with the new password', async () => {
+  const { api } = await start(null, {
+    'POST /auth/password-reset/': null,
+    'POST /auth/password-reset/confirm/': { access: 'a', refresh: 'r' },
+    'GET /auth/me/': anna,
+  });
+  await screen.findByText('wylogowany');
+
+  await act(() => auth().requestPasswordReset('anna@example.com'));
+  await act(() => auth().resetPassword('anna@example.com', '123456', 'Nowe-haslo-123'));
+
+  expect(api.sent('POST /auth/password-reset/')).toEqual([{ email: 'anna@example.com' }]);
+  expect(api.sent('POST /auth/password-reset/confirm/')).toEqual([
+    { email: 'anna@example.com', code: '123456', new_password: 'Nowe-haslo-123' },
+  ]);
+  expect(setTokens).toHaveBeenCalledWith({ access: 'a', refresh: 'r' });
+  expect(screen.getByText('anna@example.com')).toBeTruthy();
+});
+
 test('a new profile picture goes up as a file and the user keeps it', async () => {
   const withPhoto = { ...anna, avatar_url: 'http://localhost:8000/media/avatars/a.webp' };
   const { api } = await start(

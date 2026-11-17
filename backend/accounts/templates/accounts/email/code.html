@@ -1,0 +1,10 @@
+{% extends "email/layout.html" %}
+{# A one-time code, large enough to read and type into the app. #}
+{% block content %}
+<tr>
+  <td style="padding:20px 32px 8px;">
+    <p style="margin:0; display:inline-block; padding:14px 22px; background:#F4F6FA; border:1px solid #D9DEE8; border-radius:12px; font-size:32px; font-weight:700; letter-spacing:8px; font-family:'SFMono-Regular', Menlo, Consolas, monospace;">{{ code }}</p>
+    <p style="margin:12px 0 16px; font-size:13px; line-height:1.5; color:#5B6478;">{{ note }}</p>
+  </td>
+</tr>
+{% endblock %}

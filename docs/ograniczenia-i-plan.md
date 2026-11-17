@@ -12,7 +12,6 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
 - **Logowanie do panelu sklepu jednym kliknięciem.** Teraz aplikacja pokazuje login i hasło administratora.
   Pomysł: wtyczka „must-use” w WordPressie i jednorazowe linki logowania wydawane przez backend.
 - **Atrybuty produktów według branży** (rozmiar, kolor, materiał), żeby filtry w sklepie miały z czego filtrować.
-- **Zawieszanie sklepów:** stan `suspended` jest w modelu, ale nic go nie ustawia ani nie zdejmuje.
 - **Ustawienia sklepu w aplikacji** obejmują podstawy, zakupy, płatności przelewem i przy odbiorze, wysyłkę w kraju sklepu,
   jedną stawkę VAT, region i motyw. Brakuje płatności internetowych (Przelewy24, PayU, karty), logo i kolorów motywu,
   wysyłki za granicę oraz regulaminu i polityki prywatności.
@@ -45,8 +44,7 @@ W PrestaShop aplikacja nie zmienia jeszcze zakupów (konto klienta, opinie, stan
 Właściciel ustawia je w panelu. Zmiana języka po założeniu sklepu wymagałaby pobrania pakietu językowego i tłumaczenia kategorii.
 
 W Magento aplikacja nie zamyka sklepu (Magento nie ma trybu „wkrótce otwarcie” bez dodatkowego modułu), nie zmienia
-zakupów ani motywu. Magento dostaje co najmniej 1,5 GB pamięci także przy planach, które dają mniej, i wybór platformy
-nie zależy jeszcze od planu.
+zakupów ani motywu. Magento dostaje co najmniej 1,5 GB pamięci także przy planach, które dają mniej.
 
 ## Droga do produkcji
 

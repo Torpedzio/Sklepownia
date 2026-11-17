@@ -47,6 +47,9 @@ export default function SignInScreen() {
         onSubmitEditing={handleSubmit}
       />
       <Button title="Zaloguj się" size="large" onPress={handleSubmit} loading={submitting} disabled={!email || !password} />
+      <Link href={{ pathname: '/reset-password', params: email.trim() ? { email: email.trim() } : {} }} asChild>
+        <Button title="Nie pamiętasz hasła?" variant="ghost" />
+      </Link>
       <Link href="/sign-up" asChild>
         <Button title="Nie masz konta? Załóż je" variant="ghost" />
       </Link>

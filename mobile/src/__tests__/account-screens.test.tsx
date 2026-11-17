@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import AccountScreen from '@/app/(tabs)/account';
 import ShopsScreen from '@/app/(tabs)/shops';
 import ContactScreen from '@/app/contact';
+import ResetPasswordScreen from '@/app/reset-password';
 import SignInScreen from '@/app/sign-in';
 import SignUpScreen from '@/app/sign-up';
 import VerifyEmailScreen from '@/app/verify-email';
@@ -13,7 +14,7 @@ import { pickAvatar } from '@/lib/avatar';
 import { confirm } from '@/lib/confirm';
 import type { Shop, User } from '@/lib/types';
 import { mockApi } from '@/testing/api';
-import { router } from '@/testing/router';
+import { router, useLocalSearchParams } from '@/testing/router';
 
 jest.mock('expo-router', () => require('@/testing/router'));
 jest.mock('@/lib/api', () => ({ ...jest.requireActual('@/lib/api'), api: jest.fn() }));
@@ -42,6 +43,49 @@ const renderScreen = (screenElement: React.ReactElement) => render(screenElement
 
 beforeEach(() => jest.clearAllMocks());
 
+describe('forgotten password', () => {
+  test('a code goes to the address, then the new password signs in', async () => {
+    useLocalSearchParams.mockReturnValue({ email: 'Anna@Example.com' });
+    const requestPasswordReset = jest.fn(async () => {});
+    const resetPassword = jest.fn(async () => {});
+    signedIn(null, { requestPasswordReset, resetPassword });
+    await renderScreen(<ResetPasswordScreen />);
+
+    expect(screen.getByLabelText('E-mail')).toHaveProp('value', 'Anna@Example.com');
+    await fireEvent.press(screen.getByRole('button', { name: 'Wyślij kod' }));
+
+    expect(requestPasswordReset).toHaveBeenCalledWith('anna@example.com');
+    expect(await screen.findByText(/Jeśli anna@example.com to adres konta/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ustaw hasło i zaloguj się' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Wyślij kod ponownie za 60 s' })).toBeDisabled();
+
+    await fireEvent.changeText(screen.getByLabelText('Kod z wiadomości'), '12 34-56');
+    await fireEvent.changeText(screen.getByLabelText('Nowe hasło'), 'Nowe-haslo-123');
+    await fireEvent.press(screen.getByRole('button', { name: 'Ustaw hasło i zaloguj się' }));
+
+    expect(resetPassword).toHaveBeenCalledWith('anna@example.com', '123456', 'Nowe-haslo-123');
+    expect(await screen.findByText('Nowe hasło ustawione. Na innych urządzeniach zaloguj się ponownie.')).toBeTruthy();
+  });
+
+  test('a wrong code says so under the field, and the address can be changed', async () => {
+    useLocalSearchParams.mockReturnValue({});
+    const resetPassword = jest.fn(async () => Promise.reject(new ApiError(400, { code: ['Nieprawidłowy kod.'] })));
+    signedIn(null, { requestPasswordReset: jest.fn(async () => {}), resetPassword });
+    await renderScreen(<ResetPasswordScreen />);
+
+    await fireEvent.changeText(screen.getByLabelText('E-mail'), 'anna@example.com');
+    await fireEvent.press(screen.getByRole('button', { name: 'Wyślij kod' }));
+    await fireEvent.changeText(await screen.findByLabelText('Kod z wiadomości'), '000000');
+    await fireEvent.changeText(screen.getByLabelText('Nowe hasło'), 'Nowe-haslo-123');
+    await fireEvent.press(screen.getByRole('button', { name: 'Ustaw hasło i zaloguj się' }));
+
+    expect(await screen.findAllByText('Nieprawidłowy kod.')).toHaveLength(2);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Zmień adres e-mail' }));
+    expect(screen.getByLabelText('E-mail')).toHaveProp('value', 'anna@example.com');
+  });
+});
+
 describe('sign in', () => {
   test('signs in with the trimmed e-mail', async () => {
     const signIn = jest.fn(async () => {});
@@ -66,6 +110,16 @@ describe('sign in', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Zaloguj się' }));
 
     expect(await screen.findByText('Nieprawidłowy e-mail lub hasło.')).toBeTruthy();
+  });
+
+  test('a forgotten password starts with the e-mail typed so far', async () => {
+    signedIn(null, { signIn: jest.fn() });
+    await renderScreen(<SignInScreen />);
+
+    await fireEvent.changeText(screen.getByLabelText('E-mail'), ' anna@example.com ');
+    await fireEvent.press(screen.getByRole('button', { name: 'Nie pamiętasz hasła?' }));
+
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/reset-password', params: { email: 'anna@example.com' } });
   });
 
   test('links to signing up', async () => {

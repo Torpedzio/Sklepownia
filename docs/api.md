@@ -29,6 +29,8 @@ Ten plik jest przeglądem: co jest gdzie i jakie obowiązują zasady.
 | `POST logout/` | tak | `{refresh}` → `205`. Unieważnia token odświeżania. |
 | `POST logout-everywhere/` | tak | `205`. Unieważnia wszystkie tokeny odświeżania konta: wylogowanie na każdym urządzeniu. |
 | `POST change-password/` | tak | `{current_password, new_password}` → `{access, refresh}`. Inne urządzenia są wylogowane, to dostaje nowe tokeny, a właściciel e-mail o zmianie. `400` przy złym obecnym albo słabym nowym haśle. |
+| `POST password-reset/` | nie | `{email}` → `204`. Wysyła kod do ustawienia nowego hasła (ważny 15 min). Odpowiedź jest taka sama dla adresu bez konta i dla ponownej prośby w ciągu 60 s (wtedy nic nie wychodzi), żeby nie dało się sprawdzać, kto ma konto. |
+| `POST password-reset/confirm/` | nie | `{email, code, new_password}` → `{access, refresh}`: nowe hasło i od razu zalogowanie. Inne urządzenia są wylogowane, właściciel dostaje e-mail o zmianie, a niepotwierdzony adres staje się potwierdzony (kod dowodzi dostępu do skrzynki). `400` z `{code: [...]}` przy złym, wygasłym albo zablokowanym kodzie (5 prób; dla nieznanego adresu ten sam komunikat) albo `{new_password: [...]}` przy słabym haśle, po którym kod dalej działa. |
 | `GET me/` | tak | Dane konta: `id, email, first_name, last_name, is_email_verified, date_joined, shop_limit, plan, can_create_shops, avatar_url` |
 | `PATCH me/` | tak | Zmiana `first_name`, `last_name` |
 | `PUT avatar/` | tak | `multipart/form-data` z polem `avatar` (JPG, PNG, WebP albo GIF do 10 MB) → dane konta. Serwer przycina zdjęcie do kwadratu 512×512, zapisuje jako WebP bez metadanych (EXIF, GPS) i usuwa poprzednie. `400` z `{avatar: [...]}`, gdy plik nie jest obsługiwanym zdjęciem. |
@@ -36,7 +38,7 @@ Ten plik jest przeglądem: co jest gdzie i jakie obowiązują zasady.
 | `POST verify-email/` | tak | `{code}` (6 cyfr) → dane konta z `is_email_verified: true` |
 | `POST resend-verification/` | tak | `204`. Nowy kod najwcześniej po 60 s, inaczej `429`. |
 
-Limity zapytań: logowanie i rejestracja 10 na minutę, potwierdzanie e-maila 10 na godzinę, zmiana zdjęcia profilowego 30 na godzinę.
+Limity zapytań: logowanie, rejestracja i ustawianie nowego hasła 10 na minutę, potwierdzanie e-maila 10 na godzinę, prośby o kod do nowego hasła 5 na godzinę z jednego adresu IP, zmiana zdjęcia profilowego 30 na godzinę.
 
 ## Sklepy: `/api/shops/`
 

@@ -77,6 +77,16 @@ class VerifyEmailSerializer(serializers.Serializer):
     code = serializers.RegexField(r"^\d{6}$", error_messages={"invalid": "Kod musi składać się z 6 cyfr."})
 
 
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.RegexField(r"^\d{6}$", error_messages={"invalid": "Kod musi składać się z 6 cyfr."})
+    new_password = serializers.CharField(write_only=True, style={"input_type": "password"})
+
+
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(write_only=True, style={"input_type": "password"})
     new_password = serializers.CharField(write_only=True, style={"input_type": "password"})

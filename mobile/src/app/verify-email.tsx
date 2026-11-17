@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
 
 import { AuthLayout } from '@/components/auth-layout';
 import { Button } from '@/components/ui/button';
-import { TextField } from '@/components/ui/text-field';
-import { Fonts } from '@/constants/theme';
+import { CODE_LENGTH, CodeField } from '@/components/ui/code-field';
 import { useAuth } from '@/context/auth';
 import { useNotify } from '@/context/notifications';
 
@@ -51,18 +49,14 @@ export default function VerifyEmailScreen() {
 
   return (
     <AuthLayout title="Potwierdź e-mail" subtitle={`Wpisz 6-cyfrowy kod, który wysłaliśmy na ${user?.email}.`}>
-      <TextField
-        label="Kod z wiadomości"
-        value={code}
-        onChangeText={(text) => setCode(text.replace(/\D/g, '').slice(0, 6))}
-        keyboardType="number-pad"
-        autoComplete="one-time-code"
-        textContentType="oneTimeCode"
-        maxLength={6}
-        style={styles.codeInput}
-        onSubmitEditing={handleVerify}
+      <CodeField value={code} onChangeText={setCode} onSubmitEditing={handleVerify} />
+      <Button
+        title="Potwierdź"
+        size="large"
+        onPress={handleVerify}
+        loading={submitting}
+        disabled={code.length !== CODE_LENGTH}
       />
-      <Button title="Potwierdź" size="large" onPress={handleVerify} loading={submitting} disabled={code.length !== 6} />
       <Button
         title={cooldown > 0 ? `Wyślij kod ponownie za ${cooldown} s` : 'Wyślij kod ponownie'}
         variant="secondary"
@@ -73,13 +67,3 @@ export default function VerifyEmailScreen() {
     </AuthLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  codeInput: {
-    fontFamily: Fonts.displayMedium,
-    fontSize: 30,
-    letterSpacing: 10,
-    textAlign: 'center',
-    minHeight: 64,
-  },
-});
