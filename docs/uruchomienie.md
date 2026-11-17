@@ -41,6 +41,7 @@ Migracje dodają też szablony sklepów (Storefront, Astra, Kadence) i serwer `l
 | http://localhost:8000/api/docs/ | Dokumentacja API (Swagger) |
 | http://localhost:8000/admin/ | Panel admina Django |
 | http://localhost:8030 | Mailpit: cała poczta wysłana przez platformę (nic nie wychodzi na zewnątrz) |
+| http://localhost:8031 | Mailpit serwera sklepów: poczta wysłana przez sklepy |
 
 Backend działa na `runserver` z katalogiem `backend/` podmontowanym do kontenera, więc zmiany w kodzie
 przeładowują się same. Worker Celery **nie** przeładowuje się sam: po zmianie kodu provisioningu
@@ -81,6 +82,11 @@ na zewnątrz. Wiadomości czyta się w przeglądarce: http://localhost:8030. Tra
 dane logowania do sklepów i wiadomości z formularza kontaktowego.
 
 Port 8030 wybrany jest dlatego, że 8025 często zajmuje inny Mailpit (np. z DDEV). Inny port: `MAIL_UI_PORT` w `.env`.
+
+Pocztę sklepów (potwierdzenia zamówień, e-maile kont klientów, powiadomienia właściciela o zamówieniach) przyjmuje
+osobny Mailpit na serwerze sklepów: usługa `mail` w [infra/shops/docker-compose.yml](../infra/shops/docker-compose.yml),
+podgląd http://localhost:8031 (port: `SHOPS_MAIL_UI_PORT` w `infra/shops/.env`). Jest osobny, bo sklepy mogą
+odczytać wszystko, z czym rozmawiają, a w poczcie platformy są kody i hasła innych sklepów.
 Bez ustawień poczty w `.env` backend wypisuje wiadomości w logach (`EMAIL_BACKEND` domyślnie to backend konsolowy):
 `docker compose logs worker`.
 
@@ -102,6 +108,8 @@ Bez ustawień poczty w `.env` backend wypisuje wiadomości w logach (`EMAIL_BACK
 | `DEFAULT_FROM_EMAIL` | `Sklepownia <no-reply@localhost>` | Nadawca wiadomości |
 | `PLATFORM_NAME` | `Sklepownia` | Nazwa platformy w treści wiadomości |
 | `MAIL_UI_PORT` | `8030` | Port podglądu Mailpit (tylko docker-compose) |
+| `SHOPS_SMTP_HOST`, `SHOPS_SMTP_PORT` | `shops-mail`, `1025` | Przekaźnik poczty sklepów w sieci serwera sklepów, bez logowania. Puste `SHOPS_SMTP_HOST`: sklepy bez poczty |
+| `SHOPS_MAIL_DOMAIN` | `SHOPS_BASE_DOMAIN` | Sklepy wysyłają jako `<slug>@<domena>`; domena musi mieć kropkę (dla `localhost`: `sklepy.localhost`) |
 | `PAYMENT_GATEWAY` | `FakeGateway` | Symulowana bramka albo `billing.gateways.tpay.TpayGateway` ([platnosci.md](platnosci.md#operatorzy-płatności)) |
 | `TPAY_CLIENT_ID`, `TPAY_CLIENT_SECRET` | puste | Klucze Open API z panelu Tpay |
 | `TPAY_SECURITY_CODE` | puste | Kod bezpieczeństwa powiadomień (panel Tpay → Powiadomienia → Bezpieczeństwo) |

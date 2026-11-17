@@ -4,8 +4,6 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
 
 ## Czego brakuje w funkcjach
 
-- **E-maile sklepów:** platforma wysyła pocztę przez SMTP (lokalnie do Mailpit), ale sklepy WordPress nie mają
-  skonfigurowanej poczty, więc nie wyślą klientom potwierdzeń zamówień.
 - **Hasło w e-mailu:** dane logowania do panelu przychodzą zwykłym e-mailem. Bezpieczniejsze będzie logowanie
   jednym kliknięciem z aplikacji, bez przesyłania hasła.
 - **Płatności i wysyłka** nie są konfigurowane. Właściciel robi to sam w panelu WooCommerce.
@@ -58,7 +56,11 @@ Projekt działa dziś tylko lokalnie. Przed uruchomieniem dla użytkowników trz
 3. **Serwer aplikacji.** Gunicorn lub uvicorn zamiast `runserver`, `DJANGO_DEBUG=0`, konkretne `DJANGO_ALLOWED_HOSTS`
    i `CORS_ALLOWED_ORIGINS`, pliki statyczne, kopie zapasowe PostgreSQL.
 4. **Kopie zapasowe sklepów:** wolumenów sklepów i baz MariaDB (indeksy OpenSearch da się odbudować `indexer:reindex`).
-5. **Poczta:** dostawca SMTP dla platformy (zmienne `EMAIL_*`, zamiast Mailpit) i dla sklepów, z rekordami SPF i DKIM domeny.
+5. **Poczta:** dostawca SMTP dla platformy (zmienne `EMAIL_*`, zamiast Mailpit) z rekordami SPF i DKIM domeny.
+   Dla sklepów przekaźnik na serwerze sklepów w miejsce `shops-mail` (np. Postfix), który trzyma dane logowania
+   do dostawcy i przepuszcza tylko nadawców z `SHOPS_MAIL_DOMAIN`, z limitem wiadomości na sklep. Domena
+   `SHOPS_MAIL_DOMAIN` potrzebuje SPF i DKIM, a poczta przychodząca na `<slug>@` najlepiej przekierowana
+   do właściciela, gdyby ktoś odpisał na adres nadawcy zamiast na Reply-To.
 6. **Monitorowanie:** zdrowie sklepów, błędy zakładania, zajętość serwera (`Server.max_shops`).
 7. **Wiele serwerów sklepów.** Model `Server` i krok przydziału serwera są gotowe, ale provisionery
    rozmawiają tylko z lokalnym Dockerem.

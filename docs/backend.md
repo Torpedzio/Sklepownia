@@ -9,10 +9,11 @@ backend/
 ├── config/            ustawienia, główne URL-e, konfiguracja Celery
 ├── accounts/          użytkownicy, rejestracja, logowanie JWT, potwierdzanie e-maila
 ├── shops/             sklepy: modele, API, zakładanie (provisioning), polecenia
-│   ├── platforms/     __init__.py (platformy: kroki, sekcje ustawień, panel), woocommerce.py, prestashop.py, magento.py
+│   ├── platforms/     __init__.py (platformy: kroki, sekcje ustawień, panel), woocommerce.py, prestashop.py, magento.py,
+│   │                  files/ (pliki instalowane w sklepach: wtyczka poczty WordPressa, moduł poczty PrestaShop)
 │   ├── provisioning/  base.py (kroki), container.py (wspólne dla kontenerów), runner.py (zakładanie),
 │   │                  operations.py (operacje na działającym sklepie), fake.py (symulacja)
-│   ├── management/    polecenie update_shop_addresses
+│   ├── management/    polecenia update_shop_addresses i configure_shop_mail
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
 │   ├── choices.py     branże, języki, waluty, kraje, zakres liczby kategorii
@@ -81,7 +82,9 @@ Przebieg i stany: [architektura.md](architektura.md#przebieg-zakładania-sklepu)
 - `runner.run_job` wykonuje kroki i zapisuje ich stan. Użytkownik widzi treść tylko wyjątków `ProvisioningError`.
   Pozostałe wyjątki zastępuje ogólny komunikat, a pełny opis ląduje w logach workera.
 - `ContainerProvisioner` ([container.py](../backend/shops/provisioning/container.py)) tworzy kontener `shop-<id>`,
-  wolumen `shop-<id>` i bazę `shop_<id>`. Na nim stoją:
+  wolumen `shop-<id>` i bazę `shop_<id>`. Kontener jest odtwarzany, gdy zmieni się jego środowisko, adres, limit
+  pamięci albo obraz. Pocztę sklepu (`configure_mail`, [poczta sklepów](../infra/shops/README.md#poczta-sklepów))
+  każda platforma ustawia w kroku konfiguracji sklepu. Na nim stoją:
   - `WooCommerceProvisioner` ([woocommerce.py](../backend/shops/platforms/woocommerce.py)): WordPressa konfiguruje
     przez WP-CLI w kontenerze. Ustawienia zależne od motywu (pasek boczny) są w `THEME_NAVIGATION`.
     Szczegóły i pułapki: [infra/shops/woocommerce/README.md](../infra/shops/woocommerce/README.md).
@@ -194,11 +197,16 @@ Worker potwierdza zadanie dopiero po jego wykonaniu (`CELERY_TASK_ACKS_LATE`) i 
 docker compose exec backend python manage.py migrate
 docker compose exec backend python manage.py createsuperuser
 docker compose exec worker  python manage.py update_shop_addresses   # po zmianie SHOPS_BASE_DOMAIN
+docker compose exec worker  python manage.py configure_shop_mail     # poczta w sklepach sprzed niej albo po zmianie SHOPS_SMTP_*
 docker compose exec backend python manage.py spectacular --file schema.yml   # schemat OpenAPI do pliku
 ```
 
 `update_shop_addresses` uruchamia się w workerze, bo tylko on ma dostęp do Dockera.
 Dla każdego działającego sklepu odtwarza kontener z nową regułą Traefika i podmienia adres w bazie WordPressa.
+
+`configure_shop_mail [slug…]` ustawia w działających sklepach wysyłkę przez przekaźnik poczty
+([poczta sklepów](../infra/shops/README.md#poczta-sklepów)). Nowe sklepy dostają ją przy zakładaniu.
+Kontener ze starszego obrazu jest najpierw odtwarzany. Zawieszone sklepy są pomijane, bo ich kontenery stoją.
 
 ## Panel admina
 
@@ -233,7 +241,7 @@ Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od
 | `shops/tests/test_platforms.py` | Platformy przez API: wybór motywu i platformy, kroki, panel, sekcje ustawień, wybór provisionera |
 | `billing/tests/test_billing.py`, `billing/tests/test_tpay.py` | Płatności i bramka Tpay ([platnosci.md](platnosci.md#testy)) |
 | `shops/tests/test_emails.py` | E-mail z danymi logowania: po założeniu i ponowieniu, ponowne wysłanie i jego limit, nowe hasło, brak danych w API |
-| `shops/tests/test_commands.py` | Polecenie `update_shop_addresses` i domyślne zachowanie `BaseProvisioner` |
+| `shops/tests/test_commands.py` | Polecenia `update_shop_addresses` i `configure_shop_mail`, domyślne zachowanie `BaseProvisioner` |
 | `support/tests/test_contact.py` | Formularz kontaktowy i powiadomienie |
 | `handbook/tests/test_handbook.py` | Strony dokumentacji, odnośniki, kotwice, dostęp, kompletność menu |
 

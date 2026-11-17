@@ -15,6 +15,8 @@ from accounts.models import User
 from shops.models import Server, Shop, ShopConfig, ShopCredentials, ShopTemplate
 from shops.provisioning.base import ProvisioningError
 from shops.platforms.woocommerce import (
+    MAIL_PLUGIN,
+    MAIL_PLUGIN_PATH,
     OUTPUT_MARKER,
     SAMPLE_PRODUCT_META,
     CommandError,
@@ -597,6 +599,107 @@ def test_update_address_replaces_the_old_address(provisioner, shell, shop, monke
 
     assert previous == "http://palarnia.stary.example"
     assert ["search-replace", previous, shop.url, "--all-tables-with-prefix", "--skip-columns=guid"] in shell.wp()
+
+
+# --- e-mail ---
+
+
+@pytest.fixture
+def relay(settings):
+    settings.SHOPS_SMTP_HOST = "shops-mail"
+    settings.SHOPS_SMTP_PORT = 1025
+    settings.SHOPS_MAIL_DOMAIN = "sklepy.example.pl"
+
+
+def test_configure_woocommerce_sends_mail_through_the_relay(provisioner, shell, shop, relay):
+    provisioner.step_configure_woocommerce(shop)
+
+    [write] = [call for call in shell.calls if call["args"][:2] == ["sh", "-c"]]
+    assert write["user"] == "www-data"
+    assert write["environment"] == {"FILE": MAIL_PLUGIN_PATH, "CONTENT": MAIL_PLUGIN.read_text()}
+    assert shell.options()["sklepownia_mail"] == {
+        "host": "shops-mail", "port": 1025, "sender": "palarnia@sklepy.example.pl",
+    }
+    # The owner's address stays the sender WooCommerce knows; the plugin turns it into the Reply-To.
+    assert ["option", "update", "woocommerce_email_from_address", "kontakt@example.com"] in shell.wp()
+
+
+def test_without_a_mail_server_shops_are_left_as_they_are(provisioner, shell, shop, settings):
+    settings.SHOPS_SMTP_HOST = ""
+
+    provisioner.step_configure_woocommerce(shop)
+
+    assert not any(call["args"][:2] == ["sh", "-c"] for call in shell.calls)
+    assert "sklepownia_mail" not in shell.options()
+
+
+def test_mail_plugin_keeps_the_owner_as_reply_to():
+    plugin = MAIL_PLUGIN.read_text()
+
+    assert "add_action('phpmailer_init'" in plugin
+    assert "$mailer->addReplyTo(" in plugin and "$mailer->setFrom($mail['sender']" in plugin
+    assert "get_option('sklepownia_mail')" in plugin
+
+
+def test_configure_mail_on_a_running_shop_replaces_a_container_of_an_older_image(provisioner, shell, shop, relay):
+    old = MagicMock(labels={}, attrs={"Config": {"Env": []}})
+    old.image.id = "sha256:stary"
+    provisioner.client.containers.get.return_value = old
+    provisioner.client.images.get.return_value.id = "sha256:nowy"
+    provisioner.client.containers.run.return_value.exec_run.return_value.exit_code = 0
+
+    assert provisioner.configure_mail(shop) is True
+
+    old.remove.assert_called_once_with(force=True)
+    provisioner.client.containers.run.assert_called_once()
+    assert shell.options()["sklepownia_mail"]["sender"] == "palarnia@sklepy.example.pl"
+
+
+def test_configure_mail_skips_shops_without_a_container_or_a_mail_server(provisioner, shell, shop, settings):
+    provisioner.client.containers.get.side_effect = NotFound("brak")
+    assert provisioner.configure_mail(shop) is False
+
+    provisioner.client.containers.get.side_effect = None
+    settings.SHOPS_SMTP_HOST = ""
+    assert provisioner.configure_mail(shop) is False
+    assert shell.options() == {}
+
+
+def test_a_container_of_the_current_image_is_kept(provisioner, shop):
+    current = MagicMock(labels={}, attrs={"Config": {"Env": []}})
+    current.image.id = "sha256:ten-sam"
+    provisioner.client.images.get.return_value.id = "sha256:ten-sam"
+    provisioner.client.containers.get.return_value = current
+    current.exec_run.return_value.exit_code = 0
+    environment = provisioner.container_environment(shop)
+    current.attrs["Config"]["Env"] = [f"{key}={value}" for key, value in environment.items()]
+    current.attrs["HostConfig"] = {"Memory": 512 * 1024 ** 2}
+    current.labels = {
+        "traefik.enable": "true",
+        f"traefik.http.routers.shop-{shop.pk}.rule": f"Host(`{shop.domain}`)",
+        f"traefik.http.routers.shop-{shop.pk}.entrypoints": "web",
+        f"traefik.http.services.shop-{shop.pk}.loadbalancer.server.port": "80",
+        "shops.id": str(shop.pk),
+        "shops.slug": shop.slug,
+    }
+
+    provisioner.step_start_container(shop)
+
+    current.remove.assert_not_called()
+    current.start.assert_called_once()
+
+
+def test_a_missing_image_keeps_the_container(provisioner, shop):
+    container = MagicMock()
+    provisioner.client.images.get.side_effect = NotFound("brak")
+
+    assert provisioner._image_changed(container) is False
+
+
+def test_shops_send_from_their_own_address(shop, settings):
+    settings.SHOPS_MAIL_DOMAIN = "sklepy.example.pl"
+
+    assert shop.mail_sender == "palarnia@sklepy.example.pl"
 
 
 # --- helpers ---

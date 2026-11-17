@@ -55,6 +55,7 @@ Po uruchomieniu:
 | http://localhost:8000/api/docs/ | Dokumentacja endpointów API |
 | http://localhost:8000/admin/ | Panel administratora |
 | http://localhost:8030 | Poczta wysłana przez platformę (Mailpit): kody potwierdzające, dane logowania do sklepów |
+| http://localhost:8031 | Poczta wysłana przez sklepy (Mailpit): potwierdzenia zamówień, e-maile do klientów sklepów |
 
 ## Dokumentacja
 

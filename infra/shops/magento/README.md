@@ -24,7 +24,10 @@ docker compose up -d search      # OpenSearch, potrzebny każdemu sklepowi Magen
   `catalog` (kategorie i przykładowe produkty), `home` (strona główna), `read` (ustawienia dla aplikacji), `config`
   (zapis ustawień), `taxes` (stawka i reguła VAT), `admin` (e-mail, hasło i język panelu administratora),
   `remove_samples`. Dane przychodzą jako base64 JSON w zmiennej `SKLEPOWNIA_DATA` (hasła nie trafiają na listę procesów),
-  wynik to JSON po znaczniku `@@sklepownia@@`. Moduł dodaje też metodę dostawy „Odbiór osobisty” (`sklepowniapickup`).
+  wynik to JSON po znaczniku `@@sklepownia@@`. Moduł dodaje też metodę dostawy „Odbiór osobisty” (`sklepowniapickup`)
+  i wtyczkę [MailSender](Sklepownia/Provisioning/Plugin/MailSender.php), która wysyła pocztę sklepu z adresu
+  platformy ([poczta sklepów](../README.md#poczta-sklepów)). Zmiana w module wymaga przebudowy obrazu
+  (`docker compose build magento`), a działające sklepy dostają nowy obraz przy `configure_shop_mail`.
 - **Wyszukiwarka:** jeden OpenSearch (`shops-search`) dla wszystkich sklepów; każdy ma swoje indeksy z prefiksem
   `shop_<id>`, usuwane razem ze sklepem.
 - **Zadania okresowe** (indeksy, e-maile, ceny) uruchamia co minutę pętla w [entrypoint.sh](entrypoint.sh),

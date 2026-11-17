@@ -4,6 +4,7 @@ import logging
 import re
 import secrets
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
 from django.conf import settings
 
@@ -11,7 +12,9 @@ from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
 from . import Platform
-from ..provisioning.container import FILES_PATH, CommandError, ContainerProvisioner, container_env, container_name, db_name
+from ..provisioning.container import (
+    FILES_PATH, CommandError, ContainerProvisioner, container_env, container_name, db_name, mail_relay,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +27,11 @@ SAMPLE_PRODUCTS_PER_CATEGORY = 2
 SAMPLE_PRODUCT_META = "_sklepownia_sample"
 # Older shops have unmarked sample products; they are recognised by name.
 SAMPLE_PRODUCT_NAME = re.compile(r"^Przykładowy produkt \d+$")
+
+# Sends the shop's e-mail through the platform's relay; its settings are in MAIL_OPTION.
+MAIL_PLUGIN = Path(__file__).parent / "files" / "woocommerce" / "sklepownia-mail.php"
+MAIL_PLUGIN_PATH = f"{WP_PATH}/wp-content/mu-plugins/sklepownia-mail.php"
+MAIL_OPTION = "sklepownia_mail"
 
 # Where the settings keep track of the shipping zone and VAT rate they manage.
 SHIPPING_ZONE_OPTION = "sklepownia_shipping_zone_id"
@@ -310,6 +318,10 @@ class WooCommerceProvisioner(ContainerProvisioner):
         self._wp(shop, "option", "update", "show_on_front", "page")
         shop_page = self._wp(shop, "option", "get", "woocommerce_shop_page_id")
         self._wp(shop, "option", "update", "page_on_front", shop_page)
+        # Order confirmations and the owner's new-order alerts.
+        relay = mail_relay(shop)
+        if relay is not None:
+            self._configure_mail(shop, relay)
 
     def step_install_theme(self, shop):
         theme = shop.config.template.theme
@@ -534,6 +546,11 @@ class WooCommerceProvisioner(ContainerProvisioner):
     def remove_sample_products(self, shop):
         pattern = "/" + SAMPLE_PRODUCT_NAME.pattern + "/u"
         return int(self._php(shop, REMOVE_SAMPLE_PRODUCTS_PHP, {"name_pattern": pattern}))
+
+    def _configure_mail(self, shop, relay):
+        # A must-use plugin: WordPress loads it on its own and the panel can't switch it off.
+        self._write_file(shop, MAIL_PLUGIN_PATH, MAIL_PLUGIN.read_text())
+        self._set_options(shop, {MAIL_OPTION: relay})
 
     def _switch_language(self, shop):
         language = shop.config.language

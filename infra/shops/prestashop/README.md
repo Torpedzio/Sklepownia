@@ -34,5 +34,8 @@ Z aplikacji zmienia się podstawowe dane, otwarcie sklepu, płatności i motyw; 
   (łączy tabelę kombinacji przez `INNER JOIN`), więc przy prostych produktach nic nie powstaje. Szablon zapisujemy sami.
 - **Adres** sklepu jest w tabeli `ps_shop_url` i w `PS_SHOP_DOMAIN`; `update_shop_addresses` podmienia oba
   i odtwarza `.htaccess`.
+- **Poczta:** moduł `sklepowniamail` (zapisywany przez backend w `modules/`) zmienia nadawcę w haku
+  `actionEmailSendBefore`, a PrestaShop wysyła przez SMTP przekaźnika ([poczta sklepów](../README.md#poczta-sklepów)).
+  `PS_SHOP_EMAIL` zostaje adresem właściciela: pokazuje go sklep i na niego idą odpowiedzi.
 - **Braki:** logo „my store” z motywu zostaje do wymiany w panelu; część napisów motywu Hummingbird
   nie ma polskiego tłumaczenia („Search products…”, stopka).

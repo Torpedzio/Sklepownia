@@ -258,6 +258,16 @@ SHOPS_DB_ROOT_PASSWORD = os.environ.get("SHOPS_DB_ROOT_PASSWORD", "")
 SHOPS_CONTAINER_MEMORY = os.environ.get("SHOPS_CONTAINER_MEMORY", "512m")
 # "local" lets WordPress accept application passwords over plain HTTP; use "production" with HTTPS.
 SHOPS_WP_ENVIRONMENT = os.environ.get("SHOPS_WP_ENVIRONMENT", "production")
+# Shops send e-mail through a relay on the shop node, without credentials: shop owners can read everything
+# their shop is configured with. Locally Mailpit (shops-mail in infra/shops), in production a relay that holds
+# the mail provider's credentials. Empty: shops aren't given a mail server.
+SHOPS_SMTP_HOST = os.environ.get("SHOPS_SMTP_HOST", "shops-mail")
+SHOPS_SMTP_PORT = int(os.environ.get("SHOPS_SMTP_PORT", "1025"))
+# Shops send from <slug>@SHOPS_MAIL_DOMAIN, so the provider can sign their mail; replies go to the shop's
+# contact address. Shop software rejects addresses without a dot in the domain, such as name@localhost.
+SHOPS_MAIL_DOMAIN = os.environ.get("SHOPS_MAIL_DOMAIN") or (
+    SHOPS_BASE_DOMAIN if "." in SHOPS_BASE_DOMAIN else f"sklepy.{SHOPS_BASE_DOMAIN}"
+)
 
 
 # Billing

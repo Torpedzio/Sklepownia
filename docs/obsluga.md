@@ -55,6 +55,7 @@ Użytkownik i panel admina widzą komunikat skrócony.
 | „Otwórz sklep” na telefonie nie działa | Domena sklepów to `localhost` albo stare IP. Patrz [zmiana sieci](#zmiana-sieci-lub-adresu-ip). |
 | Sklep przekierowuje na stary adres | WordPress ma zapisany stary adres. Uruchom `update_shop_addresses`. |
 | Brak kodu potwierdzającego albo danych logowania do sklepu | Lokalnie poczta jest w Mailpit: http://localhost:8030. Pusto? Sprawdź `docker compose ps mail` i błędy wysyłki w `docker compose logs worker`. Dane sklepu wyśle ponownie przycisk „Wyślij dane ponownie” w ustawieniach ręcznych. |
+| Sklep nie wysyła e-maili (brak ich w http://localhost:8031) | Sklep sprzed poczty albo zawieszony w trakcie zmiany: `docker compose exec worker python manage.py configure_shop_mail <slug>`. Działa `shops-mail`? `cd infra/shops && docker compose ps mail`. |
 | Zmiana w provisioningu nie działa | Worker nie przeładowuje kodu sam: `docker compose restart worker`. |
 | Zakładanie stoi na „Oczekuje” | Worker nie działa albo nie widzi Redisa: `docker compose ps`, `docker compose logs worker`. |
 | Krok kończy się „Wystąpił nieoczekiwany błąd” | Szczegóły w logach workera. Po naprawie przyczyny użyj „Spróbuj ponownie” w aplikacji. |

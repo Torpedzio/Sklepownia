@@ -292,7 +292,7 @@ export default function ShopSettingsScreen() {
                 />
                 <TextField
                   label="E-mail kontaktowy"
-                  hint="Z tego adresu klienci dostają potwierdzenia zamówień i na niego odpowiadają."
+                  hint="Tu przychodzą powiadomienia o zamówieniach i odpowiedzi klientów na e-maile sklepu."
                   value={get('general', 'contact_email')}
                   onChangeText={(text) => set('general', 'contact_email', text)}
                   error={fieldError('general', 'contact_email')}

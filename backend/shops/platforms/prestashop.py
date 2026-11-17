@@ -6,6 +6,7 @@ installed with the image's command-line installer and configured by PHP run insi
 import base64
 import json
 import secrets
+from pathlib import Path
 
 from django.conf import settings
 
@@ -14,7 +15,9 @@ from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
 from . import Platform
 from ..provisioning.base import ProvisioningError
-from ..provisioning.container import FILES_PATH, CommandError, ContainerProvisioner, container_name, db_name
+from ..provisioning.container import (
+    FILES_PATH, CommandError, ContainerProvisioner, container_name, db_name, mail_relay,
+)
 
 SAMPLE_PRODUCT_CATEGORIES = 3
 SAMPLE_PRODUCTS_PER_CATEGORY = 2
@@ -40,6 +43,9 @@ CURRENCY_LOCALIZATION = {"PLN": "pl", "EUR": "de", "USD": "us", "GBP": "gb"}
 WIRE_MODULE = "ps_wirepayment"
 COD_MODULE = "ps_cashondelivery"
 CHEQUE_MODULE = "ps_checkpayment"
+# Our module that sends the shop's e-mail from the platform's address (see MAIL_PHP).
+MAIL_MODULE = "sklepowniamail"
+MAIL_MODULE_FILE = Path(__file__).parent / "files" / "prestashop" / MAIL_MODULE / f"{MAIL_MODULE}.php"
 # Modules that fill a new shop's home page with demo slides and lorem ipsum.
 DEMO_MODULES = ["ps_imageslider", "ps_customtext", "ps_banner"]
 
@@ -230,6 +236,25 @@ sklepownia_module('%(wire)s', $d['wire']);
 sklepownia_module('%(cod)s', $d['cod']);
 """ % {"wire": WIRE_MODULE, "cod": COD_MODULE}
 
+# PrestaShop sends through the relay, without logging in; the module sets the sender. 2 is Mail::METHOD_SMTP.
+MAIL_PHP = """
+Configuration::updateValue('PS_MAIL_METHOD', 2);
+Configuration::updateValue('PS_MAIL_SERVER', $d['host']);
+Configuration::updateValue('PS_MAIL_SMTP_PORT', (int) $d['port']);
+Configuration::updateValue('PS_MAIL_SMTP_ENCRYPTION', 'off');
+Configuration::updateValue('PS_MAIL_USER', '');
+Configuration::updateValue('PS_MAIL_PASSWD', '');
+Configuration::updateValue('SKLEPOWNIA_MAIL_FROM', $d['sender']);
+sklepownia_module('%(module)s', true);
+$module = Module::getInstanceByName('%(module)s');
+// An installation cut short by an error leaves the module installed without its hook, and installing is skipped later.
+if ($module && Module::isEnabled('%(module)s') && !$module->isRegisteredInHook('actionEmailSendBefore')) {
+    $module->registerHook('actionEmailSendBefore');
+}
+$ready = $module && Module::isEnabled('%(module)s') && $module->isRegisteredInHook('actionEmailSendBefore');
+echo "\\n%(marker)s" . ($ready ? 'enabled' : 'disabled');
+""" % {"module": MAIL_MODULE, "marker": OUTPUT_MARKER}
+
 REMOVE_SAMPLE_PRODUCTS_PHP = """
 $removed = 0;
 foreach ((array) json_decode((string) Configuration::get('%(samples)s'), true) as $id) {
@@ -333,6 +358,10 @@ class PrestaShopProvisioner(ContainerProvisioner):
             self._php(shop, GENERAL_PHP, {
                 "name": shop.name, "email": config.contact_email, "description": config.description,
             })
+        # Order confirmations and the owner's new-order alerts.
+        relay = mail_relay(shop)
+        if relay is not None:
+            self._configure_mail(shop, relay)
 
     def step_create_categories(self, shop):
         config = shop.config
@@ -413,6 +442,12 @@ class PrestaShopProvisioner(ContainerProvisioner):
         self.step_start_container(shop)
         previous = self._php(shop, ADDRESS_PHP, {"domain": _host(shop)})
         return f"{shop.url.split('://', 1)[0]}://{previous}"
+
+    def _configure_mail(self, shop, relay):
+        self._write_file(shop, f"{FILES_PATH}/modules/{MAIL_MODULE}/{MAIL_MODULE}.php", MAIL_MODULE_FILE.read_text())
+        # Installing a module updates its translations, which needs the back office's kernel.
+        if self._php(shop, MAIL_PHP, relay, kernel=True) != "enabled":
+            raise CommandError(f"module {MAIL_MODULE} is not enabled on actionEmailSendBefore")
 
     # --- helpers ---
 

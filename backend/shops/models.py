@@ -102,6 +102,11 @@ class Shop(models.Model):
         return f"{scheme}://{self.domain}" + ("" if port == default_port else f":{port}")
 
     @property
+    def mail_sender(self) -> str:
+        """The address the shop's e-mail comes from; replies go to the shop's contact address."""
+        return f"{self.slug}@{settings.SHOPS_MAIL_DOMAIN}"
+
+    @property
     def admin_url(self) -> str | None:
         path = self.admin_path or platform_info(self.platform).admin_path
         return f"{self.url}/{path}/" if path else None

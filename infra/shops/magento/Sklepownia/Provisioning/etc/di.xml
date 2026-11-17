@@ -7,4 +7,8 @@
             </argument>
         </arguments>
     </type>
+    <!-- Shop e-mail goes out from the platform's address; see Plugin/MailSender.php. -->
+    <type name="Magento\Framework\Mail\TransportInterface">
+        <plugin name="sklepownia_mail_sender" type="Sklepownia\Provisioning\Plugin\MailSender" />
+    </type>
 </config>

@@ -18,7 +18,8 @@ from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..provisioning.base import ProvisioningError
 from ..provisioning.container import (
-    FILES_PATH, CommandError, ContainerProvisioner, container_memory, container_name, db_name, memory_bytes,
+    FILES_PATH, CommandError, ContainerProvisioner, container_memory, container_name, db_name, mail_relay,
+    memory_bytes,
 )
 from .woocommerce import _money
 
@@ -49,6 +50,9 @@ TITLES = {
         "recipient": "Empfänger", "account": "Kontonummer", "bank": "Bank",
     },
 }
+
+# The address the shop's e-mail goes out from (see infra/shops/magento/Sklepownia/Provisioning/Plugin/MailSender.php).
+MAIL_SENDER_PATH = "sklepownia/mail/sender"
 
 # Where the bank details the owner typed are kept, so the app can show them again (Magento itself only
 # has the instructions text made from them).
@@ -163,6 +167,10 @@ class MagentoProvisioner(ContainerProvisioner):
         }
         self._run(shop, "config", values)
         self._run(shop, "home", {"title": shop.name, "content": _home_content(config.description)})
+        # Order confirmations and the copies of them for the owner.
+        relay = mail_relay(shop)
+        if relay is not None:
+            self._configure_mail(shop, relay)
 
     def step_create_categories(self, shop):
         config = shop.config
@@ -319,6 +327,19 @@ class MagentoProvisioner(ContainerProvisioner):
             "curl", "-s", "-f", "-X", "DELETE", f"http://localhost:9200/{index_prefix(shop)}_*",
         ])
 
+    def _configure_mail(self, shop, relay):
+        # Magento's own SMTP client, without logging in. Our module's plugin sets the sender (Plugin/MailSender.php).
+        self._run(shop, "config", {
+            "system/smtp/disable": "0",
+            "system/smtp/transport": "smtp",
+            "system/smtp/host": relay["host"],
+            "system/smtp/port": str(relay["port"]),
+            "system/smtp/auth": "none",
+            "system/smtp/ssl": "",
+            "system/smtp/username": "",
+            MAIL_SENDER_PATH: relay["sender"],
+        })
+
     # --- helpers ---
 
     def _installed(self, shop):
@@ -385,8 +406,15 @@ def _name_values(name):
 
 
 def _email_values(name, email):
-    """Every sender address Magento has: general, sales, support and the two custom ones."""
-    values = {}
+    """
+    Every sender address Magento has (general, sales, support and the two custom ones), where the contact form
+    goes, and who gets a copy of every order confirmation: the owner, like WooCommerce's new-order alert.
+    """
+    values = {
+        "contact/email/recipient_email": email,
+        "sales_email/order/copy_to": email,
+        "sales_email/order/copy_method": "bcc",
+    }
     for ident in ("general", "sales", "support", "custom1", "custom2"):
         values[f"trans_email/ident_{ident}/email"] = email
         values[f"trans_email/ident_{ident}/name"] = name

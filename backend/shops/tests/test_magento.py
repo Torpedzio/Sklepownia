@@ -185,7 +185,7 @@ def test_installed_shop_is_not_installed_again(provisioner, shell, shop):
 def test_configure_shop_turns_payments_and_shipping_off_and_sets_titles(provisioner, shell, shop):
     provisioner.step_configure_shop(shop)
 
-    [values] = shell.runs("config")
+    values, _mail = shell.runs("config")
     assert values["general/store_information/name"] == "Palarnia"
     assert values["payment/checkmo/active"] == "0"
     assert values["carriers/flatrate/active"] == "0"
@@ -197,6 +197,48 @@ def test_configure_shop_turns_payments_and_shipping_off_and_sets_titles(provisio
     [home] = shell.runs("home")
     assert home["title"] == "Palarnia"
     assert home["content"].startswith("<p>Kawa z małych palarni</p>")
+
+
+def test_configure_shop_sends_mail_through_the_relay_with_copies_for_the_owner(provisioner, shell, shop, settings):
+    settings.SHOPS_SMTP_HOST = "shops-mail"
+    settings.SHOPS_SMTP_PORT = 1025
+    settings.SHOPS_MAIL_DOMAIN = "sklepy.example.pl"
+
+    provisioner.step_configure_shop(shop)
+
+    values, mail = shell.runs("config")
+    assert values["contact/email/recipient_email"] == "kontakt@example.com"
+    assert values["sales_email/order/copy_to"] == "kontakt@example.com"
+    assert values["sales_email/order/copy_method"] == "bcc"
+    assert mail == {
+        "system/smtp/disable": "0",
+        "system/smtp/transport": "smtp",
+        "system/smtp/host": "shops-mail",
+        "system/smtp/port": "1025",
+        "system/smtp/auth": "none",
+        "system/smtp/ssl": "",
+        "system/smtp/username": "",
+        "sklepownia/mail/sender": "palarnia@sklepy.example.pl",
+    }
+
+
+def test_without_a_mail_server_magento_keeps_its_own(provisioner, shell, shop, settings):
+    settings.SHOPS_SMTP_HOST = ""
+
+    provisioner.step_configure_shop(shop)
+
+    [values] = shell.runs("config")
+    assert not any(path.startswith("system/smtp/") for path in values)
+
+
+def test_a_new_contact_address_gets_the_order_copies_and_the_contact_form(provisioner, shell, shop):
+    general = {"name": "Palarnia", "description": "Kawa", "contact_email": "nowy@example.com"}
+    provisioner.apply_settings(shop, {"general": {"contact_email": "nowy@example.com"}}, settings_values(general=general))
+
+    [values] = shell.runs("config")
+    assert values["sales_email/order/copy_to"] == "nowy@example.com"
+    assert values["contact/email/recipient_email"] == "nowy@example.com"
+    assert values["trans_email/ident_general/email"] == "nowy@example.com"
 
 
 def test_categories_and_samples(provisioner, shell, shop):

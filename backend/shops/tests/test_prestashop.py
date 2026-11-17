@@ -14,7 +14,7 @@ from accounts.models import User
 from shops.models import Shop, ShopConfig, ShopCredentials, ShopTemplate
 from shops.provisioning.base import ProvisioningError
 from shops.provisioning.container import CommandError
-from shops.platforms.prestashop import OUTPUT_MARKER, PrestaShopProvisioner
+from shops.platforms.prestashop import MAIL_MODULE_FILE, OUTPUT_MARKER, PrestaShopProvisioner
 
 pytestmark = pytest.mark.django_db
 
@@ -36,7 +36,7 @@ class Shell:
         self.on(lambda command: command[0] == "php" and "-r" in command and snippet in command[-1], output, fail)
 
     def __call__(self, container, command, user="", environment=None):
-        self.calls.append({"container": container, "command": list(command), "user": user})
+        self.calls.append({"container": container, "command": list(command), "user": user, "env": environment})
         for matches, output, fail in self.rules:
             if matches(command):
                 if fail:
@@ -64,6 +64,7 @@ def shell(monkeypatch):
     fake = Shell()
     fake.on_command("sh", "-c", output="admin-api/\nadmin4f7k2x/")
     fake.on_php("PS_CURRENCY_DEFAULT", output=f"Notice\n{OUTPUT_MARKER}PLN")
+    fake.on_php("SKLEPOWNIA_MAIL_FROM", output=f"{OUTPUT_MARKER}enabled")
     monkeypatch.setattr(
         PrestaShopProvisioner,
         "_exec",
@@ -157,6 +158,43 @@ def test_configure_shop_sets_currency_and_turns_payments_off(provisioner, shell,
     assert data["config"]["PS_SHOP_EMAIL"] == "kontakt@example.com"
     assert "sklepownia_module('ps_wirepayment', false)" in script
     assert shell.php("Meta::getMetaByPage")[0][1]["description"] == "Kawa z małych palarni"
+
+
+def test_configure_shop_installs_the_mail_module_and_points_at_the_relay(provisioner, shell, shop, settings):
+    settings.SHOPS_SMTP_HOST = "shops-mail"
+    settings.SHOPS_SMTP_PORT = 1025
+    settings.SHOPS_MAIL_DOMAIN = "sklepy.example.pl"
+
+    provisioner.step_configure_shop(shop)
+
+    [write] = [call for call in shell.calls if call["env"] and "FILE" in call["env"]]
+    assert write["env"]["FILE"] == "/var/www/html/modules/sklepowniamail/sklepowniamail.php"
+    assert write["env"]["CONTENT"] == MAIL_MODULE_FILE.read_text()
+    assert write["user"] == "www-data"
+    [(script, data)] = shell.php("SKLEPOWNIA_MAIL_FROM")
+    assert data == {"host": "shops-mail", "port": 1025, "sender": "palarnia@sklepy.example.pl"}
+    assert "sklepownia_module('sklepowniamail', true)" in script
+    assert "AdminKernel" in script
+    # A module left without its hook by an interrupted installation gets it back.
+    assert "registerHook('actionEmailSendBefore')" in script
+    assert "Configuration::updateValue('PS_MAIL_METHOD', 2)" in script
+    # The shop's contact address stays as it was: customers see it, and replies go to it.
+    assert shell.php("PS_CURRENCY_DEFAULT")[0][1]["config"]["PS_SHOP_EMAIL"] == "kontakt@example.com"
+
+
+def test_mail_module_that_did_not_enable_fails_the_step(provisioner, shell, shop):
+    shell.on_php("SKLEPOWNIA_MAIL_FROM", output=f"{OUTPUT_MARKER}disabled")
+
+    with pytest.raises(CommandError, match="sklepowniamail"):
+        provisioner.step_configure_shop(shop)
+
+
+def test_mail_module_rewrites_the_sender_and_keeps_replies():
+    module = MAIL_MODULE_FILE.read_text()
+
+    assert "class SklepowniaMail extends Module" in module
+    assert "registerHook('actionEmailSendBefore')" in module
+    assert "$params['replyTo'] = $from;" in module and "$params['from'] = $sender;" in module
 
 
 def test_configure_shop_fails_when_the_currency_did_not_change(provisioner, shell, shop):

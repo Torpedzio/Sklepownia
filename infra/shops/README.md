@@ -24,6 +24,7 @@ przeglądarka ──▶ Traefik :8080 ──Host: <slug>.<SHOPS_BASE_DOMAIN>─�
                                                                          │
                                        MariaDB (shops-db): osobna baza i użytkownik na sklep
                                        OpenSearch (shops-search): wyszukiwarka sklepów Magento, indeksy shop_<id>_*
+                                       Mailpit (shops-mail): poczta wysłana przez sklepy, podgląd :8031
 ```
 
 ## Uruchomienie
@@ -32,15 +33,44 @@ przeglądarka ──▶ Traefik :8080 ──Host: <slug>.<SHOPS_BASE_DOMAIN>─�
 cd infra/shops
 cp .env.example .env                       # wpisz SHOPS_DB_ROOT_PASSWORD
 docker compose build wordpress magento     # obrazy sklepów; Magento buduje się ~10 min
-docker compose up -d                       # Traefik, MariaDB i OpenSearch
+docker compose up -d                       # Traefik, MariaDB, OpenSearch i Mailpit sklepów
 ```
 
 Obraz PrestaShop pobiera się sam przy pierwszym sklepie, ale lepiej zrobić to od razu:
 `docker pull prestashop/prestashop:9.2.1-apache` (~1 GB).
-Bez sklepów Magento można pominąć `magento` w `build` i uruchomić tylko `docker compose up -d proxy db`.
+Bez sklepów Magento można pominąć `magento` w `build` i uruchomić tylko `docker compose up -d proxy db mail`.
 
 Sklepy są na porcie **8080**, żeby nie kolidować z innymi serwerami na 80/443.
 Przeglądarki i curl same rozwiązują `*.localhost` na 127.0.0.1, więc nie trzeba konfigurować DNS.
+
+## Poczta sklepów
+
+Sklepy wysyłają e-maile (potwierdzenia zamówień, konta klientów, powiadomienia właściciela o zamówieniach) przez
+przekaźnik w sieci `shops`: `SHOPS_SMTP_HOST:SHOPS_SMTP_PORT`, lokalnie Mailpit `shops-mail:1025`, podgląd
+http://localhost:8031. Sklep nie loguje się do przekaźnika: właściciel sklepu może odczytać wszystko, co sklep ma
+w ustawieniach, więc dane logowania do dostawcy poczty trzyma tylko przekaźnik.
+
+Nadawcą jest zawsze `<slug>@SHOPS_MAIL_DOMAIN` z nazwą sklepu, bo dostawca poczty podpisze tylko adresy z własnej
+domeny. Adres, z którego wiadomość wysłał sam system sklepu (zwykle adres kontaktowy właściciela), trafia do Reply-To,
+chyba że wiadomość już je ma (np. powiadomienie o zamówieniu odpowiada klientowi). Ustawienia właściciela
+w sklepie się nie zmieniają. Zasadę wdraża każda platforma po swojemu:
+
+| Platforma | Gdzie | Serwer SMTP |
+|---|---|---|
+| WooCommerce | wtyczka „must-use” [sklepownia-mail.php](../../backend/shops/platforms/files/woocommerce/sklepownia-mail.php) (hak `phpmailer_init`) | opcja `sklepownia_mail` |
+| PrestaShop | moduł [sklepowniamail](../../backend/shops/platforms/files/prestashop/sklepowniamail/sklepowniamail.php) (hak `actionEmailSendBefore`) | `PS_MAIL_METHOD=2`, `PS_MAIL_SERVER`, `PS_MAIL_SMTP_PORT` |
+| Magento | wtyczka [MailSender](magento/Sklepownia/Provisioning/Plugin/MailSender.php) w obrazie (`TransportInterface::sendMessage`) | `system/smtp/*`, nadawca w `sklepownia/mail/sender` |
+
+Pliki WooCommerce i PrestaShop backend zapisuje w wolumenie sklepu, bo te platformy trzymają tam swój kod.
+Nowe sklepy dostają pocztę przy zakładaniu, istniejące poleceniem (kontener ze starszego obrazu jest najpierw odtwarzany):
+
+```bash
+docker compose exec worker python manage.py configure_shop_mail            # wszystkie działające sklepy
+docker compose exec worker python manage.py configure_shop_mail <slug>     # wybrane
+```
+
+Magento wysyła kopię każdego potwierdzenia zamówienia do właściciela (`sales_email/order/copy_to`, ukryta kopia),
+bo inaczej nie dowiedziałby się o zamówieniu; WooCommerce i PrestaShop mają osobne powiadomienie.
 
 ## Pamięć
 

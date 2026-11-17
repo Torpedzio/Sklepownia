@@ -132,7 +132,7 @@ export const ShopGuides: ShopGuide[] = [
       },
       {
         title: 'Wiadomości do klientów',
-        text: 'Zmień nadawcę, stopkę i treść e-maili o zamówieniu, wysyłce i zwrocie.',
+        text: 'Zmień nazwę nadawcy, stopkę i treść e-maili o zamówieniu, wysyłce i zwrocie. Adres nadawcy ustawia platforma, a odpowiedzi klientów trafiają na adres kontaktowy sklepu.',
         menu: 'WooCommerce → Ustawienia → E-maile',
         adminPath: 'admin.php?page=wc-settings&tab=email',
       },

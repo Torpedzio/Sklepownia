@@ -50,6 +50,9 @@ Sklepy ze skryptu nie są widoczne w aplikacji.
 - **Klucze API:** zamiast kluczy WooCommerce (`ck_`/`cs_`, których nie da się wygenerować z WP-CLI)
   używamy Application Password. WooCommerce REST API przyjmuje go przez Basic Auth.
   Przez HTTP działa tylko przy `WP_ENVIRONMENT_TYPE=local` (`SHOPS_WP_ENVIRONMENT`); na produkcji potrzebny jest HTTPS.
+- **Poczta:** WordPress bez konfiguracji wysyła przez `mail()`, którego w kontenerze nie ma. Wtyczka „must-use”
+  `wp-content/mu-plugins/sklepownia-mail.php` kieruje pocztę do przekaźnika ([poczta sklepów](../README.md#poczta-sklepów)).
+  Wtyczki „must-use” nie da się wyłączyć w panelu. Skrypt `provision-shop.sh` poczty nie ustawia.
 - **Czas:** najwięcej kosztuje start WP-CLI przy każdym poleceniu (~1–2 s). Zgrupowanie konfiguracji
   WooCommerce i kategorii w jednym `wp eval-file` powinno skrócić całość do ~30 s.
   Pakiety językowe też można wbudować w obraz.

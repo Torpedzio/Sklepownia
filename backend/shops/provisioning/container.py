@@ -112,6 +112,8 @@ class ContainerProvisioner(BaseProvisioner):
             or not labels.items() <= container.labels.items()
             # A different plan means a different memory limit.
             or container.attrs.get("HostConfig", {}).get("Memory") != memory_bytes(memory)
+            # A rebuilt image (e.g. new platform code) reaches running shops this way.
+            or self._image_changed(container)
         )
         if outdated:
             container.remove(force=True)
@@ -180,6 +182,19 @@ class ContainerProvisioner(BaseProvisioner):
         if self._find_container(shop) is not None:
             self.step_start_container(shop)
 
+    def configure_mail(self, shop):
+        relay = mail_relay(shop)
+        if relay is None or self._find_container(shop) is None:
+            return False
+        # A container of an older image is replaced first, so the shop runs the current mail code.
+        self.step_start_container(shop)
+        self._configure_mail(shop, relay)
+        return True
+
+    def _configure_mail(self, shop, relay):
+        """Point the platform at `relay` ({host, port, sender}); see mail_relay."""
+        raise NotImplementedError
+
     # --- helpers ---
 
     def _credentials(self, shop):
@@ -193,6 +208,23 @@ class ContainerProvisioner(BaseProvisioner):
             return self.client.containers.get(container_name(shop))
         except NotFound:
             return None
+
+    def _image_changed(self, container):
+        try:
+            return container.image.id != self.client.images.get(self.image()).id
+        except NotFound:
+            # The image is gone (e.g. renamed); keep the container rather than fail.
+            return False
+
+    def _write_file(self, shop, path, content):
+        """Write `content` to `path` inside the shop's container, as the web server's user, creating folders."""
+        # Through the environment, so the content needs no quoting.
+        self._exec(
+            container_name(shop),
+            ["sh", "-c", 'mkdir -p "$(dirname "$FILE")" && printf "%s" "$CONTENT" > "$FILE"'],
+            user="www-data",
+            environment={"FILE": path, "CONTENT": content},
+        )
 
     def _exec(self, container_name, command, user="", environment=None):
         container = self.client.containers.get(container_name)
@@ -222,6 +254,13 @@ def container_name(shop):
 
 def db_name(shop):
     return f"shop_{shop.pk}"
+
+
+def mail_relay(shop):
+    """Where the shop sends e-mail and from which address, or None when shops get no mail server."""
+    if not settings.SHOPS_SMTP_HOST:
+        return None
+    return {"host": settings.SHOPS_SMTP_HOST, "port": settings.SHOPS_SMTP_PORT, "sender": shop.mail_sender}
 
 
 def container_env(container, keys):

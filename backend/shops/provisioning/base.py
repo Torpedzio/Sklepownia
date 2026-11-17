@@ -36,6 +36,13 @@ class BaseProvisioner:
     def refresh_resources(self, shop):
         """Apply the owner's current plan (e.g. memory) to a running shop."""
 
+    def configure_mail(self, shop):
+        """
+        Send the running shop's e-mail through the platform's mail relay (settings SHOPS_SMTP_*), from the shop's
+        own sender address. Returns False when the shop has nothing running to configure.
+        """
+        return False
+
     # --- running shops (see provisioning/operations.py) ---
 
     def read_settings(self, shop):

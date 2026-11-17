@@ -40,6 +40,20 @@ services:
         aliases:
           - shops-db
 
+  # Catches every e-mail the shops send (order confirmations, account e-mails): read them at http://localhost:8031.
+  # Shops reach it as shops-mail:1025 without logging in (SHOPS_SMTP_* in the backend). In production a relay to
+  # the mail provider takes its place: one that holds the provider's credentials, so shops never see them.
+  mail:
+    image: axllent/mailpit:v1.33
+    container_name: shops-mail
+    restart: unless-stopped
+    ports:
+      - "${SHOPS_MAIL_UI_PORT:-8031}:8025"
+    networks:
+      shops:
+        aliases:
+          - shops-mail
+
   # Search engine Magento requires; every Magento shop has its own indexes (prefix shop_<id>).
   search:
     image: opensearchproject/opensearch:2.19.4
