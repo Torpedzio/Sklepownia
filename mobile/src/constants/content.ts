@@ -43,6 +43,8 @@ export const Features: Feature[] = [
     icon: 'cart',
     title: 'Trzy systemy do wyboru',
     text: 'WooCommerce z tysiącami wtyczek, PrestaShop popularny w Polsce albo Magento dla dużych katalogów (w planach Standard i Biznes). Wybierasz przy zakładaniu sklepu.',
+    // The home page has a section of its own about the systems.
+    homeSlide: false,
   },
   {
     icon: 'category',
@@ -76,54 +78,59 @@ export const Features: Feature[] = [
   },
 ];
 
+/** One band of a Showcase: a screenshot fading into the page, with a description next to it. */
+export type ShowcaseItem = {
+  name: string;
+  /** Short line above the name. */
+  label: string;
+  text: string;
+  /** Smaller line under the text. */
+  details?: string;
+  preview: number;
+  /** What the screenshot shows, for screen readers. */
+  alt: string;
+};
+
 // Previews are screenshots of shops set up by the app, so they show what a new shop really looks like.
-export const Themes = [
+export const Platforms: ShowcaseItem[] = [
   {
-    name: 'Storefront',
-    platform: 'WooCommerce',
-    text: 'Motyw od twórców WooCommerce. Klasyczny i czytelny: wyszukiwarka i koszyk w nagłówku, kategorie z boku.',
-    colors: ['#333333', '#96588A', '#F8F8F8'],
+    name: 'WooCommerce',
+    label: 'We wszystkich planach',
+    text: 'WordPress z wtyczką sklepu. Najwięcej dodatków, motywów i poradników, a w aplikacji zmienisz w nim najwięcej ustawień. Dobry wybór na początek.',
+    details: 'Motywy Storefront, Astra i Kadence. Sklep gotowy w około dwie minuty.',
     preview: require('@/assets/images/themes/storefront.jpg'),
+    alt: 'Sklep WooCommerce z motywem Storefront',
   },
   {
-    name: 'Astra',
-    platform: 'WooCommerce',
-    text: 'Lekki i szybki. Pod każdym produktem wyraźny przycisk „Dodaj do koszyka”, wyszukiwarka nad listą kategorii.',
-    colors: ['#0170B9', '#1E293B', '#F1F5F9'],
-    preview: require('@/assets/images/themes/astra.jpg'),
-  },
-  {
-    name: 'Kadence',
-    platform: 'WooCommerce',
-    text: 'Nowoczesny, z kartami produktów i banerem nad listą. Klienci przełączają widok między siatką a listą.',
-    colors: ['#2B6CB0', '#1A202C', '#EDF2F7'],
-    preview: require('@/assets/images/themes/kadence.jpg'),
-  },
-  {
-    name: 'Hummingbird',
-    platform: 'PrestaShop',
-    text: 'Nowy motyw PrestaShop 9. Kategorie w menu i obok listy, filtry ceny i dostępności, koszyk przy każdym produkcie.',
-    colors: ['#0D6EFD', '#212529', '#F5F6F8'],
+    name: 'PrestaShop',
+    label: 'We wszystkich planach',
+    text: 'Samodzielny system sklepowy, popularny w Polsce. Rozbudowany katalog z wariantami produktów i wygodna obsługa zamówień.',
+    details: 'Motywy Hummingbird i Classic. Sklep gotowy w około dwie minuty.',
     preview: require('@/assets/images/themes/hummingbird.jpg'),
+    alt: 'Sklep PrestaShop z motywem Hummingbird',
   },
   {
-    name: 'Luma',
-    platform: 'Magento',
-    text: 'Motyw Magento z kategoriami w menu, filtrami obok listy, porównywaniem produktów i listą życzeń.',
-    colors: ['#1979C3', '#333333', '#F0F0F0'],
+    name: 'Magento',
+    label: 'W planach Standard i Biznes',
+    text: 'Dla większych sklepów: duży katalog, kilka magazynów i wersji językowych, porównywanie produktów i listy życzeń.',
+    details: 'Motyw Luma. Sklep gotowy w około minutę.',
     preview: require('@/assets/images/themes/luma.jpg'),
+    alt: 'Sklep Magento z motywem Luma',
   },
 ];
 
+/** Width divided by height of the preview screenshots. */
+export const PreviewAspectRatio = 1200 / 750;
+
 /** Colours of every theme a shop can start with, for the swatches in the new shop form. */
 export const ThemeColors: Record<string, string[]> = {
-  ...Object.fromEntries(Themes.map((theme) => [theme.name, theme.colors])),
-  // PrestaShop's older theme, without a preview on the home page.
+  Storefront: ['#333333', '#96588A', '#F8F8F8'],
+  Astra: ['#0170B9', '#1E293B', '#F1F5F9'],
+  Kadence: ['#2B6CB0', '#1A202C', '#EDF2F7'],
+  Hummingbird: ['#0D6EFD', '#212529', '#F5F6F8'],
   Classic: ['#24B9D7', '#232323', '#F6F6F6'],
+  Luma: ['#1979C3', '#333333', '#F0F0F0'],
 };
-
-/** Width divided by height of the theme preview screenshots. */
-export const ThemePreviewAspectRatio = 1200 / 750;
 
 /** About the shops themselves; plans and payments are in PricingFaq. */
 export const Faq = [

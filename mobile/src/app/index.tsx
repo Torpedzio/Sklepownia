@@ -11,11 +11,11 @@ import { PlanAction } from '@/components/plan-action';
 import { PlanCard } from '@/components/plan-card';
 import { Receipt } from '@/components/receipt';
 import { SiteFooter } from '@/components/site-footer';
+import { Showcase } from '@/components/showcase';
 import { SiteHeader } from '@/components/site-header';
-import { ThemeShowcase } from '@/components/theme-showcase';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { Faq, Features, PricingFaq, SetupSteps } from '@/constants/content';
+import { Faq, Features, Platforms, PricingFaq, SetupSteps } from '@/constants/content';
 import { useAuth } from '@/context/auth';
 import { Spacing, WideBreakpoint } from '@/constants/theme';
 import { useApiQuery } from '@/hooks/use-api-query';
@@ -142,9 +142,10 @@ export default function HomeScreen() {
           </View>
         </Section>
 
-        <ThemeShowcase
-          title="Wybierz wygląd"
-          text="Motywy dla każdego z trzech systemów. W każdym są kategorie, wyszukiwarka i filtr ceny."
+        <Showcase
+          title="Wybierz system sklepu"
+          text="Każdy ma pełny panel administracyjny, kategorie, wyszukiwarkę i filtr ceny. System wybierasz przy zakładaniu sklepu i później go nie zmienisz."
+          items={Platforms}
         />
 
         {plans?.length ? (

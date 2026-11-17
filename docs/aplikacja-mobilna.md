@@ -79,7 +79,7 @@ Motyw graficzny nawiązuje do sklepu przy ulicy. Są w nim trzy elementy:
 |---|---|
 | [constants/theme.ts](../mobile/src/constants/theme.ts) | `Colors` (jasny i ciemny motyw), `Fonts`, `Spacing`, `Radius`, `MaxContentWidth`, `WideBreakpoint` |
 | [constants/brand.ts](../mobile/src/constants/brand.ts) | Nazwa i dane kontaktowe. **To wartości tymczasowe do podmiany przed startem.** |
-| [constants/content.ts](../mobile/src/constants/content.ts) | Teksty strony głównej: kroki na paragonie, funkcje (slajdy), motywy, FAQ o sklepach (`Faq`) i o planach (`PricingFaq`, też w cenniku, „Jak to działa” i Pomocy). Liczby sklepów i ceny w odpowiedziach trzeba poprawić przy zmianie planów. |
+| [constants/content.ts](../mobile/src/constants/content.ts) | Teksty strony głównej: kroki na paragonie, funkcje (slajdy), systemy sklepu (`Platforms`, z planami, w których są), kolory motywów do formularza, FAQ o sklepach (`Faq`) i o planach (`PricingFaq`, też w cenniku, „Jak to działa” i Pomocy). Liczby sklepów i ceny w odpowiedziach trzeba poprawić przy zmianie planów. |
 | [constants/shop-guides.ts](../mobile/src/constants/shop-guides.ts) | Porady w szczegółach sklepu i w zakładce Pomoc |
 
 Markiza (`Awning`) wygląda wszędzie tak samo: paski 40×16 px, liczba pasków zależy od szerokości, pierwszy zawsze zielony.
@@ -109,7 +109,7 @@ Ruch na ekranie (Reanimated) respektuje systemowe ograniczenie ruchu.
 | `NewShopButton` | Przycisk nowego sklepu; bez planu prowadzi do wyboru planu, po osiągnięciu limitu planu wyszarzony z dymkiem. Sklepy testowe nie liczą się do limitu (`paidShopCount`). |
 | `PlanCard`, `BillingProfileForm` | Plan z ceną brutto, korzyściami i znacznikiem „Polecany” (do wyboru albo z przyciskiem wyrównanym do dołu karty) i formularz danych do faktury (osoba albo firma z NIP) |
 | `FeatureSlides` | „Co dostajesz” na całą szerokość pod markizą. Przy przewijaniu przyklejona witryna, w której każde przewinięcie pokazuje następny slajd (`PinnedSequence`); przy ograniczonym ruchu pokaz slajdów ze strzałkami, kropkami i automatycznym przewijaniem. Zdjęcia przechodzą po bokach gradientem w kolor strony (`SIDE_FADE_WIDE`, `SIDE_FADE_NARROW`). |
-| `ThemeShowcase` | Motywy jako pasy na całą szerokość: zrzut sklepu przechodzący gradientem w tło. Przy przewijaniu działa jak `FeatureSlides` (`PinnedSequence`); przy ograniczonym ruchu zwykła lista. |
+| `Showcase` | Pasy na całą szerokość (na stronie głównej systemy sklepu z `Platforms` w content.ts): zrzut sklepu przechodzący gradientem w tło. Przy przewijaniu działa jak `FeatureSlides` (`PinnedSequence`); przy ograniczonym ruchu zwykła lista. |
 | `PinnedSequence`, `SwapLayer` | Wspólny mechanizm obu sekcji: przyklejenie nagłówka i sceny oraz podmiana elementu co około 160 px przewinięcia (`STEP`, `SWITCH_AT`). W przeglądarce przykleja CSS `sticky`. Na telefonie scena przesuwa się dokładnie o przewinięcie (położenie sekcji jest mierzone tylko przed przyklejeniem, więc nic nie drży), a jedno przesunięcie palcem zmienia najwyżej jeden element: rozpęd zatrzymuje się na następnym, a strona dociąga do pokazanego. `SwapLayer` to jedna warstwa sceny z przenikaniem. |
 | `SettingsSection` | Karta jednej sekcji ustawień sklepu; po zmianie pokazuje „Zapisz” i „Cofnij”, każda sekcja zapisuje się osobno |
 | `SettingsMenu`, `SettingsPane` | Menu sekcji ustawień: na szerokim ekranie lista z boku, na wąskim przewijany pasek nad treścią, z kropką przy sekcji z niezapisanymi zmianami. `SettingsPane` wsuwa nowo wybraną sekcję od strony ruchu w menu (z dołu lub góry obok listy, z boku pod paskiem). |
