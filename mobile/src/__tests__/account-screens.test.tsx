@@ -325,6 +325,7 @@ describe('account overview and security', () => {
         vat_rate: '23.00',
         interval_months: 1,
         max_shops: 3,
+        max_magento_shops: 1,
         shop_memory_mb: 512,
         is_featured: true,
         features: [],

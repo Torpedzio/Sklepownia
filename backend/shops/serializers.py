@@ -146,6 +146,8 @@ class PlatformOptionSerializer(serializers.Serializer):
     value = serializers.CharField()
     label = serializers.CharField()
     description = serializers.CharField()
+    available = serializers.BooleanField(help_text="Czy plan pozwala teraz założyć sklep na tym systemie.")
+    note = serializers.CharField(help_text="Ograniczenie planu, np. w których planach jest Magento; puste bez niego.")
 
 
 class FormOptionsSerializer(serializers.Serializer):

@@ -26,6 +26,7 @@ const plan = (code: string, name: string, price: string, maxShops: number): Plan
   vat_rate: '23.00',
   interval_months: 1,
   max_shops: maxShops,
+  max_magento_shops: 0,
   shop_memory_mb: 512,
   is_featured: code === 'standard',
   features: [],

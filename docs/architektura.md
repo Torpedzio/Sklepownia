@@ -45,7 +45,8 @@ Proces API nie dotyka Dockera (klient Dockera jest tworzony leniwie, dopiero prz
 
 1. Aplikacja wysyła formularz: `POST /api/shops/`.
 2. Backend w jednej transakcji ([services.create_shop](../backend/shops/services.py)):
-   - blokuje wiersz użytkownika, sprawdza aktywny plan i jego limit sklepów (`Plan.max_shops`; sklepy testowe się nie liczą),
+   - blokuje wiersz użytkownika, sprawdza aktywny plan i jego limit sklepów (`Plan.max_shops`; sklepy testowe się nie liczą)
+     oraz limit sklepów Magento (`Plan.max_magento_shops`),
    - tworzy `Shop` (status `pending`) i `ShopConfig` z wyborami z formularza,
    - tworzy `ProvisioningJob` z listą `ProvisioningStep` (po jednym na krok),
    - po zatwierdzeniu transakcji wrzuca zadanie `provision_shop` do kolejki.

@@ -43,7 +43,7 @@ Limity zapytań: logowanie i rejestracja 10 na minutę, potwierdzanie e-maila 10
 | Metoda i ścieżka | Opis |
 |---|---|
 | `GET shops/` | Sklepy użytkownika (bez usuniętych): `id, name, slug, url, status, status_display, platform, platform_display, is_test, created_at`. `platform`: `woocommerce` albo `prestashop`. `is_test`: sklep sprzed płatnych planów |
-| `POST shops/` | Założenie sklepu (wymaga potwierdzonego e-maila i aktywnego planu). `201` ze szczegółami sklepu. `402` bez planu, `400` przy zajętym adresie albo osiągniętym limicie planu (sklepy testowe się nie liczą). |
+| `POST shops/` | Założenie sklepu (wymaga potwierdzonego e-maila i aktywnego planu). `201` ze szczegółami sklepu. `402` bez planu, `400` przy zajętym adresie albo osiągniętym limicie planu (sklepy testowe się nie liczą); limit sklepów Magento daje błąd pola `platform`. |
 | `GET shops/{id}/` | Szczegóły: pola z listy plus `panel_name` (np. „panel PrestaShop”), `setup_time` (ile trwa zakładanie, np. „około dwóch minut”), `config` (wybory z formularza) i `provisioning` (ostatnie zadanie z krokami; kroki zależą od platformy) |
 | `DELETE shops/{id}/` | Usunięcie, `204`. W trakcie zakładania `409`. |
 | `POST shops/{id}/resume/` | Przywrócenie sklepu zawieszonego przez plan, gdy plan ma na niego miejsce, `200` ze szczegółami. `400`: brak miejsca, `402`: brak planu, `409`: sklep nie jest zawieszony. |
@@ -51,7 +51,7 @@ Limity zapytań: logowanie i rejestracja 10 na minutę, potwierdzanie e-maila 10
 | `GET shops/{id}/admin-access/` | `{admin_url, sent_to}`: adres panelu sklepu i adres e-mail, na który wysłano login i hasło. Samych danych logowania API nie zwraca. Tylko dla działającego sklepu, inaczej `409`. |
 | `POST shops/{id}/send-admin-access/` | Wysyła ponownie e-mail z danymi sklepu i logowaniem, `202` z `{admin_url, sent_to}`. Najwyżej 5 razy na godzinę (`429`). |
 | `GET shops/check-slug/?slug=` | `{slug, available, reason}`: czy adres jest wolny i dlaczego nie |
-| `GET shops/form-options/` | Wszystko do formularza: platformy (`{value, label, description}`), branże, języki, waluty, kraje, motywy (każdy z `platform`), zakres liczby kategorii, domena |
+| `GET shops/form-options/` | Wszystko do formularza: platformy (`{value, label, description, available, note}`; `available: false` z powodem w `note`, gdy plan nie pozwala teraz na sklep na tej platformie, np. Magento w planie Start), branże, języki, waluty, kraje, motywy (każdy z `platform`), zakres liczby kategorii, domena |
 
 ### Ustawienia i operacje na działającym sklepie
 

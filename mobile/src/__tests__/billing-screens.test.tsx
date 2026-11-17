@@ -32,20 +32,38 @@ const standard: Plan = {
   vat_rate: '23.00',
   interval_months: 1,
   max_shops: 3,
+  max_magento_shops: 1,
   shop_memory_mb: 512,
   is_featured: true,
   features: ['Do 3 sklepów'],
 };
-const start: Plan = { ...standard, code: 'start', name: 'Start', price: '29.00', max_shops: 1, is_featured: false };
+const start: Plan = {
+  ...standard,
+  code: 'start',
+  name: 'Start',
+  price: '29.00',
+  max_shops: 1,
+  max_magento_shops: 0,
+  is_featured: false,
+};
 const business: Plan = {
   ...standard,
   code: 'business',
   name: 'Biznes',
   price: '99.00',
   max_shops: 10,
+  max_magento_shops: 5,
   shop_memory_mb: 1024,
   is_featured: false,
 };
+
+const woo = (id: number, name: string) => ({
+  id,
+  name,
+  status: 'active' as const,
+  platform: 'woocommerce' as const,
+  platform_display: 'WooCommerce',
+});
 
 const person: BillingProfile = {
   kind: 'individual',
@@ -392,11 +410,11 @@ describe('changing the plan', () => {
     };
   }
 
-  async function open(routes = {}) {
-    signedIn({ ...verified, plan: 'Standard' });
+  async function open(routes = {}, current = standard) {
+    signedIn({ ...verified, plan: current.name });
     const api = mockApi({
       'GET /billing/plans/': [[start, standard, business]],
-      'GET /billing/': overview({ subscription: subscription() }),
+      'GET /billing/': overview({ subscription: subscription({ plan: current }) }),
       ...routes,
     });
     await renderScreen(<ChangePlanScreen />);
@@ -449,8 +467,8 @@ describe('changing the plan', () => {
 
   test('a cheaper plan credits the difference and lets you choose which shops stay', async () => {
     const shops = [
-      { id: 1, name: 'Palarnia', status: 'active' as const },
-      { id: 2, name: 'Herbaciarnia', status: 'active' as const },
+      woo(1, 'Palarnia'),
+      woo(2, 'Herbaciarnia'),
     ];
     const downgrade = (keepIds: number[]) =>
       previewOf({
@@ -495,8 +513,8 @@ describe('changing the plan', () => {
 
   test('keeping too many shops is refused before asking the server', async () => {
     const shops = [
-      { id: 1, name: 'Palarnia', status: 'active' as const },
-      { id: 2, name: 'Herbaciarnia', status: 'active' as const },
+      woo(1, 'Palarnia'),
+      woo(2, 'Herbaciarnia'),
     ];
     await open({
       'POST /billing/subscription/change-preview/': previewOf({
@@ -513,6 +531,33 @@ describe('changing the plan', () => {
     await fireEvent.press(await screen.findByRole('checkbox', { name: /Herbaciarnia/ }));
 
     expect(await screen.findByText('W planie Start zostawisz najwyżej 1 sklep.')).toBeTruthy();
+  });
+
+  test('Magento shops beyond the plan are refused before asking the server', async () => {
+    const shops = [
+      { ...woo(1, 'Palarnia'), platform: 'magento' as const, platform_display: 'Magento' },
+      { ...woo(2, 'Herbaciarnia'), platform: 'magento' as const, platform_display: 'Magento' },
+      woo(3, 'Kawiarnia'),
+    ];
+    await open({
+      'POST /billing/subscription/change-preview/': previewOf({
+        plan: standard,
+        direction: 'downgrade',
+        amount_due: '0.00',
+        credit_added: '50.00',
+        keep: [shops[0], shops[2]],
+        suspend: [shops[1]],
+      }),
+    }, business);
+
+    await fireEvent.press(await screen.findByRole('radio', { name: /^Standard/ }));
+
+    expect(
+      await screen.findByText('Plan Standard to do 3 sklepów, w tym 1 na Magento. Wybierz, które sklepy zostają aktywne:'),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByRole('checkbox', { name: /Herbaciarnia/ }));
+
+    expect(await screen.findByText('W planie Standard zostawisz najwyżej 1 sklep Magento.')).toBeTruthy();
   });
 
   test('a blocked change says why', async () => {

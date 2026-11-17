@@ -15,8 +15,15 @@ jest.mock('@/context/auth', () => ({ useAuth: jest.fn() }));
 
 const options: FormOptions = {
   platforms: [
-    { value: 'woocommerce', label: 'WooCommerce', description: 'WordPress z wtyczką WooCommerce.' },
-    { value: 'prestashop', label: 'PrestaShop', description: 'Samodzielny system sklepowy.' },
+    { value: 'woocommerce', label: 'WooCommerce', description: 'WordPress z wtyczką WooCommerce.', available: true, note: '' },
+    { value: 'prestashop', label: 'PrestaShop', description: 'Samodzielny system sklepowy.', available: true, note: '' },
+    {
+      value: 'magento',
+      label: 'Magento',
+      description: 'Dla dużych katalogów.',
+      available: false,
+      note: 'Sklepy Magento są w planach Standard i Biznes. Plan Start ich nie obejmuje.',
+    },
   ],
   industries: [
     { value: 'food', label: 'Żywność i napoje' },
@@ -110,6 +117,20 @@ test('each platform offers its own themes', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Załóż sklep' }));
 
   expect(api.sent('POST /shops/')).toEqual([expect.objectContaining({ platform: 'prestashop', template: 'classic' })]);
+});
+
+test('a platform the plan does not allow says why and cannot be chosen', async () => {
+  await open();
+
+  const magento = await screen.findByRole('radio', { name: /^Magento/ });
+  expect(magento).toHaveProp('accessibilityState', { selected: false, disabled: true });
+  expect(screen.getByText('Sklepy Magento są w planach Standard i Biznes. Plan Start ich nie obejmuje.')).toBeTruthy();
+
+  await fireEvent.press(magento);
+  expect(screen.getByRole('radio', { name: /^WooCommerce/ })).toHaveProp('accessibilityState', {
+    selected: true,
+    disabled: false,
+  });
 });
 
 test('errors from the server show under the fields', async () => {

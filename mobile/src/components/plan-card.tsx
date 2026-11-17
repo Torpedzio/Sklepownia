@@ -26,6 +26,14 @@ export function periodLabel(months: number) {
       : `${months} ${plural(months, ['miesiąc', 'miesiące', 'miesięcy'])}`;
 }
 
+/** "1 sklep", "do 3 sklepów, w tym 1 na Magento", "do 10 sklepów, w tym do 5 na Magento". */
+export function planShopsLabel(plan: Pick<Plan, 'max_shops' | 'max_magento_shops'>) {
+  const shops = plan.max_shops === 1 ? '1 sklep' : `do ${plan.max_shops} sklepów`;
+  const magento = plan.max_magento_shops;
+  if (!magento) return shops;
+  return `${shops}, w tym ${magento === 1 || magento === plan.max_shops ? magento : `do ${magento}`} na Magento`;
+}
+
 /** A plan with its gross price and benefits. */
 export function PlanCard({ plan, selected, onSelect, children }: PlanCardProps) {
   const theme = useTheme();

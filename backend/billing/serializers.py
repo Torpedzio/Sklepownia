@@ -12,7 +12,7 @@ class PlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plan
         fields = ["code", "name", "description", "price", "currency", "vat_rate", "interval_months", "max_shops",
-                  "shop_memory_mb", "is_featured", "features"]
+                  "max_magento_shops", "shop_memory_mb", "is_featured", "features"]
 
 
 class BillingProfileSerializer(serializers.ModelSerializer):
@@ -128,7 +128,8 @@ class PlanChangeSerializer(serializers.Serializer):
     plan = serializers.SlugRelatedField(slug_field="code", queryset=Plan.objects.filter(is_active=True))
     keep_shops = serializers.ListField(
         child=serializers.IntegerField(), required=False,
-        help_text="Sklepy, które zostają aktywne, gdy nowy plan ma mniejszy limit. Domyślnie najstarsze.",
+        help_text="Sklepy, które zostają aktywne, gdy nowy plan ma mniejsze limity. "
+                  "Domyślnie najstarsze, które się zmieszczą.",
     )
     return_url = serializers.CharField(
         max_length=500, required=False, default="",
@@ -140,6 +141,8 @@ class ShopBriefSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
     status = serializers.CharField()
+    platform = serializers.CharField()
+    platform_display = serializers.CharField(source="get_platform_display")
 
 
 class PlanChangePreviewSerializer(serializers.Serializer):

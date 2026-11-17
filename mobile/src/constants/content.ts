@@ -42,7 +42,7 @@ export const Features: Feature[] = [
   {
     icon: 'cart',
     title: 'Trzy systemy do wyboru',
-    text: 'WooCommerce z tysiącami wtyczek, PrestaShop popularny w Polsce albo Magento dla dużych katalogów. Wybierasz przy zakładaniu sklepu.',
+    text: 'WooCommerce z tysiącami wtyczek, PrestaShop popularny w Polsce albo Magento dla dużych katalogów (w planach Standard i Biznes). Wybierasz przy zakładaniu sklepu.',
   },
   {
     icon: 'category',
@@ -140,12 +140,12 @@ export const Faq = [
   {
     question: 'Który system wybrać?',
     answer:
-      'Jeśli nie wiesz, wybierz WooCommerce. To WordPress z wtyczką sklepu: ma najwięcej wtyczek, motywów i poradników, a w aplikacji zmienisz w nim najwięcej ustawień. PrestaShop to samodzielny system sklepowy, popularny w Polsce, z rozbudowanym katalogiem i obsługą zamówień. Magento jest dla większych sklepów: z dużym katalogiem, kilkoma magazynami albo wersjami językowymi.',
+      'Jeśli nie wiesz, wybierz WooCommerce. To WordPress z wtyczką sklepu: ma najwięcej wtyczek, motywów i poradników, a w aplikacji zmienisz w nim najwięcej ustawień. PrestaShop to samodzielny system sklepowy, popularny w Polsce, z rozbudowanym katalogiem i obsługą zamówień. Magento jest dla większych sklepów: z dużym katalogiem, kilkoma magazynami albo wersjami językowymi. Potrzebuje więcej zasobów serwera, dlatego jest w planach Standard (jeden sklep Magento) i Biznes (do pięciu).',
   },
   {
     question: 'Ile sklepów mogę założyć?',
     answer:
-      'Tyle, ile pozwala Twój plan: Start to jeden sklep, Standard do trzech, Biznes do dziesięciu. Usunięty sklep zwalnia miejsce, a większy plan wybierzesz w każdej chwili.',
+      'Tyle, ile pozwala Twój plan: Start to jeden sklep, Standard do trzech (w tym jeden na Magento), Biznes do dziesięciu (w tym do pięciu na Magento). Usunięty sklep zwalnia miejsce, a większy plan wybierzesz w każdej chwili.',
   },
   {
     question: 'Jak dodać własne produkty?',
@@ -188,7 +188,7 @@ export const PricingFaq = [
   {
     question: 'Czy mogę zmienić plan?',
     answer:
-      'Tak, w każdej chwili w zakładce Plan i płatności, a data płatności się nie zmienia. Za wyższy plan dopłacasz tylko za dni do końca opłaconego okresu. Przy niższym niewykorzystana kwota pomniejszy kolejne płatności, a sklepy ponad limit planu zostaną zawieszone. Nic z nich nie zniknie i przywrócisz je, gdy zrobi się miejsce.',
+      'Tak, w każdej chwili w zakładce Plan i płatności, a data płatności się nie zmienia. Za wyższy plan dopłacasz tylko za dni do końca opłaconego okresu. Przy niższym niewykorzystana kwota pomniejszy kolejne płatności, a sklepy ponad limit planu (także sklepy Magento ponad jego limit) zostaną zawieszone. Nic z nich nie zniknie i przywrócisz je, gdy zrobi się miejsce.',
   },
   {
     question: 'Jak zrezygnować?',

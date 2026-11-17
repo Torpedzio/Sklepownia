@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { backArrowOptions } from '@/components/back-link';
 import { Icon } from '@/components/icon';
 import { Page } from '@/components/page';
-import { periodLabel, PlanCard } from '@/components/plan-card';
+import { periodLabel, PlanCard, planShopsLabel } from '@/components/plan-card';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
@@ -85,8 +85,19 @@ function ChangeForm({ plans, subscription }: { plans: Plan[]; subscription: Subs
     if (!preview) return;
     const kept = keep ?? preview.keep.map((shop) => shop.id);
     const next = kept.includes(id) ? kept.filter((shopId) => shopId !== id) : [...kept, id];
-    if (next.length > preview.plan.max_shops) {
-      notify.error(`W planie ${preview.plan.name} zostawisz najwyżej ${shopsLabel(preview.plan.max_shops)}.`);
+    const { plan } = preview;
+    if (next.length > plan.max_shops) {
+      notify.error(`W planie ${plan.name} zostawisz najwyżej ${shopsLabel(plan.max_shops)}.`);
+      return;
+    }
+    const shops = [...preview.keep, ...preview.suspend];
+    const magento = shops.filter((shop) => shop.platform === 'magento' && next.includes(shop.id)).length;
+    if (magento > plan.max_magento_shops) {
+      notify.error(
+        plan.max_magento_shops
+          ? `W planie ${plan.name} zostawisz najwyżej ${shopsLabel(plan.max_magento_shops)} Magento.`
+          : `Plan ${plan.name} nie obejmuje sklepów Magento.`,
+      );
       return;
     }
     setLoading(true);
@@ -176,7 +187,8 @@ function Summary({ preview, subscription, keep, onToggleShop, saving, onSubmit }
   const periodEnd = subscription.current_period_end ? formatDate(subscription.current_period_end) : null;
   const nextPayment = Math.max(Number(plan.price) - Number(preview.credit_after), 0);
   const counted = [...preview.keep, ...preview.suspend];
-  const overLimit = counted.length > plan.max_shops;
+  // Shops are suspended only when they don't fit the new plan; then the owner picks which stay.
+  const overLimit = preview.suspend.length > 0;
 
   if (preview.blocked) {
     return (
@@ -217,7 +229,7 @@ function Summary({ preview, subscription, keep, onToggleShop, saving, onSubmit }
       {overLimit ? (
         <View style={styles.shops}>
           <ThemedText type="smallBold">
-            Plan {plan.name} pozwala na {shopsLabel(plan.max_shops)}. Wybierz, które zostają aktywne:
+            Plan {plan.name} to {planShopsLabel(plan)}. Wybierz, które sklepy zostają aktywne:
           </ThemedText>
           {counted.map((shop) => {
             const kept = keep.includes(shop.id);
@@ -229,7 +241,12 @@ function Summary({ preview, subscription, keep, onToggleShop, saving, onSubmit }
                 onPress={() => onToggleShop(shop.id)}
                 style={[styles.shopRow, { borderColor: kept ? theme.primary : theme.border }]}>
                 <Icon name={kept ? 'check' : 'pause'} size={18} color={kept ? 'primary' : 'textSecondary'} />
-                <ThemedText style={styles.flex}>{shop.name}</ThemedText>
+                <View style={styles.flex}>
+                  <ThemedText>{shop.name}</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {shop.platform_display}
+                  </ThemedText>
+                </View>
                 <ThemedText type="small" themeColor={kept ? 'primary' : 'textSecondary'}>
                   {kept ? 'Zostaje' : 'Zostanie zawieszony'}
                 </ThemedText>

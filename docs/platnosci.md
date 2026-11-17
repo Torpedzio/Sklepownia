@@ -117,15 +117,20 @@ Wszystko poza planami wymaga potwierdzonego e-maila.
 ## Zmiana planów i cen
 
 Plany są w panelu admina (**Płatności → Plany**): nazwa, cena brutto, VAT, okres w miesiącach, limit sklepów,
-pamięć sklepu, wyróżnienie w cenniku, korzyści (lista w JSON), kolejność i widoczność. Migracje dodają:
+limit sklepów Magento, pamięć sklepu, wyróżnienie w cenniku, korzyści (lista w JSON), kolejność i widoczność. Migracje dodają:
 
-| Plan | Cena brutto | Sklepy | Pamięć sklepu | Pomoc |
-|---|---|---|---|---|
-| Start (`start`) | 29 zł / mies. | 1 | 512 MB | e-mailowa |
-| Standard (`standard`, polecany) | 49 zł / mies. | 3 | 512 MB | e-mailowa |
-| Biznes (`business`) | 99 zł / mies. | 10 | 1 GB | priorytetowa, odpowiedź w ciągu 1 dnia roboczego |
+| Plan | Cena brutto | Sklepy | W tym Magento | Pamięć sklepu | Pomoc |
+|---|---|---|---|---|---|
+| Start (`start`) | 29 zł / mies. | 1 | 0 | 512 MB | e-mailowa |
+| Standard (`standard`, polecany) | 49 zł / mies. | 3 | 1 | 512 MB | e-mailowa |
+| Biznes (`business`) | 99 zł / mies. | 10 | 5 | 1 GB | priorytetowa, odpowiedź w ciągu 1 dnia roboczego |
 
 - `max_shops` sprawdza backend przy zakładaniu sklepu (sklepy testowe się nie liczą).
+- `max_magento_shops` to ile z tych sklepów może działać na Magento, które potrzebuje ok. trzy razy więcej pamięci.
+  Backend sprawdza go przy zakładaniu i przywracaniu sklepu, a przy zmianie planu zostawia aktywne najstarsze
+  sklepy, które mieszczą się w obu limitach (właściciel może wybrać inne). Formularz sklepu (`form-options`)
+  pokazuje Magento jako niedostępne, gdy plan go nie obejmuje albo limit jest wykorzystany. Kolejny system
+  z osobnym limitem to pole planu i wpis w `PLATFORM_LIMIT_FIELDS` ([shops/services.py](../backend/shops/services.py)).
 - `shop_memory_mb` to limit pamięci kontenera sklepu, ustawiany przy jego tworzeniu (`ContainerProvisioner`).
   Sklepy testowe i sklepy bez planu dostają `SHOPS_CONTAINER_MEMORY`, a sklepy Magento zawsze co najmniej
   `SHOPS_MAGENTO_MEMORY` (1,5 GB), więcej niż daje dziś którykolwiek plan. Działający kontener zmieni limit

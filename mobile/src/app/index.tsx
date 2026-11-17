@@ -150,7 +150,7 @@ export default function HomeScreen() {
         {plans?.length ? (
           <Section
             title="Plany i ceny"
-            text="W każdym planie te same systemy sklepu i motywy. Plany różnią się liczbą sklepów i zasobami serwera.">
+            text="Plany różnią się liczbą sklepów i zasobami serwera. WooCommerce i PrestaShop są w każdym, Magento w planach Standard i Biznes.">
             <View style={styles.plans}>
               {plans.map((plan) => (
                 <PlanCard key={plan.code} plan={plan}>

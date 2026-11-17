@@ -79,21 +79,27 @@ function LimitReached({ limit }: { limit: number }) {
   );
 }
 
-function NewShopForm({ options }: { options: FormOptions }) {
-  const theme = useTheme();
-  const notify = useNotify();
-  const [form, setForm] = useState<NewShop>(() => ({
+/** The first platform the plan allows now, with its first theme. */
+function initialForm(options: FormOptions): NewShop {
+  const platform = (options.platforms.find((p) => p.available) ?? options.platforms[0]).value;
+  return {
     name: '',
     slug: '',
-    platform: options.platforms[0].value,
+    platform,
     industry: '',
-    template: options.templates.find((t) => t.platform === options.platforms[0].value)?.slug ?? '',
+    template: options.templates.find((t) => t.platform === platform)?.slug ?? '',
     category_count: options.category_count.default,
     language: options.languages[0].value,
     currency: options.currencies[0].value,
     country: options.countries[0].value,
     include_sample_products: true,
-  }));
+  };
+}
+
+function NewShopForm({ options }: { options: FormOptions }) {
+  const theme = useTheme();
+  const notify = useNotify();
+  const [form, setForm] = useState<NewShop>(() => initialForm(options));
   const [slugEdited, setSlugEdited] = useState(false);
   const [lastSlugCheck, setLastSlugCheck] = useState<SlugCheck | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -212,6 +218,8 @@ function NewShopForm({ options }: { options: FormOptions }) {
               key={platform.value}
               title={platform.label}
               text={platform.description}
+              note={platform.note}
+              disabled={!platform.available}
               selected={platform.value === form.platform}
               onPress={() => choosePlatform(platform.value)}
             />
@@ -330,22 +338,29 @@ function Section({ title, text, children }: { title: string; text?: string; chil
 function Choice({
   title,
   text,
+  note,
   colors = [],
   selected,
+  disabled = false,
   onPress,
 }: {
   title: string;
   text: string;
+  /** A limit of the plan, e.g. "W planach Standard i Biznes." */
+  note?: string;
   colors?: string[];
   selected: boolean;
+  disabled?: boolean;
   onPress: () => void;
 }) {
   const theme = useTheme();
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled }}
+      accessibilityHint={disabled ? note : undefined}
       onPress={onPress}
+      disabled={disabled}
       style={[
         styles.template,
         {
@@ -360,10 +375,17 @@ function Choice({
           ))}
         </View>
       ) : null}
-      <ThemedText type="heading">{title}</ThemedText>
+      <ThemedText type="heading" themeColor={disabled ? 'textSecondary' : undefined}>
+        {title}
+      </ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
         {text}
       </ThemedText>
+      {note ? (
+        <ThemedText type="smallBold" themeColor={disabled ? 'text' : 'primary'}>
+          {note}
+        </ThemedText>
+      ) : null}
     </Pressable>
   );
 }

@@ -16,6 +16,8 @@ class Plan(models.Model):
     vat_rate = models.DecimalField(max_digits=4, decimal_places=2, default=23)
     interval_months = models.PositiveSmallIntegerField(default=1)
     max_shops = models.PositiveSmallIntegerField()
+    # How many of those shops may run on Magento, which needs about three times the memory of the others.
+    max_magento_shops = models.PositiveSmallIntegerField(default=0)
     # Memory limit of each shop's container; more memory serves more visitors at once.
     shop_memory_mb = models.PositiveIntegerField(default=512)
     # Highlighted on the pricing page as the usual choice.

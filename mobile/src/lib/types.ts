@@ -85,7 +85,14 @@ export type ShopAdminAccess = {
 export type Choice = { value: string; label: string };
 
 export type FormOptions = {
-  platforms: (Choice & { value: Platform; description: string })[];
+  platforms: (Choice & {
+    value: Platform;
+    description: string;
+    /** Whether the plan lets the user create a shop on it now. */
+    available: boolean;
+    /** The plan's limit, e.g. which plans have Magento; empty without one. */
+    note: string;
+  })[];
   industries: Choice[];
   languages: Choice[];
   currencies: Choice[];
@@ -187,6 +194,8 @@ export type Plan = {
   vat_rate: string;
   interval_months: number;
   max_shops: number;
+  /** How many of those shops may run on Magento; 0 when the plan has no Magento. */
+  max_magento_shops: number;
   /** Memory of each shop's container. */
   shop_memory_mb: number;
   /** Highlighted as the usual choice. */
@@ -248,7 +257,13 @@ export type BillingOverview = {
 
 export type Checkout = { payment: Payment; redirect_url: string };
 
-export type ShopBrief = { id: number; name: string; status: ShopStatus };
+export type ShopBrief = {
+  id: number;
+  name: string;
+  status: ShopStatus;
+  platform: Platform;
+  platform_display: string;
+};
 
 /** What moving to another plan would mean now. */
 export type PlanChangePreview = {

@@ -406,11 +406,12 @@ def preview_change(subscription, plan, keep_ids=None, now=None):
     """
     Moving to a dearer plan costs the price difference for the rest of the paid period (from the balance first,
     nothing below MIN_SURCHARGE). Moving to a cheaper one adds the unused difference to the balance. Either way
-    the plan changes now and the billing date stays. Shops beyond the new plan's limit are suspended
-    (`keep_ids` chooses which stay; by default the oldest); with room to spare, suspended shops come back.
+    the plan changes now and the billing date stays. Shops beyond the new plan's limits (all shops, and shops on
+    a platform it limits, like Magento) are suspended (`keep_ids` chooses which stay; by default the oldest that
+    fit); with room to spare, suspended shops that fit come back.
     """
     from shops.models import Shop
-    from shops.services import counted_shops
+    from shops.services import counted_shops, shops_that_fit, suspended_shops
 
     change = PlanChange(plan=plan)
     blocked = _change_blocked(subscription, plan)
@@ -434,23 +435,23 @@ def preview_change(subscription, plan, keep_ids=None, now=None):
     change.credit_after = subscription.credit - change.credit_used + change.credit_added
 
     counted = list(counted_shops(subscription.user))
-    limit = plan.max_shops
-    if len(counted) > limit:
+    fitting = shops_that_fit(plan, counted)
+    if len(fitting) < len(counted):
         if keep_ids is not None:
             keep_ids = set(keep_ids)
             change.keep = [shop for shop in counted if shop.pk in keep_ids]
-            if len(change.keep) > limit:
-                change.blocked = f"W planie {plan.name} zostawisz najwyżej {limit} {_shops(limit)}."
+            too_many = _over_limits(plan, change.keep)
+            if too_many:
+                change.blocked = too_many
                 return change
         else:
-            change.keep = counted[:limit]
+            change.keep = fitting
         change.suspend = [shop for shop in counted if shop not in change.keep]
         if any(shop.status in (Shop.Status.PENDING, Shop.Status.PROVISIONING) for shop in change.suspend):
             change.blocked = "Poczekaj, aż zakładany sklep będzie gotowy, albo zostaw go aktywnym."
     else:
         change.keep = counted
-        suspended = subscription.user.shops.filter(status=Shop.Status.SUSPENDED, is_test=False)
-        change.resume = list(suspended.order_by("created_at", "pk")[: limit - len(counted)])
+        change.resume = shops_that_fit(plan, suspended_shops(subscription.user), kept=counted)
     return change
 
 
@@ -517,7 +518,7 @@ def _after_plan_change(subscription_id, old_plan_id, charged, credit_added, susp
     old_plan = Plan.objects.get(pk=old_plan_id)
     suspended = list(Shop.objects.filter(pk__in=suspend_ids).order_by("created_at", "pk"))
     suspend_shops(suspended)
-    resumed = resume_up_to_limit(subscription.user, plan.max_shops)
+    resumed = resume_up_to_limit(subscription.user, plan)
     if plan.shop_memory_mb != old_plan.shop_memory_mb:
         resumed_ids = {shop.pk for shop in resumed}
         for shop in counted_shops(subscription.user).filter(status=Shop.Status.ACTIVE):
@@ -553,6 +554,21 @@ def _remaining_share(subscription, now):
         return Decimal("0")
     total = (end - start).total_seconds()
     return min(Decimal(str((end - now).total_seconds() / total)), Decimal("1")) if total > 0 else Decimal("0")
+
+
+def _over_limits(plan, shops):
+    """Why `shops` can't all stay active in `plan`, or "" when they can."""
+    from shops.services import PLATFORM_LIMIT_FIELDS, platform_limit
+
+    if len(shops) > plan.max_shops:
+        return f"W planie {plan.name} zostawisz najwyżej {plan.max_shops} {_shops(plan.max_shops)}."
+    for platform in PLATFORM_LIMIT_FIELDS:
+        limit = platform_limit(plan, platform)
+        if sum(shop.platform == platform for shop in shops) > limit:
+            if limit == 0:
+                return f"Plan {plan.name} nie obejmuje sklepów {platform.label}."
+            return f"W planie {plan.name} zostawisz najwyżej {limit} {_shops(limit)} {platform.label}."
+    return ""
 
 
 def _shops(count):

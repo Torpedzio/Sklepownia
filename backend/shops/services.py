@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import timedelta
 
 from django.conf import settings
@@ -17,7 +18,7 @@ from .models import (
     ShopOperation,
     ShopSettings,
 )
-from .platforms import platform_info
+from .platforms import Platform, platform_info
 from .tasks import provision_shop, resume_shop_container, run_shop_operation, suspend_shop, teardown_shop
 
 # An operation older than this no longer blocks new ones (e.g. the worker died while running it).
@@ -27,6 +28,16 @@ OPERATION_TIMEOUT = timedelta(minutes=15)
 class ShopLimitReached(Exception):
     def __init__(self, limit):
         super().__init__(limit)
+        self.limit = limit
+
+
+class PlatformLimitReached(Exception):
+    """The plan allows only `limit` shops on `platform` (none at all when 0)."""
+
+    def __init__(self, plan, platform, limit):
+        super().__init__(platform, limit)
+        self.plan = plan
+        self.platform = platform
         self.limit = limit
 
 
@@ -56,8 +67,7 @@ def create_shop(owner, *, name, slug, platform=None, **config):
             plan = active_plan(owner)
             if plan is None:
                 raise PlanRequired()
-            if paid_shop_count(owner) >= plan.max_shops:
-                raise ShopLimitReached(plan.max_shops)
+            _check_room(owner, plan, platform)
             shop = Shop.objects.create(owner=owner, name=name, slug=slug, platform=platform)
             ShopConfig.objects.create(shop=shop, **config)
             _enqueue_provisioning(shop)
@@ -89,6 +99,52 @@ def paid_shop_count(user):
     return counted_shops(user).count()
 
 
+# Platforms that plans allow only a few shops on, and the plan field with that number.
+PLATFORM_LIMIT_FIELDS = {Platform.MAGENTO: "max_magento_shops"}
+
+
+def platform_limit(plan, platform):
+    """How many shops on `platform` the plan allows, or None when only its total limit counts."""
+    field = PLATFORM_LIMIT_FIELDS.get(platform)
+    return getattr(plan, field) if field else None
+
+
+def platform_usage(user, plan, platform):
+    """(shops on `platform` that count, the plan's limit for it), or None when the platform has no own limit."""
+    limit = platform_limit(plan, platform)
+    if limit is None:
+        return None
+    return counted_shops(user).filter(platform=platform).count(), limit
+
+
+def _check_room(user, plan, platform):
+    if paid_shop_count(user) >= plan.max_shops:
+        raise ShopLimitReached(plan.max_shops)
+    usage = platform_usage(user, plan, platform)
+    if usage and usage[0] >= usage[1]:
+        raise PlatformLimitReached(plan, platform, usage[1])
+
+
+def shops_that_fit(plan, shops, kept=()):
+    """
+    `shops` in their order, as many as fit in the plan next to the `kept` ones: within its total limit and the
+    limits for single platforms (e.g. Magento). A shop that doesn't fit is skipped, so a later one may still fit.
+    """
+    total = len(kept)
+    per_platform = Counter(shop.platform for shop in kept)
+    fitting = []
+    for shop in shops:
+        if total >= plan.max_shops:
+            break
+        limit = platform_limit(plan, shop.platform)
+        if limit is not None and per_platform[shop.platform] >= limit:
+            continue
+        fitting.append(shop)
+        total += 1
+        per_platform[shop.platform] += 1
+    return fitting
+
+
 def suspend_shops(shops):
     """Takes shops beyond the plan's limit offline. Their files and data stay; resume_shop brings them back."""
     for shop in shops:
@@ -110,20 +166,19 @@ def resume_shop(shop):
         plan = active_plan(shop.owner)
         if plan is None:
             raise PlanRequired()
-        if paid_shop_count(shop.owner) >= plan.max_shops:
-            raise ShopLimitReached(plan.max_shops)
+        _check_room(shop.owner, plan, shop.platform)
         _bring_back(shop)
     return shop
 
 
-def resume_up_to_limit(user, limit):
-    """After a plan change gives room: brings back suspended shops, oldest first, as far as the limit allows."""
-    room = limit - paid_shop_count(user)
+def suspended_shops(user):
+    return user.shops.filter(status=Shop.Status.SUSPENDED, is_test=False).order_by("created_at", "pk")
+
+
+def resume_up_to_limit(user, plan):
+    """After a plan change gives room: brings back suspended shops, oldest first, as far as the plan allows."""
     resumed = []
-    if room <= 0:
-        return resumed
-    suspended = user.shops.filter(status=Shop.Status.SUSPENDED, is_test=False).order_by("created_at", "pk")
-    for shop in suspended[:room]:
+    for shop in shops_that_fit(plan, suspended_shops(user), kept=list(counted_shops(user))):
         with transaction.atomic():
             shop = Shop.objects.select_for_update().get(pk=shop.pk)
             if shop.status == Shop.Status.SUSPENDED:

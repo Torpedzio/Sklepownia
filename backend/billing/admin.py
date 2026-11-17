@@ -5,8 +5,8 @@ from .models import BillingProfile, Payment, Plan, Subscription
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
-    list_display = ["name", "code", "price", "currency", "interval_months", "max_shops", "shop_memory_mb",
-                    "is_featured", "is_active", "sort_order"]
+    list_display = ["name", "code", "price", "currency", "interval_months", "max_shops", "max_magento_shops",
+                    "shop_memory_mb", "is_featured", "is_active", "sort_order"]
     list_editable = ["is_featured", "is_active", "sort_order"]
 
 

@@ -6,7 +6,7 @@ import { backArrowOptions } from '@/components/back-link';
 import { BillingProfileForm, EMPTY_PROFILE } from '@/components/billing-profile-form';
 import { Icon } from '@/components/icon';
 import { Page } from '@/components/page';
-import { periodLabel } from '@/components/plan-card';
+import { periodLabel, planShopsLabel } from '@/components/plan-card';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing, type ThemeColor } from '@/constants/theme';
@@ -107,7 +107,7 @@ function PlanSection({ subscription, onChange }: { subscription: Subscription | 
         <View style={styles.flex}>
           <ThemedText type="heading">Plan {plan.name}</ThemedText>
           <ThemedText themeColor="textSecondary">
-            {formatMoney(plan.price, plan.currency)} / {periodLabel(plan.interval_months)}, do {plan.max_shops} sklepów
+            {formatMoney(plan.price, plan.currency)} / {periodLabel(plan.interval_months)}, {planShopsLabel(plan)}
           </ThemedText>
         </View>
         <View style={[styles.badge, { backgroundColor: theme[background] }]}>

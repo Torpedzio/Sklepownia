@@ -7,11 +7,12 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
 from accounts.permissions import IsEmailVerified
+from billing.models import Plan
 
 from . import services
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import InvalidTransition, Shop, ShopCredentials, ShopOperation, ShopTemplate
-from .platforms import PLATFORMS, platform_info
+from .platforms import PLATFORMS, Platform, platform_info
 from .shop_settings import SettingsUpdateSerializer
 from .tasks import send_admin_access_email
 from .serializers import (
@@ -46,6 +47,67 @@ def plural_shops(count):
     if count == 1:
         return "sklep"
     return "sklepy" if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14) else "sklepów"
+
+
+def _join(names):
+    """["Standard", "Biznes", "Pro"] → "Standard, Biznes i Pro"."""
+    return " i ".join([", ".join(names[:-1]), names[-1]]) if len(names) > 1 else "".join(names)
+
+
+def _plans_with(platform, more_than=0):
+    """Names of the plans that allow more than `more_than` shops on `platform`."""
+    plans = Plan.objects.filter(is_active=True).order_by("sort_order", "price")
+    names = [plan.name for plan in plans if (services.platform_limit(plan, platform) or 0) > more_than]
+    return list(dict.fromkeys(names))
+
+
+def _in_plans(platform):
+    """"W planach Standard i Biznes." when only some plans have `platform`, otherwise ""."""
+    with_platform = _plans_with(platform)
+    if platform not in services.PLATFORM_LIMIT_FIELDS or len(with_platform) == _active_plan_names_count():
+        return ""
+    if not with_platform:
+        return "Niedostępne w żadnym planie."
+    return f"W planie {with_platform[0]}." if len(with_platform) == 1 else f"W planach {_join(with_platform)}."
+
+
+def _active_plan_names_count():
+    return Plan.objects.filter(is_active=True).values("name").distinct().count()
+
+
+def _platform_limit_message(plan, platform, limit, used=None, *, resuming=False):
+    label = Platform(platform).label
+    if limit == 0:
+        plans = _plans_with(platform)
+        where = f"są w planie {plans[0]}" if len(plans) == 1 else f"są w planach {_join(plans)}"
+        return f"Sklepy {label} {where}. Plan {plan.name} ich nie obejmuje."
+    used = limit if used is None else used
+    text = f"Masz już {used} {plural_shops(used)} {label}, tyle ile pozwala plan {plan.name}."
+    if resuming:
+        return f"{text} Usuń inny sklep {label} albo zmień plan, żeby przywrócić ten."
+    bigger = _plans_with(platform, more_than=limit)
+    remove = "Usuń go" if used == 1 else "Usuń któryś z nich"
+    return f"{text} {remove}" + (f" albo przejdź na plan {bigger[0]}." if bigger else ".")
+
+
+def _platform_options(user):
+    plan = services.active_plan(user)
+    options = []
+    for platform, info in PLATFORMS.items():
+        available, note = True, ""
+        if plan is None:
+            # No plan yet: say which plans have the platform.
+            note = _in_plans(platform)
+        else:
+            usage = services.platform_usage(user, plan, platform)
+            if usage and usage[0] >= usage[1]:
+                available = False
+                note = _platform_limit_message(plan, platform, usage[1], usage[0])
+        options.append({
+            "value": platform.value, "label": platform.label, "description": info.description,
+            "available": available, "note": note,
+        })
+    return options
 
 
 def _choices(choices_class):
@@ -132,6 +194,11 @@ class ShopViewSet(
                 {"detail": f"Twój plan pozwala na {limit.limit} {plural_shops(limit.limit)}. Usuń jeden albo zmień plan."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except services.PlatformLimitReached as limit:
+            return Response(
+                {"platform": [_platform_limit_message(limit.plan, limit.platform, limit.limit)]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except services.SlugTaken:
             return Response({"slug": ["Ten adres jest już zajęty."]}, status=status.HTTP_400_BAD_REQUEST)
         return Response(ShopDetailSerializer(self.get_queryset().get(pk=shop.pk)).data, status=status.HTTP_201_CREATED)
@@ -182,6 +249,11 @@ class ShopViewSet(
                            "Zmień plan albo usuń inny sklep, żeby przywrócić ten."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except services.PlatformLimitReached as limit:
+            return Response(
+                {"detail": _platform_limit_message(limit.plan, limit.platform, limit.limit, resuming=True)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except InvalidTransition:
             return Response({"detail": "Ten sklep nie jest zawieszony."}, status=status.HTTP_409_CONFLICT)
         return Response(ShopDetailSerializer(self.get_queryset().get(pk=pk)).data)
@@ -226,10 +298,7 @@ class ShopViewSet(
     def form_options(self, request):
         templates = ShopTemplate.objects.filter(is_active=True)
         return Response({
-            "platforms": [
-                {"value": platform.value, "label": platform.label, "description": info.description}
-                for platform, info in PLATFORMS.items()
-            ],
+            "platforms": _platform_options(request.user),
             "industries": _choices(Industry),
             "languages": _choices(Language),
             "currencies": _choices(Currency),
