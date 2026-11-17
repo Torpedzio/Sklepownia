@@ -511,12 +511,9 @@ describe('changing the plan', () => {
     ]);
   });
 
-  test('keeping too many shops is refused before asking the server', async () => {
-    const shops = [
-      woo(1, 'Palarnia'),
-      woo(2, 'Herbaciarnia'),
-    ];
-    await open({
+  test('at the limit, ticking another shop swaps it for the kept one, without asking the server again', async () => {
+    const shops = [woo(1, 'Palarnia'), woo(2, 'Herbaciarnia')];
+    const { api } = await open({
       'POST /billing/subscription/change-preview/': previewOf({
         plan: start,
         direction: 'downgrade',
@@ -530,34 +527,46 @@ describe('changing the plan', () => {
     await fireEvent.press(await screen.findByRole('radio', { name: /^Start/ }));
     await fireEvent.press(await screen.findByRole('checkbox', { name: /Herbaciarnia/ }));
 
-    expect(await screen.findByText('W planie Start zostawisz najwyżej 1 sklep.')).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: /Herbaciarnia/ })).toHaveProp('accessibilityState', { checked: true });
+    expect(screen.getByRole('checkbox', { name: /Palarnia/ })).toHaveProp('accessibilityState', { checked: false });
+    expect(api.sent('POST /billing/subscription/change-preview/')).toEqual([{ plan: 'start' }]);
   });
 
-  test('Magento shops beyond the plan are refused before asking the server', async () => {
-    const shops = [
-      { ...woo(1, 'Palarnia'), platform: 'magento' as const, platform_display: 'Magento' },
-      { ...woo(2, 'Herbaciarnia'), platform: 'magento' as const, platform_display: 'Magento' },
-      woo(3, 'Kawiarnia'),
-    ];
-    await open({
-      'POST /billing/subscription/change-preview/': previewOf({
-        plan: standard,
-        direction: 'downgrade',
-        amount_due: '0.00',
-        credit_added: '50.00',
-        keep: [shops[0], shops[2]],
-        suspend: [shops[1]],
-      }),
-    }, business);
+  test('a Magento shop swaps for the kept Magento shop when Magento is full', async () => {
+    const magento = (id: number, name: string) => ({
+      ...woo(id, name),
+      platform: 'magento' as const,
+      platform_display: 'Magento',
+    });
+    const shops = [magento(1, 'Palarnia'), magento(2, 'Herbaciarnia'), woo(3, 'Kawiarnia'), woo(4, 'Piekarnia')];
+    await open(
+      {
+        'POST /billing/subscription/change-preview/': previewOf({
+          plan: standard,
+          direction: 'downgrade',
+          amount_due: '0.00',
+          credit_added: '50.00',
+          keep: [shops[0], shops[2], shops[3]],
+          suspend: [shops[1]],
+        }),
+      },
+      business,
+    );
 
     await fireEvent.press(await screen.findByRole('radio', { name: /^Standard/ }));
-
     expect(
       await screen.findByText('Plan Standard to do 3 sklepów, w tym 1 na Magento. Wybierz, które sklepy zostają aktywne:'),
     ).toBeTruthy();
     await fireEvent.press(screen.getByRole('checkbox', { name: /Herbaciarnia/ }));
 
-    expect(await screen.findByText('W planie Standard zostawisz najwyżej 1 sklep Magento.')).toBeTruthy();
+    const names = ['Palarnia', 'Herbaciarnia', 'Kawiarnia', 'Piekarnia'];
+    const checked = () =>
+      names.map((name) => screen.getByRole('checkbox', { name: new RegExp(name) }).props.accessibilityState.checked);
+    expect(checked()).toEqual([false, true, true, true]);
+
+    // Unticking a shop keeps the list as it is.
+    await fireEvent.press(screen.getByRole('checkbox', { name: /Kawiarnia/ }));
+    expect(checked()).toEqual([false, true, false, true]);
   });
 
   test('a blocked change says why', async () => {

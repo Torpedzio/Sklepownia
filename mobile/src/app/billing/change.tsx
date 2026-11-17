@@ -17,7 +17,7 @@ import { api, ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
 import { formatDate, formatMoney } from '@/lib/format';
 import { goToPayment, paymentReturnUrl } from '@/lib/payment';
-import { plural } from '@/lib/plural';
+import { toggleKept } from '@/lib/plan-change';
 import type { BillingOverview, Plan, PlanChangePreview, PlanChangeResult, Subscription } from '@/lib/types';
 
 export default function ChangePlanScreen() {
@@ -57,21 +57,22 @@ function ChangeForm({ plans, subscription }: { plans: Plan[]; subscription: Subs
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // The preview is computed by the server, so the amounts shown are the ones charged.
+  // The preview is computed by the server, so the amounts shown are the ones charged. Which shops stay doesn't
+  // change the amounts, so picking them happens here and the server checks the choice when the plan changes.
   useEffect(() => {
     if (!chosen) return;
     let current = true;
-    api<PlanChangePreview>('/billing/subscription/change-preview/', {
-      method: 'POST',
-      body: { plan: chosen, ...(keep ? { keep_shops: keep } : {}) },
-    })
+    api<PlanChangePreview>('/billing/subscription/change-preview/', { method: 'POST', body: { plan: chosen } })
       .then((result) => current && setPreview(result))
       .catch((e: Error) => current && notify.error(e.message))
       .finally(() => current && setLoading(false));
     return () => {
       current = false;
     };
-  }, [chosen, keep, notify]);
+  }, [chosen, notify]);
+
+  const kept = keep ?? preview?.keep.map((shop) => shop.id) ?? [];
+  const suspended = preview ? [...preview.keep, ...preview.suspend].filter((shop) => !kept.includes(shop.id)) : [];
 
   function choose(code: string) {
     if (code === subscription.plan.code) return;
@@ -83,34 +84,19 @@ function ChangeForm({ plans, subscription }: { plans: Plan[]; subscription: Subs
 
   function toggleShop(id: number) {
     if (!preview) return;
-    const kept = keep ?? preview.keep.map((shop) => shop.id);
-    const next = kept.includes(id) ? kept.filter((shopId) => shopId !== id) : [...kept, id];
-    const { plan } = preview;
-    if (next.length > plan.max_shops) {
-      notify.error(`W planie ${plan.name} zostawisz najwyżej ${shopsLabel(plan.max_shops)}.`);
-      return;
-    }
     const shops = [...preview.keep, ...preview.suspend];
-    const magento = shops.filter((shop) => shop.platform === 'magento' && next.includes(shop.id)).length;
-    if (magento > plan.max_magento_shops) {
-      notify.error(
-        plan.max_magento_shops
-          ? `W planie ${plan.name} zostawisz najwyżej ${shopsLabel(plan.max_magento_shops)} Magento.`
-          : `Plan ${plan.name} nie obejmuje sklepów Magento.`,
-      );
-      return;
-    }
-    setLoading(true);
-    setKeep(next);
+    const result = toggleKept(shops, kept, id, preview.plan);
+    if ('error' in result) notify.error(result.error);
+    else setKeep(result.keep);
   }
 
   async function submit() {
     if (!preview || !chosen) return;
     if (
-      preview.suspend.length &&
+      suspended.length &&
       !(await confirm(
         'Zawiesić sklepy?',
-        `${preview.suspend.map((shop) => shop.name).join(', ')}: klienci przestaną je widzieć. Nic z nich nie zniknie, a przywrócisz je po zmianie planu.`,
+        `${suspended.map((shop) => shop.name).join(', ')}: klienci przestaną je widzieć. Nic z nich nie zniknie, a przywrócisz je po zmianie planu.`,
         'Zmień plan',
       ))
     ) {
@@ -161,7 +147,7 @@ function ChangeForm({ plans, subscription }: { plans: Plan[]; subscription: Subs
         <Summary
           preview={preview}
           subscription={subscription}
-          keep={keep ?? preview.keep.map((shop) => shop.id)}
+          keep={kept}
           onToggleShop={toggleShop}
           saving={saving}
           onSubmit={submit}
@@ -188,9 +174,13 @@ function Summary({ preview, subscription, keep, onToggleShop, saving, onSubmit }
   const nextPayment = Math.max(Number(plan.price) - Number(preview.credit_after), 0);
   const counted = [...preview.keep, ...preview.suspend];
   // Shops are suspended only when they don't fit the new plan; then the owner picks which stay.
-  const overLimit = preview.suspend.length > 0;
+  const choosing = preview.suspend.length > 0;
+  // A shop being set up can't be suspended; the owner keeps it, or waits until it is ready.
+  const settingUp = counted.find(
+    (shop) => !keep.includes(shop.id) && (shop.status === 'pending' || shop.status === 'provisioning'),
+  );
 
-  if (preview.blocked) {
+  if (preview.blocked && !choosing) {
     return (
       <View style={[styles.card, { backgroundColor: theme.accentMuted, borderColor: theme.accent }]}>
         <ThemedText type="heading">Tej zmiany nie da się teraz zrobić</ThemedText>
@@ -226,7 +216,7 @@ function Summary({ preview, subscription, keep, onToggleShop, saving, onSubmit }
         </ThemedText>
       ) : null}
 
-      {overLimit ? (
+      {choosing ? (
         <View style={styles.shops}>
           <ThemedText type="smallBold">
             Plan {plan.name} to {planShopsLabel(plan)}. Wybierz, które sklepy zostają aktywne:
@@ -263,19 +253,22 @@ function Summary({ preview, subscription, keep, onToggleShop, saving, onSubmit }
         <ThemedText>Wrócą zawieszone sklepy: {preview.resume.map((shop) => shop.name).join(', ')}.</ThemedText>
       ) : null}
 
+      {settingUp ? (
+        <ThemedText themeColor="danger">
+          Sklep {settingUp.name} jest jeszcze zakładany. Zostaw go aktywnym albo poczekaj, aż będzie gotowy.
+        </ThemedText>
+      ) : null}
+
       <Button
         title={Number(preview.amount_due) > 0 ? `Dopłać ${money(preview.amount_due)} i zmień plan` : 'Zmień plan'}
         icon={Number(preview.amount_due) > 0 ? 'card' : 'check'}
         size="large"
         loading={saving}
+        disabled={!!settingUp}
         onPress={onSubmit}
       />
     </View>
   );
-}
-
-function shopsLabel(count: number) {
-  return `${count} ${plural(count, ['sklep', 'sklepy', 'sklepów'])}`;
 }
 
 const styles = StyleSheet.create({
