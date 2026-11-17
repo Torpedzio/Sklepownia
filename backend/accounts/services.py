@@ -4,15 +4,25 @@ import secrets
 
 from django.conf import settings
 from django.contrib.auth import password_validation
+from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from .models import EmailVerificationCode, PasswordResetCode, User
-from .tasks import send_password_changed_email, send_password_reset_email, send_verification_email
+from .tasks import (
+    send_account_deleted_email,
+    send_password_changed_email,
+    send_password_reset_email,
+    send_verification_email,
+)
 
 
 class VerificationError(Exception):
+    pass
+
+
+class AccountDeletionBlocked(Exception):
     pass
 
 
@@ -112,3 +122,41 @@ def reset_password(email, code, new_password):
         sign_out_everywhere(user)
         transaction.on_commit(lambda: send_password_changed_email.delay(user.pk))
     return user
+
+
+def delete_account(user):
+    """
+    Deletes the account for good. Every shop is torn down, the plan ends now without a refund of the paid period,
+    and the card is forgotten. The user row stays, because paid payments (kept for tax law) point at it,
+    but without anything personal: no e-mail, name, picture or password, and it can't sign in.
+    The address is free for a new account. A confirmation goes to the old address.
+    """
+    from billing.services import close_account
+    from shops.services import ShopBeingSetUp, delete_all_shops
+
+    with transaction.atomic():
+        # The same lock as creating a shop, so no shop appears while the account goes.
+        user = User.objects.select_for_update().get(pk=user.pk)
+        if user.is_staff:
+            raise AccountDeletionBlocked("Konto administratora usuń w panelu administracyjnym.")
+        try:
+            shops = delete_all_shops(user)
+        except ShopBeingSetUp as busy:
+            raise AccountDeletionBlocked(
+                f"Sklep „{busy.shop.name}” jest właśnie zakładany. Poczekaj, aż będzie gotowy, i spróbuj ponownie.",
+            ) from None
+        close_account(user)
+        email, avatar = user.email, user.avatar.name
+        user.email = f"deleted-{user.pk}@deleted.invalid"
+        user.first_name = user.last_name = ""
+        user.avatar = ""
+        user.set_unusable_password()
+        user.is_active = False
+        user.deleted_at = timezone.now()
+        user.save()
+        EmailVerificationCode.objects.filter(user=user).delete()
+        PasswordResetCode.objects.filter(user=user).delete()
+        sign_out_everywhere(user)
+        if avatar:
+            transaction.on_commit(lambda: default_storage.delete(avatar))
+        transaction.on_commit(lambda: send_account_deleted_email.delay(email, shops))

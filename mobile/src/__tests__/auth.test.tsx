@@ -125,6 +125,17 @@ test('a new password keeps this device signed in with fresh tokens', async () =>
   expect(screen.getByText('wylogowany')).toBeTruthy();
 });
 
+test('deleting the account sends the password and drops the session', async () => {
+  const { api } = await start({ access: 'a', refresh: 'r' }, { 'GET /auth/me/': anna, 'POST /auth/delete-account/': null });
+  await screen.findByText('anna@example.com');
+
+  await act(() => auth().deleteAccount('Sekretne-haslo-123'));
+
+  expect(api.sent('POST /auth/delete-account/')).toEqual([{ password: 'Sekretne-haslo-123' }]);
+  expect(setTokens).toHaveBeenLastCalledWith(null);
+  expect(screen.getByText('wylogowany')).toBeTruthy();
+});
+
 test('a forgotten password: a code by e-mail, then signed in with the new password', async () => {
   const { api } = await start(null, {
     'POST /auth/password-reset/': null,

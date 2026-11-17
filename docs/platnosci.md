@@ -46,6 +46,8 @@ Cykl rozliczeń (odnowienia, ponowienia, wygasanie) jest w [services.py](../back
 | `expired` | Wszystkie ponowienia odnowienia nie wyszły albo brak zapisanej karty | nie |
 
 Anulowanie (`cancel_at_period_end`) nie przerywa planu od razu: działa do końca okresu i można je cofnąć.
+Usunięcie konta kończy plan od razu (`canceled`, `current_period_end` przycięte do chwili usunięcia), bez zwrotu
+za resztę okresu i bez wypłaty salda; ekran usuwania prosi, żeby o zwrot napisać przed usunięciem.
 Istniejące sklepy na razie działają we wszystkich stanach planu; zawieszanie sklepów po końcu planu jest w planie
 ([ograniczenia-i-plan.md](ograniczenia-i-plan.md)). Dziś sklepy zawiesza tylko zmiana na plan z mniejszym limitem.
 

@@ -43,6 +43,33 @@ def send_password_reset_email(user_id, code):
 
 
 @shared_task(autoretry_for=(OSError, SMTPException), retry_backoff=True, max_retries=5)
+def send_account_deleted_email(email, shop_names):
+    """Confirms a deleted account to its old address; the account itself no longer has one."""
+    when = formats.date_format(timezone.localtime(), "j E Y, H:i")
+    context = {
+        "platform": settings.PLATFORM_NAME,
+        "recipient": email,
+        "heading": "Konto zostało usunięte",
+        "intro": f"Konto {email} usunęliśmy {when}. Plan przestał działać i nie pobierzemy już żadnej płatności. "
+                 "Dane płatności i faktur przechowujemy tylko dlatego, że wymagają tego przepisy podatkowe. "
+                 "Jeśli to nie Ty, odpowiedz od razu na tę wiadomość.",
+        "title": "Usunięte sklepy",
+        "rows": [(name, "usunięty razem z danymi") for name in shop_names],
+    }
+    shops = "".join(f"\n- {name}" for name in shop_names)
+    message = EmailMultiAlternatives(
+        subject="Konto zostało usunięte",
+        body=f"{context['heading']}\n\n{context['intro']}"
+             + (f"\n\n{context['title']}:{shops}" if shop_names else "")
+             + f"\n\n--\n{context['platform']}.",
+        to=[email],
+        reply_to=[settings.CONTACT_EMAIL],
+    )
+    message.attach_alternative(render_to_string("accounts/email/deleted.html", context), "text/html")
+    message.send()
+
+
+@shared_task(autoretry_for=(OSError, SMTPException), retry_backoff=True, max_retries=5)
 def send_password_changed_email(user_id):
     """Tells the owner their password changed, so a change they didn't make doesn't go unnoticed."""
     user = User.objects.get(pk=user_id)

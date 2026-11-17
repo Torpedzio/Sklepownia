@@ -45,6 +45,14 @@ class PlanRequired(Exception):
     """Creating shops needs an active paid plan."""
 
 
+class ShopBeingSetUp(Exception):
+    """A shop is being set up right now, so it can't be removed yet."""
+
+    def __init__(self, shop):
+        super().__init__(shop.pk)
+        self.shop = shop
+
+
 class SlugTaken(Exception):
     pass
 
@@ -211,6 +219,27 @@ def delete_shop(shop):
         shop = Shop.objects.select_for_update().get(pk=shop.pk)
         shop.transition_to(Shop.Status.DELETED)
         transaction.on_commit(lambda: teardown_shop.delay(shop.pk))
+
+
+def delete_all_shops(user):
+    """
+    For a deleted account: every shop of the user is torn down and then removed from the database too
+    (teardown_shop does that for owners without an account). Returns the names of shops that were still live.
+    Shops deleted earlier are torn down again, which is harmless, so nothing is left behind if that failed.
+    """
+    shops = list(Shop.objects.select_for_update().filter(owner=user).order_by("created_at", "pk"))
+    # A queued shop would be picked up by the worker after its row is gone, so it has to finish like one being set up.
+    setting_up = (Shop.Status.PENDING, Shop.Status.PROVISIONING)
+    busy = next((shop for shop in shops if shop.status in setting_up), None)
+    if busy is not None:
+        raise ShopBeingSetUp(busy)
+    removed = []
+    for shop in shops:
+        if shop.status != Shop.Status.DELETED:
+            shop.transition_to(Shop.Status.DELETED)
+            removed.append(shop.name)
+        transaction.on_commit(lambda shop_id=shop.pk: teardown_shop.delay(shop_id))
+    return removed
 
 
 def _enqueue_provisioning(shop):

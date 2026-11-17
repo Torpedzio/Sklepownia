@@ -1,0 +1,4 @@
+{% extends "email/layout.html" %}
+{% block content %}
+{% if rows %}{% include "email/rows.html" with title=title rows=rows %}{% endif %}
+{% endblock %}

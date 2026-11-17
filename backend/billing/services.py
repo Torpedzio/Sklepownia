@@ -120,6 +120,9 @@ def apply_result(result: PaymentResult):
             logger.warning("Payment result for a missing payment %s", payment_id)
             return None
         if payment.status != Payment.Status.PENDING or result.paid is None:
+            if payment.status == Payment.Status.FAILED and result.paid:
+                # E.g. paid in another tab after the account was deleted: the money has to be returned by hand.
+                logger.error("Payment %s was paid after it had failed (%s); refund it", payment.pk, payment.error)
             return payment
         if result.paid and result.amount is not None and result.amount < payment.amount:
             logger.error("Payment %s paid %s instead of %s", payment.pk, result.amount, payment.amount)
@@ -184,6 +187,30 @@ def cancel(subscription):
         raise BillingError("Nie ma aktywnego planu do anulowania.")
     subscription.cancel_at_period_end = True
     subscription.save(update_fields=["cancel_at_period_end", "updated_at"])
+
+
+def close_account(user):
+    """
+    The owner deleted the account: the plan ends now and the saved card is forgotten, so nothing is charged again,
+    and payments still waiting are dropped. Paid payments stay, with the invoice details they were made with,
+    because tax law requires keeping them.
+    """
+    now = timezone.now()
+    subscription = Subscription.objects.select_for_update().filter(user=user).first()
+    if subscription is not None:
+        if subscription.status != Subscription.Status.EXPIRED:
+            subscription.status = Subscription.Status.CANCELED
+        if subscription.current_period_end and subscription.current_period_end > now:
+            subscription.current_period_end = now
+        subscription.cancel_at_period_end = False
+        subscription.next_attempt_at = None
+        subscription.card_token = ""
+        subscription.card_brand = subscription.card_tail = subscription.card_expiry = ""
+        subscription.save()
+    Payment.objects.filter(user=user, status=Payment.Status.PENDING).update(
+        status=Payment.Status.FAILED, error="Konto zostało usunięte przed opłaceniem.",
+    )
+    BillingProfile.objects.filter(user=user).delete()
 
 
 def resume(subscription):

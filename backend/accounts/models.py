@@ -30,6 +30,8 @@ class User(AbstractUser):
     email = models.EmailField("adres e-mail", unique=True)
     is_email_verified = models.BooleanField(default=False)
     avatar = models.FileField("zdjęcie profilowe", upload_to="avatars/", blank=True)
+    # When the owner deleted the account. The row stays, without personal data, because payments point at it.
+    deleted_at = models.DateTimeField("usunięte", null=True, blank=True)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []

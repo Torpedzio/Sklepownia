@@ -40,6 +40,15 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
   - Wylogowanie dopisuje token odświeżania do czarnej listy.
 - **Potwierdzony e-mail** jest wymagany do zakładania i ponawiania sklepów (`IsEmailVerified`).
 - **`GET /api/auth/me/`** zwraca dane konta razem z `shop_limit`, żeby aplikacja mogła zablokować przycisk nowego sklepu.
+- **Usunięcie konta** (`delete_account`) to anonimizacja, nie skasowanie wiersza, bo płatności (`Payment.user`, `PROTECT`)
+  trzeba przechowywać dla przepisów podatkowych.
+  - E-mail zmienia się na `deleted-{id}@deleted.invalid`, a imię, nazwisko, zdjęcie i hasło znikają.
+    Konto dostaje `is_active=False` i `deleted_at`, a jego tokeny trafiają na czarną listę.
+  - Sklepy są usuwane (`delete_all_shops`). `teardown_shop` po sprzątnięciu kontenera kasuje też wiersz sklepu,
+    gdy właściciel nie ma już konta.
+  - Plan kończy się od razu jako `canceled` bez karty (`close_account`), czekające płatności są nieudane,
+    a dane do faktury (`BillingProfile`) znikają. Płatność opłacona po usunięciu konta trafia do logu błędów jako do zwrotu.
+  - Wiadomości z formularza kontaktowego zostają, bo to korespondencja z obsługą.
 
 ## Aplikacja `shops`
 
@@ -166,7 +175,8 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 |---|---|---|
 | `accounts.tasks.send_verification_email` | Rejestracja, ponowne wysłanie kodu | Wysyła kod potwierdzający |
 | `shops.tasks.provision_shop` | Założenie i ponowienie sklepu | Wykonuje kroki zadania (`run_job`) |
-| `shops.tasks.teardown_shop` | Usunięcie sklepu | Usuwa kontener, wolumen i bazę |
+| `shops.tasks.teardown_shop` | Usunięcie sklepu albo konta | Usuwa kontener, wolumen i bazę; przy usuniętym koncie także wiersz sklepu |
+| `accounts.tasks.send_account_deleted_email` | Usunięcie konta | Potwierdzenie na dawny adres z listą usuniętych sklepów |
 | `shops.tasks.send_admin_access_email` | Koniec zakładania, nowe hasło, prośba z aplikacji | Wysyła właścicielowi e-mail ze szczegółami sklepu i danymi logowania ([emails.py](../backend/shops/emails.py)); przy błędzie serwera pocztowego ponawia |
 | `billing.tasks.renew_subscriptions` | Co 15 minut (Celery beat) | Odnawia plany, ponawia nieudane odnowienia, kończy anulowane i niezapłacone |
 | `billing.tasks.reconcile_payments` | Co 5 minut (Celery beat) | Pyta operatora o płatności, które wciąż czekają; po dobie oznacza je jako niedokończone |

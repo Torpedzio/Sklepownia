@@ -23,6 +23,7 @@ from .serializers import (
     AuthTokensSerializer,
     AvatarUploadSerializer,
     ChangePasswordSerializer,
+    DeleteAccountSerializer,
     EmailTokenObtainPairSerializer,
     LogoutSerializer,
     PasswordResetRequestSerializer,
@@ -91,6 +92,22 @@ class ChangePasswordView(APIView):
         services.sign_out_everywhere(user)
         transaction.on_commit(lambda: send_password_changed_email.delay(user.pk))
         return Response(_tokens(user))
+
+
+class DeleteAccountView(APIView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    @extend_schema(request=DeleteAccountSerializer, responses={204: None})
+    def post(self, request):
+        """Deletes the account, its shops and plan for good; the password confirms it's the owner."""
+        serializer = DeleteAccountSerializer(data=request.data, context={"user": request.user})
+        serializer.is_valid(raise_exception=True)
+        try:
+            services.delete_account(request.user)
+        except services.AccountDeletionBlocked as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class LogoutEverywhereView(APIView):

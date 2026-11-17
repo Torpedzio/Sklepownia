@@ -87,6 +87,15 @@ class PasswordResetSerializer(serializers.Serializer):
     new_password = serializers.CharField(write_only=True, style={"input_type": "password"})
 
 
+class DeleteAccountSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, style={"input_type": "password"})
+
+    def validate_password(self, value):
+        if not self.context["user"].check_password(value):
+            raise serializers.ValidationError("Hasło jest nieprawidłowe.")
+        return value
+
+
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(write_only=True, style={"input_type": "password"})
     new_password = serializers.CharField(write_only=True, style={"input_type": "password"})

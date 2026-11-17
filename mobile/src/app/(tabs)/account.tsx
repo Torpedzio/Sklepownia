@@ -447,6 +447,13 @@ function Security() {
         description="Przyda się, gdy aplikacja została zalogowana na cudzym komputerze albo zginął telefon.">
         <Button title="Wyloguj wszędzie" variant="secondary" icon="logout" onPress={handleSignOutEverywhere} />
       </Setting>
+      <Setting
+        title="Usunięcie konta"
+        description="Usuwa konto razem ze sklepami i planem. Najpierw pokażemy, co dokładnie zniknie.">
+        <Link href="/delete-account" asChild>
+          <Button title="Usuń konto" variant="danger" icon="trash" />
+        </Link>
+      </Setting>
     </Card>
   );
 }

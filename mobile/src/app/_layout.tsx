@@ -92,6 +92,7 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen name="billing/checkout" options={{ title: 'Wybierz plan' }} />
         <Stack.Screen name="billing/change" options={{ title: 'Zmień plan' }} />
         <Stack.Screen name="billing/return" options={{ title: 'Płatność' }} />
+        <Stack.Screen name="delete-account" options={{ title: 'Usuń konto' }} />
       </Stack.Protected>
       <Stack.Screen name="about" options={{ title: 'Jak to działa', headerShown: nativeHeader }} />
       <Stack.Screen name="contact" options={{ title: 'Kontakt', headerShown: nativeHeader }} />

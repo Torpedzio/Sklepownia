@@ -27,6 +27,8 @@ type AuthContextValue = {
   requestPasswordReset: (email: string) => Promise<void>;
   /** Sets the new password with the code from the e-mail and signs in. */
   resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
+  /** Deletes the account with its shops and plan for good, then forgets the session here. */
+  deleteAccount: (password: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -118,6 +120,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       });
       await setTokens(tokens);
       setUser(await api<User>('/auth/me/'));
+    },
+    async deleteAccount(password) {
+      await api('/auth/delete-account/', { method: 'POST', body: { password } });
+      await setTokens(null);
+      setUser(null);
     },
   };
 

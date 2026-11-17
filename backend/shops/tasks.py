@@ -18,8 +18,13 @@ def provision_shop(job_id):
 
 @shared_task
 def teardown_shop(shop_id):
-    shop = Shop.objects.get(pk=shop_id)
+    shop = Shop.objects.select_related("owner").filter(pk=shop_id).first()
+    if shop is None:
+        return
     get_provisioner(shop.platform).teardown(shop)
+    if shop.owner.deleted_at is not None:
+        # The owner deleted the account: nothing of the shop is kept, its settings and history included.
+        shop.delete()
 
 
 @shared_task

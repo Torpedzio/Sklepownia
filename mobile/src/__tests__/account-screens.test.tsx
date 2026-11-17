@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import AccountScreen from '@/app/(tabs)/account';
 import ShopsScreen from '@/app/(tabs)/shops';
 import ContactScreen from '@/app/contact';
+import DeleteAccountScreen from '@/app/delete-account';
 import ResetPasswordScreen from '@/app/reset-password';
 import SignInScreen from '@/app/sign-in';
 import SignUpScreen from '@/app/sign-up';
@@ -471,6 +472,94 @@ describe('account overview and security', () => {
 
     expect(signOutEverywhere).toHaveBeenCalled();
     expect(await screen.findByText('Wylogowano ze wszystkich urządzeń.')).toBeTruthy();
+  });
+});
+
+describe('deleting the account', () => {
+  const subscription = {
+    plan: { code: 'standard', name: 'Standard' },
+    status: 'active',
+    cancel_at_period_end: false,
+  };
+  const shop = (id: number, name: string, status: Shop['status'] = 'active') => ({
+    id,
+    name,
+    url: `http://${name.toLowerCase()}.sklepy.localhost`,
+    status,
+  });
+
+  async function open(deleteAccount: jest.Mock, shops = [shop(1, 'Palarnia'), shop(2, 'Herbaciarnia', 'suspended')]) {
+    signedIn(anna, { deleteAccount });
+    mockApi({ 'GET /shops/': [shops], 'GET /billing/': { subscription, profile: null, payments: [{ status: 'paid' }] } });
+    await renderScreen(<DeleteAccountScreen />);
+  }
+
+  test('says what goes, offers cancelling the plan instead, and deletes after the password', async () => {
+    const deleteAccount = jest
+      .fn()
+      .mockRejectedValueOnce(new ApiError(400, { password: ['Hasło jest nieprawidłowe.'] }))
+      .mockResolvedValueOnce(undefined);
+    await open(deleteAccount);
+
+    expect(await screen.findByText('Palarnia')).toBeTruthy();
+    expect(screen.getByText('herbaciarnia.sklepy.localhost')).toBeTruthy();
+    expect(screen.getByText(/Plan Standard przestanie działać od razu/)).toBeTruthy();
+    expect(screen.getByText(/Opłacone płatności z danymi z faktur/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Przejdź do planu i płatności' }));
+    expect(router.push).toHaveBeenCalledWith('/billing');
+
+    const button = screen.getByRole('button', { name: 'Usuń konto na zawsze' });
+    expect(button).toBeDisabled();
+    await fireEvent.changeText(screen.getByLabelText('Hasło'), 'zle');
+    await fireEvent.press(button);
+    expect(confirm).toHaveBeenCalledWith(
+      'Usunąć konto na zawsze?',
+      expect.stringContaining('Sklepy Palarnia, Herbaciarnia znikną od razu'),
+      'Usuń konto',
+    );
+    expect(await screen.findByText('Hasło jest nieprawidłowe.')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('Hasło'), 'Sekretne-haslo-123');
+    await fireEvent.press(screen.getByRole('button', { name: 'Usuń konto na zawsze' }));
+
+    expect(deleteAccount).toHaveBeenLastCalledWith('Sekretne-haslo-123');
+    expect(await screen.findByText('Konto usunięte. Potwierdzenie wysłaliśmy na anna@example.com.')).toBeTruthy();
+  });
+
+  test('nothing happens when the confirmation is declined', async () => {
+    (confirm as jest.Mock).mockResolvedValueOnce(false);
+    const deleteAccount = jest.fn();
+    await open(deleteAccount, []);
+
+    expect(await screen.findByText('Nie masz sklepów, więc żaden nie zniknie.')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Hasło'), 'Sekretne-haslo-123');
+    await fireEvent.press(screen.getByRole('button', { name: 'Usuń konto na zawsze' }));
+
+    expect(confirm).toHaveBeenCalledWith('Usunąć konto na zawsze?', 'Tego nie da się cofnąć.', 'Usuń konto');
+    expect(deleteAccount).not.toHaveBeenCalled();
+  });
+
+  test('a single shop is named in the singular', async () => {
+    (confirm as jest.Mock).mockResolvedValueOnce(false);
+    await open(jest.fn(), [shop(1, 'Palarnia')]);
+
+    expect(await screen.findByText('Sklep razem z produktami, zamówieniami i kontami klientów:')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Hasło'), 'Sekretne-haslo-123');
+    await fireEvent.press(screen.getByRole('button', { name: 'Usuń konto na zawsze' }));
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Usunąć konto na zawsze?',
+      'Sklep Palarnia zniknie od razu razem z danymi. Tego nie da się cofnąć.',
+      'Usuń konto',
+    );
+  });
+
+  test('a shop being set up has to finish first', async () => {
+    await open(jest.fn(), [shop(1, 'Palarnia', 'provisioning')]);
+
+    expect(await screen.findByText(/Sklep „Palarnia” jest właśnie zakładany/)).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Hasło'), 'Sekretne-haslo-123');
+    expect(screen.getByRole('button', { name: 'Usuń konto na zawsze' })).toBeDisabled();
   });
 });
 
