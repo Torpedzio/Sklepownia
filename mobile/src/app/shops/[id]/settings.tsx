@@ -478,8 +478,8 @@ export default function ShopSettingsScreen() {
                   </>
                 ) : (
                   <Note>
-                    Płatności internetowe (np. Przelewy24, PayU, karty) wymagają umowy z operatorem płatności. Na razie
-                    włączysz je w panelu sklepu.
+                    Płatności internetowe wymagają konta u operatora płatności. W tym sklepie podłączysz w panelu
+                    PayPal, a Przelewy24 i PayU nie są jeszcze dostępne.
                   </Note>
                 )}
                 <Button

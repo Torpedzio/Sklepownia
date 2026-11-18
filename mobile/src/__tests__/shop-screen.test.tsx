@@ -190,3 +190,34 @@ test('a PrestaShop shop names its panel and asks only for what the app can set',
   ).toBeTruthy();
   expect(screen.queryByText('Wysyłka')).toBeNull();
 });
+
+test('the tips open the right page of the WordPress panel', async () => {
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue();
+  await open(shopDetail(), {
+    'GET /shops/7/settings/': shopSettings(),
+    'GET /shops/7/admin-access/': { admin_url: 'http://palarnia.localhost:8080/wp-admin/', sent_to: 'a@example.com' },
+  });
+
+  expect(await screen.findByText('Uzupełnij dane firmy')).toBeTruthy();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Uzupełnij dane firmy: otwórz w panelu sklepu' }));
+
+  expect(openURL).toHaveBeenCalledWith(
+    'http://palarnia.localhost:8080/wp-admin/admin.php?page=wc-settings&tab=general',
+  );
+});
+
+test('a Magento shop gets tips for its own panel, which open its start page', async () => {
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue();
+  const magento = shopDetail({ platform: 'magento', platform_display: 'Magento', panel_name: 'panel Magento' });
+  await open(magento, {
+    'GET /shops/7/settings/': shopSettings({}, { sections: ['general', 'payments', 'shipping', 'documents'] }),
+    'GET /shops/7/admin-access/': { admin_url: 'http://palarnia.localhost:8080/admin_k3x9/', sent_to: 'a@example.com' },
+  });
+
+  expect(await screen.findByText('Sklepy → Konfiguracja → Ogólne → Informacje o sklepie')).toBeTruthy();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Uzupełnij dane firmy: otwórz w panelu sklepu' }));
+
+  // Pages of the Magento panel need a key from the session, so the tip opens its start page.
+  expect(openURL).toHaveBeenCalledWith('http://palarnia.localhost:8080/admin_k3x9/');
+  expect(screen.queryByText('WooCommerce → Ustawienia → Ogólne')).toBeNull();
+});

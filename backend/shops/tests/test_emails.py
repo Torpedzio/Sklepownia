@@ -122,3 +122,20 @@ def test_deleted_shops_get_no_mail(shop, mailoutbox):
     send_admin_access_email(shop.pk, "resend")
 
     assert len(mailoutbox) == 1
+
+
+@pytest.mark.parametrize(("platform", "note"), [
+    ("woocommerce", "Płatności, wysyłkę, podatki i regulamin ustawisz w aplikacji, w ustawieniach sklepu."),
+    ("prestashop", "Płatności i regulamin ustawisz w aplikacji, w ustawieniach sklepu. "
+                   "Wysyłkę i podatki w panelu sklepu."),
+    ("magento", "Płatności, wysyłkę, podatki i regulamin ustawisz w aplikacji, w ustawieniach sklepu."),
+])
+def test_the_e_mail_says_what_the_app_sets_on_the_shops_platform(shop, mailoutbox, platform, note):
+    from shops.emails import admin_access_message
+
+    shop.platform = platform
+    message = admin_access_message(shop, "resend")
+
+    # Every platform has its note, so no shop is left without its login (Magento once was).
+    assert note in message.body
+    assert note in html_of(message)

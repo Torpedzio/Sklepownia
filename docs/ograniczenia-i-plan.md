@@ -30,7 +30,9 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   - starszy regulamin nie jest archiwizowany: klient widzi tylko aktualną wersję, a e-mail z zamówieniem nie ma
     dokumentów w załączniku (trwały nośnik).
 - **Płatności online w sklepach** (Przelewy24, PayU):
-  - tylko WooCommerce i PrestaShop; w Magento właściciel instaluje moduł operatora w panelu;
+  - tylko WooCommerce i PrestaShop; w Magento właściciel podłączy w panelu tylko wbudowany PayPal, bo Magento 2.4
+    nie instaluje modułów z panelu (Extension Directory w Mage-OS pokazuje tylko polecenia `composer`), a moduł
+    operatora wymaga dostępu do serwera;
   - wtyczki i moduły instalujemy w wersji przypiętej w kodzie i nie aktualizujemy ich z aplikacji (aktualizacja to
     nowa wersja w `ONLINE_PAYMENTS`, sprawdzona na sklepie; właściciel może też zaktualizować wtyczkę w panelu);
   - konto Przelewy24 w PrestaShop i punkt PayU ustawiamy dla domyślnej waluty sklepu; inne waluty są w panelu;
@@ -61,8 +63,11 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
 - **Testy na urządzeniu:** testy aplikacji działają w Jest; zachowania zależne od urządzenia (przewijanie,
   klawiatura, animacje) sprawdza się ręcznie w Expo Go.
 - **Zdjęcia w przykładowych produktach.** Produkty przykładowe nie mają zdjęć, więc nowy sklep pokazuje szare zaślepki.
-- **Porady w innych językach.** Instrukcja logowania i porady podają polskie nazwy z panelu WordPressa,
-  także dla sklepów założonych w innym języku.
+- **Porady w innych językach.** Instrukcja logowania i porady podają polskie nazwy z paneli WordPressa,
+  PrestaShop i Magento, także dla sklepów założonych w innym języku. Polski pakiet Magento nie tłumaczy kilku
+  nazw (np. „Delivery Methods”), więc porady podają je po angielsku, tak jak w panelu.
+- **Porady PrestaShop i Magento otwierają stronę startową panelu.** Adresy stron w ich panelach zawierają token sesji
+  albo tajny klucz, więc przycisk przy poradzie nie przeniesie od razu na właściwą stronę.
 
 ## Inne platformy sklepów
 

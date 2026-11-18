@@ -14,32 +14,44 @@ import { Button } from "@/components/ui/button";
 import { ShopGuides } from "@/constants/shop-guides";
 import { Fonts, Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
+import type { Platform } from "@/lib/types";
 
 type ShopGuidesPanelProps = {
-  /** When given, each tip gets a button opening the right page of this shop's admin panel. */
-  shopUrl?: string;
+  /** Whose panel the tips walk through. A new platform needs a new panel (`key`), starting from the first tip. */
+  platform: Platform;
+  /**
+   * The shop's admin panel. When given, each tip gets a button: the right page in WooCommerce, the start page in
+   * PrestaShop and Magento.
+   */
+  adminUrl?: string;
 };
 
-// Every tip of every category in one sequence, so "Next" carries on into the next category.
-const SLIDES = ShopGuides.flatMap((guide, guideIndex) =>
-  guide.tips.map((tip, tipIndex) => ({ guide, guideIndex, tip, tipIndex })),
-);
 const SWIPE_DISTANCE = 50;
 
 /** Tips for setting up and running a shop, shown one slide at a time. */
-export function ShopGuidesPanel({ shopUrl }: ShopGuidesPanelProps) {
+export function ShopGuidesPanel({ platform, adminUrl }: ShopGuidesPanelProps) {
   const theme = useTheme();
+  const guides = ShopGuides[platform];
+  // Every tip of every category in one sequence, so "Next" carries on into the next category.
+  const slides = useMemo(
+    () =>
+      guides.flatMap((guide, guideIndex) =>
+        guide.tips.map((tip, tipIndex) => ({ guide, guideIndex, tip, tipIndex })),
+      ),
+    [guides],
+  );
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState<1 | -1>(1);
-  const slide = SLIDES[index];
+  const slide = slides[index];
   const { guide, tip, tipIndex } = slide;
-  const isLast = index === SLIDES.length - 1;
-  const nextGuide = ShopGuides[slide.guideIndex + 1];
+  const isLast = index === slides.length - 1;
+  const nextGuide = guides[slide.guideIndex + 1];
   const endsCategory = tipIndex === guide.tips.length - 1;
+  const count = slides.length;
 
   function go(to: number) {
     setDirection(to >= index ? 1 : -1);
-    setIndex((to + SLIDES.length) % SLIDES.length);
+    setIndex((to + count) % count);
   }
 
   const swipe = useMemo(
@@ -50,14 +62,14 @@ export function ShopGuidesPanel({ shopUrl }: ShopGuidesPanelProps) {
         onPanResponderRelease: (_, g) => {
           if (g.dx <= -SWIPE_DISTANCE) {
             setDirection(1);
-            setIndex((i) => (i + 1) % SLIDES.length);
+            setIndex((i) => (i + 1) % count);
           } else if (g.dx >= SWIPE_DISTANCE) {
             setDirection(-1);
             setIndex((i) => Math.max(i - 1, 0));
           }
         },
       }),
-    [],
+    [count],
   );
 
   const nextLabel = isLast
@@ -76,7 +88,7 @@ export function ShopGuidesPanel({ shopUrl }: ShopGuidesPanelProps) {
       <View style={styles.head}>
         <ThemedText type="subtitle">Porady</ThemedText>
         <View style={styles.tabs} accessibilityRole="tablist">
-          {ShopGuides.map((g, guideIndex) => {
+          {guides.map((g, guideIndex) => {
             const active = guideIndex === slide.guideIndex;
             return (
               <Pressable
@@ -84,7 +96,7 @@ export function ShopGuidesPanel({ shopUrl }: ShopGuidesPanelProps) {
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
                 onPress={() =>
-                  go(SLIDES.findIndex((s) => s.guideIndex === guideIndex))
+                  go(slides.findIndex((s) => s.guideIndex === guideIndex))
                 }
                 style={[
                   styles.tab,
@@ -163,14 +175,14 @@ export function ShopGuidesPanel({ shopUrl }: ShopGuidesPanelProps) {
                 {tip.menu}
               </ThemedText>
             </View>
-            {shopUrl ? (
+            {adminUrl ? (
               <Button
-                title="Otwórz w panelu"
+                title={tip.adminPath ? "Otwórz w panelu" : "Otwórz panel"}
                 variant="secondary"
                 icon="external"
                 accessibilityLabel={`${tip.title}: otwórz w panelu sklepu`}
                 onPress={() =>
-                  Linking.openURL(`${shopUrl}/wp-admin/${tip.adminPath}`)
+                  Linking.openURL(`${adminUrl}${tip.adminPath ?? ""}`)
                 }
               />
             ) : null}
@@ -180,7 +192,7 @@ export function ShopGuidesPanel({ shopUrl }: ShopGuidesPanelProps) {
 
       <View style={styles.dots}>
         {guide.tips.map((t, i) => {
-          const target = SLIDES.findIndex(
+          const target = slides.findIndex(
             (s) => s.guideIndex === slide.guideIndex && s.tipIndex === i,
           );
           const current = i === tipIndex;

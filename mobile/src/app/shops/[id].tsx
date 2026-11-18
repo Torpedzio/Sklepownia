@@ -20,7 +20,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
 import { panelLocative, panelTitle } from '@/lib/format';
-import type { ShopDetail, ShopSettings, ShopStatus } from '@/lib/types';
+import type { ShopAdminAccess, ShopDetail, ShopSettings, ShopStatus } from '@/lib/types';
 
 const IN_PROGRESS = ['pending', 'provisioning'];
 
@@ -38,6 +38,10 @@ export default function ShopScreen() {
   });
   // The overview of a running shop shows its settings as last read from the shop.
   const { data: settings } = useApiQuery<ShopSettings>(`/shops/${id}/settings/`, {
+    enabled: shop?.status === 'active',
+  });
+  // The tips open the shop's panel, whose address PrestaShop and Magento keep secret.
+  const { data: access } = useApiQuery<ShopAdminAccess>(`/shops/${id}/admin-access/`, {
     enabled: shop?.status === 'active',
   });
   const notify = useNotify();
@@ -236,8 +240,7 @@ export default function ShopScreen() {
         {receipt}
       </View>
 
-      {/* The guides walk through the WooCommerce panel. */}
-      {shop.platform === 'woocommerce' ? <ShopGuidesPanel shopUrl={active ? shop.url : undefined} /> : null}
+      <ShopGuidesPanel platform={shop.platform} adminUrl={active ? access?.admin_url : undefined} />
 
       {!inProgress ? (
         <Button title="Usuń sklep" variant="danger" onPress={handleDelete} disabled={busy} style={styles.delete} />

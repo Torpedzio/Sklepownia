@@ -223,7 +223,7 @@ test('keys already in the shop are not asked for again, unless the mode changes'
 test('without operators the app sets up, online payments are left to the shop panel', async () => {
   await open('platnosci', { [SETTINGS]: shopSettings({}, { ...fresh, payment_operators: [] }) });
 
-  expect(await screen.findByText(/Na razie\s+włączysz je w panelu sklepu\./)).toBeTruthy();
+  expect(await screen.findByText(/w panelu\s+PayPal, a Przelewy24 i PayU nie są jeszcze dostępne\./)).toBeTruthy();
   expect(screen.queryByRole('switch', { name: 'Przelewy24' })).toBeNull();
 });
 

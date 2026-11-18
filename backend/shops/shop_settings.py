@@ -392,7 +392,7 @@ class SettingsUpdateSerializer(serializers.Serializer):
         for key, operator in OPERATORS.items():
             if key not in operators and any(field.startswith(f"{key}_") for field in given):
                 errors.setdefault("payments", {})[f"{key}_enabled"] = [
-                    f"Płatności {operator.name} włączysz w panelu sklepu.",
+                    f"Płatności {operator.name} nie są jeszcze dostępne na platformie tego sklepu.",
                 ]
         theme = attrs.get("appearance", {}).get("theme")
         platform = self.context.get("platform")

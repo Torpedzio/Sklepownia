@@ -159,8 +159,8 @@ Płatności online (Przelewy24, PayU; tylko operatorzy z `payment_operators`):
   Spacje są usuwane, a litery zamieniane na małe.
 - Pierwsze włączenie instaluje w sklepie oficjalną wtyczkę albo moduł operatora (kilkadziesiąt sekund).
   Wyłączenie wyłącza tylko płatność: wtyczka i jej ustawienia zostają w sklepie.
-- Operator na platformie spoza `payment_operators` (Magento): `400` przy `{operator}_enabled`, „Płatności … włączysz
-  w panelu sklepu.”
+- Operator na platformie spoza `payment_operators` (Magento): `400` przy `{operator}_enabled`, „Płatności … nie są
+  jeszcze dostępne na platformie tego sklepu.”
 
 Pola formularza `POST shops/`:
 

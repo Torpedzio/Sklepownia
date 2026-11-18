@@ -8,6 +8,7 @@ import { useAuth } from '@/context/auth';
 import { NotificationsProvider } from '@/context/notifications';
 import type { Plan } from '@/lib/types';
 import { mockApi } from '@/testing/api';
+import { shopDetail } from '@/testing/fixtures';
 import { router } from '@/testing/router';
 
 jest.mock('expo-router', () => require('@/testing/router'));
@@ -105,4 +106,20 @@ test('help leads to the contact form too', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Napisz do nas' }));
 
   expect(router.push).toHaveBeenCalledWith('/contact');
+});
+
+test('help walks through the panel of the first shop’s system, and the others on request', async () => {
+  signedIn({ email: 'anna@example.com' });
+  mockApi({
+    'GET /billing/plans/': [PLANS],
+    'GET /shops/': [[shopDetail({ platform: 'magento', platform_display: 'Magento' })]],
+  });
+  await renderScreen(<HelpScreen />);
+
+  expect(await screen.findByText('Sklepy → Konfiguracja → Ogólne → Informacje o sklepie')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('radio', { name: 'PrestaShop' }));
+
+  expect(screen.getByText('Preferencje → Kontakt → Sklepy')).toBeTruthy();
+  // Without a shop there is no panel to open.
+  expect(screen.queryByRole('button', { name: /otwórz w panelu sklepu/ })).toBeNull();
 });

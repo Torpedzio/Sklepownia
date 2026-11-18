@@ -202,12 +202,14 @@ def test_pasted_keys_are_tidied(auth_client, shop, applied, django_capture_on_co
     assert changes["payments"]["przelewy24_crc_key"] == CRC
 
 
-def test_magento_sets_online_payments_in_its_panel(new_shop, auth_client):
+def test_magento_has_no_online_payments_yet(new_shop, auth_client):
     magento = new_shop("magento", template="luma")
 
     response = auth_client.patch(f"/api/shops/{magento.pk}/settings/", {"payments": {"payu_enabled": True}},
                                  format="json")
 
     assert response.status_code == 400
-    assert response.data["payments"]["payu_enabled"] == ["Płatności PayU włączysz w panelu sklepu."]
+    assert response.data["payments"]["payu_enabled"] == [
+        "Płatności PayU nie są jeszcze dostępne na platformie tego sklepu.",
+    ]
     assert auth_client.get(f"/api/shops/{magento.pk}/settings/").data["payment_operators"] == []

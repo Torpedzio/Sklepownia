@@ -388,7 +388,7 @@ Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od
 | `shops/tests/test_magento.py` | To samo dla `MagentoProvisioner`: `setup:install`, akcje `sklepownia:run` i ich dane, pamięć, indeksy OpenSearch |
 | `shops/tests/test_platforms.py` | Platformy przez API: wybór motywu i platformy, kroki, panel, sekcje ustawień, wybór provisionera |
 | `billing/tests/test_billing.py`, `billing/tests/test_tpay.py` | Płatności i bramka Tpay ([platnosci.md](platnosci.md#testy)) |
-| `shops/tests/test_emails.py` | E-mail z danymi logowania: po założeniu i ponowieniu, ponowne wysłanie i jego limit, nowe hasło, brak danych w API |
+| `shops/tests/test_emails.py` | E-mail z danymi logowania: po założeniu i ponowieniu, ponowne wysłanie i jego limit, nowe hasło, brak danych w API, uwaga o ustawieniach zgodna z sekcjami aplikacji na każdej platformie |
 | `shops/tests/test_commands.py` | Polecenia `update_shop_addresses` i `configure_shop_mail`, domyślne zachowanie `BaseProvisioner` |
 | `support/tests/test_contact.py` | Formularz kontaktowy i powiadomienie |
 | `handbook/tests/test_handbook.py` | Strony dokumentacji, odnośniki, kotwice, dostęp, kompletność menu |
