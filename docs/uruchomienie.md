@@ -152,7 +152,9 @@ Bez ustawień poczty w `.env` backend wypisuje wiadomości w logach (`EMAIL_BACK
 | `FAKE_PROVISIONER_STEP_DELAY` | `2` | Sekundy na krok w symulacji |
 | `FAKE_PROVISIONER_FAIL_AT_STEP` | puste | Klucz kroku, na którym symulacja ma się wysypać |
 
-Aplikacja mobilna: `EXPO_PUBLIC_API_URL` (opcjonalnie) wymusza adres API.
+Aplikacja mobilna: `EXPO_PUBLIC_API_URL` (opcjonalnie) wymusza adres API. `SITE_URL` (tylko serwer strony,
+bez `EXPO_PUBLIC_`) to adres strony w linkach kanonicznych, podglądach linków i `sitemap.xml`; bez niego serwer
+bierze adres z zapytania, co lokalnie wystarcza, ale za proxy na produkcji da adres wewnętrzny.
 
 ## Sprawdzanie zmian
 
@@ -162,4 +164,3 @@ docker compose exec backend python manage.py spectacular --validate --fail-on-wa
 cd mobile && npx tsc --noEmit && npx expo lint && npm test   # typy, lint i testy aplikacji
 ```
 
-Lint zgłasza jeden znany błąd w pliku z szablonu Expo: `src/hooks/use-color-scheme.web.ts`.

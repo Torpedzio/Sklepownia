@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { CtaBand } from '@/components/cta-band';
 import { FaqList } from '@/components/faq-list';
@@ -14,6 +14,7 @@ import { Brand } from '@/constants/brand';
 import { Faq, Features, PricingFaq, SetupSteps } from '@/constants/content';
 import { ReadableWidth, Spacing, WideBreakpoint } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
 export default function AboutScreen() {
   const { user } = useAuth();

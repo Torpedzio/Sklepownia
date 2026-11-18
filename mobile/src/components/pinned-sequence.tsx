@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Platform, StyleSheet, useWindowDimensions, View, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
   measure,
   scrollTo,
@@ -16,6 +16,7 @@ import type { PageScroll } from '@/components/page';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
 // Scrolling this far inside the section moves on to the next item.
 const STEP = 500;

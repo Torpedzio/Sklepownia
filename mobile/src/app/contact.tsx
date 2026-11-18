@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/icon';
 import { Page } from '@/components/page';
@@ -14,6 +14,7 @@ import { Radius, Spacing, WideBreakpoint } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 import { useNotify } from '@/context/notifications';
 import { useTheme } from '@/hooks/use-theme';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 import { api, ApiError } from '@/lib/api';
 
 const TOPICS = [

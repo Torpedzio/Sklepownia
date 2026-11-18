@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CtaBand } from '@/components/cta-band';
@@ -19,9 +19,15 @@ import { Faq, Features, Platforms, PricingFaq, SetupSteps } from '@/constants/co
 import { useAuth } from '@/context/auth';
 import { Spacing, WideBreakpoint } from '@/constants/theme';
 import { useApiQuery } from '@/hooks/use-api-query';
+import { usePlans } from '@/hooks/use-plans';
 import { useTheme } from '@/hooks/use-theme';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 import { formatMoney } from '@/lib/format';
+import { loadPlans } from '@/lib/plans';
 import type { Plan, Shop } from '@/lib/types';
+
+// On the web the server puts the plans in the page (see usePlans).
+export const loader = loadPlans;
 
 const HOME_SLIDES = Features.filter((feature) => feature.homeSlide !== false);
 
@@ -57,7 +63,7 @@ function fromPrice(plans: Plan[] | undefined) {
 export default function HomeScreen() {
   const { user } = useAuth();
   const { data: shops } = useApiQuery<Shop[]>('/shops/', { enabled: !!user });
-  const { data: plans } = useApiQuery<Plan[]>('/billing/plans/');
+  const { plans } = usePlans();
   const price = fromPrice(plans);
   const theme = useTheme();
   const { width } = useWindowDimensions();

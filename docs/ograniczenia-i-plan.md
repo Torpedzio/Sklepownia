@@ -63,10 +63,13 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   klawiatura, animacje) sprawdza się ręcznie w Expo Go.
 - **Pamięć podręczna danych** w aplikacji jest tylko w pamięci: po ponownym uruchomieniu aplikacji albo odświeżeniu
   strony ekrany zaczynają od ładowania, a bez sieci aplikacja nie pokaże ostatnich danych.
-- **Strona w przeglądarce przychodzi z serwera pusta.** Układ główny czeka na sprawdzenie zalogowania, którego na
-  serwerze nie ma, więc treść pojawia się dopiero po pobraniu całego JS, a wyszukiwarki i podglądy linków jej nie
-  widzą. Do zrobienia razem z SEO: strony publiczne renderowane na serwerze, z pierwszym renderem niezależnym od
-  szerokości okna i motywu (inaczej hydratacja się nie zgodzi).
+- **Strona w przeglądarce** ([aplikacja-mobilna.md](aplikacja-mobilna.md#strona-w-przeglądarce)):
+  - jeden obrazek podglądu linku dla wszystkich stron; dane strukturalne mówią tylko, kto prowadzi serwis (bez cen
+    planów i pytań);
+  - serwer zgaduje szerokość okna po urządzeniu, więc na komputerze z wąskim oknem układ zmienia się na wąski
+    zaraz po załadowaniu;
+  - ekrany za logowaniem mają w karcie przeglądarki tylko nazwę serwisu;
+  - plany w stronie z serwera przeglądarka trzyma do przeładowania strony (dane `loader` są zapamiętywane na sesję).
 - **Start kontenera sklepu:** przez kilka sekund od startu kontenera (zakładanie, przywrócenie, restart) Traefik
   ma już regułę sklepu, a serwer w środku jeszcze nie odpowiada, więc gość dostaje `502` zamiast strony
   „Sklep chwilowo niedostępny”. Zaradziłby healthcheck kontenera (Traefik pomija kontenery, które nie są zdrowe).
@@ -101,6 +104,9 @@ Projekt działa dziś tylko lokalnie. Przed uruchomieniem dla użytkowników trz
 
 1. **Domena i HTTPS.** Prawdziwa domena z wieloznacznym rekordem DNS (`*.sklepy.example.pl`) i certyfikatem
    wildcard w Traefiku (Let's Encrypt, wyzwanie DNS). Potem `SHOPS_URL_SCHEME=https`, `SHOPS_WP_ENVIRONMENT=production`.
+   Strona platformy potrzebuje serwera Node (renderuje strony): `npx expo export --platform web` i adapter
+   `expo-server` albo EAS Hosting ([aplikacja-mobilna.md](aplikacja-mobilna.md#strona-w-przeglądarce)), z `SITE_URL`
+   ustawionym na jej adres. Potem mapa strony w Google Search Console.
 2. **Bezpieczny dostęp do Dockera.** Worker ma dziś surowy socket Dockera, czyli uprawnienia roota.
    Trzeba go odseparować, np. przez proxy socketu ograniczające dozwolone operacje
    albo osobny agent na serwerze sklepów z własnym API.

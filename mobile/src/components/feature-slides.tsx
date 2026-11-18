@@ -1,13 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Image, PanResponder, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
-import Animated, {
-  FadeInLeft,
-  FadeInRight,
-  useAnimatedStyle,
-  useReducedMotion,
-  withTiming,
-} from 'react-native-reanimated';
+import { Image, PanResponder, Pressable, StyleSheet, View } from 'react-native';
+import Animated, { FadeInLeft, FadeInRight, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
 import { Awning, AWNING_HEIGHT } from '@/components/awning';
 import { Icon, type IconName } from '@/components/icon';
@@ -15,9 +9,11 @@ import { usePageScroll, type PageScroll } from '@/components/page';
 import { PinnedSequence, SectionHeader, SwapLayer } from '@/components/pinned-sequence';
 import { ThemedText } from '@/components/themed-text';
 import type { Feature } from '@/constants/content';
-import { Radius, Spacing, WideBreakpoint } from '@/constants/theme';
+import { clearOf, Radius, Spacing, WideBreakpoint } from '@/constants/theme';
 import { useFullBleed } from '@/hooks/use-full-bleed';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useTheme } from '@/hooks/use-theme';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
 const AUTOPLAY_MS = 7000;
 const SWIPE_DISTANCE = 50;
@@ -292,7 +288,7 @@ function Backdrop({ feature, active, tone, wide, width, height, inset }: Backdro
     const photoHeight = photoWidth / aspectRatio;
     const spare = width - photoWidth;
     const sideFade = Math.round(width * (wide ? SIDE_FADE_WIDE : SIDE_FADE_NARROW));
-    const clear = `${theme.background}00`;
+    const clear = clearOf(theme.background);
     return (
       <Animated.View style={[StyleSheet.absoluteFill, fade]} pointerEvents="none">
         <Image

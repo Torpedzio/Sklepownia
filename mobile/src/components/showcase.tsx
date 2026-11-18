@@ -1,14 +1,14 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState, type ReactNode } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { useReducedMotion } from 'react-native-reanimated';
 
 import { usePageScroll, type PageScroll } from '@/components/page';
 import { PinnedSequence, SectionHeader, SwapLayer } from '@/components/pinned-sequence';
 import { ThemedText } from '@/components/themed-text';
 import { PreviewAspectRatio, type ShowcaseItem } from '@/constants/content';
-import { Spacing, WideBreakpoint } from '@/constants/theme';
+import { clearOf, Spacing, WideBreakpoint } from '@/constants/theme';
 import { useFullBleed } from '@/hooks/use-full-bleed';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useTheme } from '@/hooks/use-theme';
 
 // Share of the page width the screenshot takes on wide screens, and its largest width.
@@ -123,7 +123,7 @@ function WideBand({
   const side = index % 2 === 0 ? 'right' : 'left';
   const height = Math.round(previewWidth / PreviewAspectRatio);
   const fadeWidth = Math.round(previewWidth * 0.5);
-  const clear = `${theme.background}00`;
+  const clear = clearOf(theme.background);
   // The fade starts at the screenshot's inner edge, the one facing the text.
   const fade = side === 'right' ? { left: width - previewWidth } : { left: previewWidth - fadeWidth };
 
@@ -165,7 +165,7 @@ function NarrowBand({ item, width, inset, onHeight }: BandProps & { onHeight?: (
           style={[styles.preview, { width, height }]}
         />
         <LinearGradient
-          colors={[`${theme.background}00`, theme.background]}
+          colors={[clearOf(theme.background), theme.background]}
           pointerEvents="none"
           style={[styles.narrowFade, { height: height * 0.6 }]}
         />

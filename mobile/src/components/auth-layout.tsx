@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import type { PropsWithChildren } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Awning } from '@/components/awning';
@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { SetupSteps } from '@/constants/content';
 import { Spacing, WideBreakpoint } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
 type AuthLayoutProps = PropsWithChildren<{ title: string; subtitle?: string }>;
 

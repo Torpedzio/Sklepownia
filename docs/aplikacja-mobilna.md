@@ -13,9 +13,9 @@ https://docs.expo.dev/versions/v58.0.0/. Pakiety instaluj przez `npx expo instal
 mobile/src/
 ├── app/            ekrany; każdy plik to ścieżka (Expo Router)
 ├── components/     komponenty współdzielone; ui/ to podstawowe kontrolki
-├── constants/      kolory i odstępy (theme), teksty (content, shop-guides), dane marki (brand)
+├── constants/      kolory i odstępy (theme), teksty (content, shop-guides), dane marki (brand), strony publiczne (pages)
 ├── context/        stan globalny: konto (auth) i powiadomienia (notifications)
-├── hooks/          useApiQuery, useTheme, useFullBleed, usePushPermission
+├── hooks/          useApiQuery, useTheme, useWindowDimensions, useReducedMotion, usePlans, useFullBleed, usePushPermission
 └── lib/            klient API, przechowywanie tokenów, typy, drobne narzędzia
 ```
 
@@ -49,6 +49,10 @@ Zasada: w `app/` są tylko ekrany. Komponenty, hooki i narzędzia są poza tym k
 Dostęp do ekranów pilnuje `Stack.Protected` w [app/_layout.tsx](../mobile/src/app/_layout.tsx):
 - niezalogowany trafia na stronę główną, zalogowany bez potwierdzonego e-maila na `/verify-email`;
 - po zalogowaniu `/sign-in` przekierowuje na `/shops` (albo `/verify-email`).
+
+Strony publiczne (`PublicPages` w [constants/pages.ts](../mobile/src/constants/pages.ts)) nie czekają na sprawdzenie
+konta: do jego końca wyglądają jak dla niezalogowanego. Reszta aplikacji czeka, żeby zalogowanego nie odesłać
+najpierw do logowania.
 
 Zakładki Sklepy, Pomoc i Konto ([app/(tabs)/_layout.tsx](../mobile/src/app/%28tabs%29/_layout.tsx)):
 na telefonie są natywnym paskiem zakładek (`app-tabs.tsx`), a w przeglądarce górnym menu z markizą (`app-tabs.web.tsx`).
@@ -103,6 +107,8 @@ Kolor drugiego paska wybiera tylko `tone`, zależnie od tła pod spodem: `page` 
 Strona `/docs/` rysuje ten sam wzór w SVG ([page.html](../backend/handbook/templates/handbook/page.html)).
 
 Kolory pobieraj przez `useTheme()`, nie wpisuj ich na sztywno. Wyjątek to zdjęcia i podglądy.
+W przeglądarce `useTheme()` daje zmienne CSS (`WebColors`, np. `var(--color-background)`), więc z kolorem nie wolno
+robić operacji na tekście (dopisywanie przezroczystości do `#RRGGBB`); przejście do przezroczystości daje `clearOf(kolor)`.
 Czcionki: Bricolage Grotesque w nagłówkach, Figtree w tekście, czcionka maszynowa tylko na paragonie.
 Na telefonie aplikacja czeka na nie pod ekranem startowym (to pliki w aplikacji), a gdy się nie wczytają, zostaje
 czcionka systemowa. W przeglądarce strona nie czeka: do czasu pobrania czcionek tekst jest w czcionce systemowej
@@ -112,6 +118,43 @@ Na iOS to symbole SF, na Androidzie i w przeglądarce Material Symbols.
 
 Szerokie ekrany (od `WideBreakpoint` = 900 px) dostają układ w kolumnach.
 Ruch na ekranie (Reanimated) respektuje systemowe ograniczenie ruchu.
+Szerokość okna bierz z `useWindowDimensions` z `@/hooks/use-window-dimensions`, a ograniczenie ruchu z `useReducedMotion`
+z `@/hooks/use-reduced-motion`, nie z `react-native` i Reanimated (dlaczego: [Strona w przeglądarce](#strona-w-przeglądarce)).
+
+## Strona w przeglądarce
+
+Wersja web działa w trybie serwera (`web.output: "server"`): każdą stronę rysuje serwer Expo, a przeglądarka ją
+przejmuje (hydratacja). Strony publiczne przychodzą więc z treścią, tytułem i opisem, które widzą wyszukiwarki
+i podglądy linków. Ekrany za logowaniem serwer wysyła puste i z `noindex`, bo nie zna sesji (tokeny są w `localStorage`).
+
+| Plik | Co robi |
+|---|---|
+| [constants/pages.ts](../mobile/src/constants/pages.ts) | Strony publiczne: ścieżka, tytuł, opis i czy trafia do wyszukiwarek (`indexed`; formularze logowania nie). Nowa strona publiczna musi tu trafić. |
+| [app/+html.tsx](../mobile/src/app/+html.tsx) | Dokument wokół każdej strony, tylko na serwerze: `lang="pl"`, tytuł, opis, link kanoniczny, Open Graph, `noindex` dla reszty, ikony, dane strukturalne (Organization, WebSite) na stronie głównej, zmienne kolorów obu motywów. |
+| [app/robots.txt+api.ts](../mobile/src/app/robots.txt+api.ts), [app/sitemap.xml+api.ts](../mobile/src/app/sitemap.xml+api.ts) | `robots.txt` (wszystko dozwolone, link do mapy) i mapa strony z publicznych stron z `indexed` ([lib/sitemap.ts](../mobile/src/lib/sitemap.ts)). Wbudowana strona `/_sitemap` Expo Router jest wyłączona (`sitemap: false` w `app.json`). |
+| [lib/site.ts](../mobile/src/lib/site.ts) | Adres strony w linkach bezwzględnych: `SITE_URL` albo adres zapytania |
+| [lib/plans.ts](../mobile/src/lib/plans.ts) | `loader` strony głównej i cennika: serwer pobiera plany z API, więc ceny są w stronie. `usePlans()` czyta je w przeglądarce z danych strony, a na telefonie z API. |
+| `public/` | `og.png` (obrazek podglądu linku, 1200×630), `favicon.svg` i `apple-touch-icon.png` |
+
+Pierwszy render w przeglądarce musi dać to samo co serwer, inaczej React wyrzuca stronę z serwera i rysuje ją od
+nowa. Dlatego nic, czego serwer nie wie, nie wpływa na ten render:
+- **motyw:** kolory to zmienne CSS ustawiane w `+html.tsx` dla `prefers-color-scheme`, więc strona z serwera ma
+  od razu dobre kolory w obu motywach;
+- **szerokość okna:** serwer zgaduje ją z nagłówków zapytania (`Sec-CH-UA-Mobile`, inaczej „Mobile” w User-Agent):
+  telefon 390 px, reszta 1280 px ([lib/viewport.ts](../mobile/src/lib/viewport.ts)), i zapisuje w
+  `<html data-viewport>`. `useWindowDimensions` w przeglądarce podczas hydratacji zwraca tę samą szerokość,
+  a zaraz potem prawdziwą (`useSyncExternalStore` z `getServerSnapshot`);
+- **ograniczenie ruchu:** `useReducedMotion` w przeglądarce zaczyna od `false` i zmienia się po hydratacji;
+- **konto:** do końca sprawdzenia strona wygląda jak dla niezalogowanego, tak jak na serwerze.
+
+Tytuł karty przy przejściach w przeglądarce ustawia układ główny (`documentTitle`): strony publiczne mają swój,
+reszta nazwę serwisu.
+
+Serwer deweloperski (`npx expo start`) ładuje ekrany leniwie, więc przeglądarka i tak rysuje stronę od nowa. Zgodność
+hydratacji sprawdza się na wersji produkcyjnej: `npx expo export --platform web` tworzy `dist/client` (pliki
+statyczne) i `dist/server` (renderowanie, `loader`, `robots.txt`, `sitemap.xml`). Na serwerze uruchamia je Node
+z adapterem `expo-server/adapter/express` albo `expo-server/adapter/http` (`createRequestHandler({ build: 'dist/server' })`,
+pliki z `dist/client` obok) albo EAS Hosting. Niezgodność widać jako błąd Reacta #418 w konsoli przeglądarki.
 
 ## Najważniejsze komponenty
 
@@ -159,6 +202,10 @@ odświeża konto (`useAuth().refreshUser()`), bo plan i limit sklepów aplikacja
 | `assets/images/features/` | Zdjęcia slajdów „Co dostajesz” | Zmniejszone zdjęcia; oryginały w pełnej rozdzielczości nie są przechowywane w repozytorium |
 | `assets/images/themes/` | Podglądy motywów | Zrzuty ekranu sklepów założonych przez aplikację, 1200×750 |
 
+Ikona strony (`public/favicon.svg`, `public/apple-touch-icon.png` i `assets/images/favicon.png`, z którego Expo robi
+`favicon.ico`) to znak z logo: markiza nad drzwiami na zielonym tle. `public/og.png` powtarza górę strony głównej
+(nagłówek i paragon z pieczątką „Otwarte”); przy zmianie hasła strony albo marki trzeba go narysować na nowo.
+
 Proporcje zdjęć są zapisane obok nich w `content.ts` (`aspectRatio`). W przeglądarce `Image`
 nie dopasowuje się sam do proporcji, więc po podmianie zdjęcia trzeba je poprawić.
 
@@ -167,7 +214,7 @@ nie dopasowuje się sam do proporcji, więc po podmianie zdjęcia trzeba je popr
 ```bash
 npx expo start          # w: przeglądarka, kod QR: Expo Go
 npx tsc --noEmit        # typy
-npx expo lint           # lint (jeden znany błąd w szablonowym hooks/use-color-scheme.web.ts)
+npx expo lint           # lint
 npm test                # testy (Jest z jest-expo i React Native Testing Library)
 npm run test:coverage   # testy z pokryciem kodu; raport w coverage/lcov-report/index.html
 ```
@@ -187,6 +234,7 @@ Pomocnicze pliki w `src/testing/`:
 | `router.ts` | Atrapa `expo-router`: `jest.mock('expo-router', () => require('@/testing/router'))`. `Link` przy naciśnięciu woła `router.push(href)`, a parametry adresu ustawia się przez `useLocalSearchParams.mockReturnValue`. |
 | `api.ts` | `mockApi({'GET /shops/7/': …})` odpowiada na `api()` według metody i ścieżki. Tablica to kolejne odpowiedzi, a `Error` jest rzucany. `sent(klucz)` zwraca wysłane treści. |
 | `fixtures.ts` | `shopSettings()` i `shopDetail()`: przykładowe odpowiedzi API do nadpisania w teście |
+| `react-dom-server.d.ts` | Typ `renderToStaticMarkup`, którym `seo.test.tsx` rysuje `+html.tsx` jak serwer |
 
 Testy sprawdzają to, co widzi użytkownik: szukają elementów po roli i nazwie (`getByRole('button', {name: 'Zapisz'})`),
 nie po identyfikatorach. Dlatego pola formularzy mają `accessibilityLabel` z widocznej etykiety.
@@ -196,4 +244,5 @@ Atrapa `Link` zgłasza błąd, gdy element owinięty przez `asChild` dostaje tab
 Expo Router. Taki element dostaje jeden obiekt stylów (`StyleSheet.flatten`); funkcji stylu `asChild` też nie przekazuje.
 
 Nietestowane zostają głównie animacje strony głównej (przyklejane sekcje, pokaz slajdów), układy nawigacji
-i pliki tylko dla przeglądarki.
+i pliki tylko dla przeglądarki (`*.web.ts`; Jest uruchamia wersje na telefon). Opis strony dla wyszukiwarek
+(`+html.tsx`, mapa strony, zgadywanie szerokości okna, zmienne kolorów) sprawdza `seo.test.tsx`.

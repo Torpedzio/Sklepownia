@@ -58,6 +58,34 @@ export const Colors = {
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+export type ThemeColors = Record<ThemeColor, string>;
+
+const variable = (name: ThemeColor) => `--color-${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
+
+/**
+ * The web's colors are CSS variables that the page's stylesheet sets for the visitor's light or dark mode
+ * (`colorVariablesCss`). The server doesn't know the mode, so the page it sends must not depend on it: with the
+ * variables it doesn't, and the browser paints the right colors before any JS runs.
+ */
+export const WebColors = Object.fromEntries(
+  (Object.keys(Colors.light) as ThemeColor[]).map((name) => [name, `var(${variable(name)})`]),
+) as ThemeColors;
+
+/** `:root` rules defining WebColors for both modes. */
+export function colorVariablesCss() {
+  const rules = (scheme: 'light' | 'dark') =>
+    (Object.keys(Colors[scheme]) as ThemeColor[]).map((name) => `${variable(name)}:${Colors[scheme][name]}`).join(';');
+  return `:root{color-scheme:light dark;${rules('light')}}@media (prefers-color-scheme:dark){:root{${rules('dark')}}}`;
+}
+
+/**
+ * The color fully transparent, to fade into it. A hex color keeps its hue (a native gradient to plain
+ * `transparent` passes through grey); browsers blend gradients without that, so a CSS variable fades to
+ * `transparent`.
+ */
+export function clearOf(color: string) {
+  return color.startsWith('var(') ? 'transparent' : `${color}00`;
+}
 
 // On the web the page shows before the fonts arrive (font-display: swap), in the system font meanwhile.
 const withFallback = (font: string) =>

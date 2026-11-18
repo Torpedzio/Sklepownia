@@ -6,12 +6,13 @@ import {
   Figtree_700Bold,
 } from '@expo-google-fonts/figtree';
 import { FontDisplay, useFonts, type FontSource } from 'expo-font';
-import { DarkTheme, DefaultTheme, type Href, router, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, type Href, router, Stack, ThemeProvider, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { AppState, Platform, useColorScheme } from 'react-native';
 
-import { Colors, Fonts } from '@/constants/theme';
+import { documentTitle, publicPage } from '@/constants/pages';
+import { Colors, Fonts, WebColors } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/context/auth';
 import { NotificationsProvider } from '@/context/notifications';
 import { configurePush, onPushTokenChange, openTappedNotifications, registerDevice } from '@/lib/push';
@@ -25,7 +26,9 @@ const font = (source: number): FontSource => ({ uri: source, display: FontDispla
 const waitForFonts = Platform.OS !== 'web';
 
 export default function RootLayout() {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const systemScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  // The web's colors follow the visitor's mode in CSS (`WebColors`), so the page from the server fits both.
+  const scheme = Platform.OS === 'web' ? 'light' : systemScheme;
   const [fontsLoaded, fontsError] = useFonts({
     BricolageGrotesque_600SemiBold: font(BricolageGrotesque_600SemiBold),
     BricolageGrotesque_700Bold: font(BricolageGrotesque_700Bold),
@@ -37,7 +40,7 @@ export default function RootLayout() {
   // Fonts that failed to load leave the system font instead of the splash screen for good.
   const fontsReady = !waitForFonts || fontsLoaded || !!fontsError;
   const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
-  const colors = Colors[scheme];
+  const colors = Platform.OS === 'web' ? WebColors : Colors[scheme];
   const navigationTheme = {
     ...base,
     colors: {
@@ -66,14 +69,22 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
   const { isLoading, user } = useAuth();
   const ready = fontsReady && !isLoading;
   const signedIn = ready && !!user?.is_email_verified;
+  const pathname = usePathname();
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
 
+  useEffect(() => {
+    if (Platform.OS === 'web') document.title = documentTitle(pathname);
+  }, [pathname]);
+
   usePushNotifications(signedIn ? user.id : null);
 
-  if (!ready) return null;
+  // Public pages don't wait for the account check: the server draws them for a visitor without a session (it has
+  // none), and in the browser they show the same until the check ends. The rest of the app waits, so a signed-in
+  // user opening it isn't sent to sign in first.
+  if (!ready && !(fontsReady && publicPage(pathname))) return null;
 
   // The web uses the site header instead of native navigation bars on public pages.
   const nativeHeader = Platform.OS !== 'web';

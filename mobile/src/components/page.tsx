@@ -1,5 +1,5 @@
 import { createContext, use, useState, type PropsWithChildren, type ReactNode } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View, type ScrollViewProps } from 'react-native';
+import { Pressable, StyleSheet, View, type ScrollViewProps } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -19,6 +19,7 @@ import { Icon } from '@/components/icon';
 import { KeyboardArea } from '@/components/keyboard-area';
 import { MaxContentWidth, Spacing, WideBreakpoint } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
 type PageProps = PropsWithChildren<
   ScrollViewProps & {

@@ -1,6 +1,6 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { backArrowOptions } from '@/components/back-link';
 import { DocumentsSettings } from '@/components/documents-settings';
@@ -21,6 +21,7 @@ import { Radius, Spacing, WideBreakpoint } from '@/constants/theme';
 import { useNotify } from '@/context/notifications';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 import { api, ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
 import { panelLocative } from '@/lib/format';

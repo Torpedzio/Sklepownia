@@ -1,5 +1,5 @@
 import { Link, usePathname, type Href } from 'expo-router';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Awning } from '@/components/awning';
 import { Icon } from '@/components/icon';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 import { useTheme } from '@/hooks/use-theme';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
 /** Header of the public pages: awning on top, logo, links and the sign-in button. */
 export function SiteHeader() {

@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { Link, type Href } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
@@ -16,6 +16,7 @@ import { useAuth } from '@/context/auth';
 import { useNotify } from '@/context/notifications';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 import { ApiError } from '@/lib/api';
 import { pickAvatar } from '@/lib/avatar';
 import { confirm } from '@/lib/confirm';

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
 /** Every awning has the same stripes: this tall, about this wide, green first. */
 export const AWNING_HEIGHT = 16;
@@ -19,8 +20,12 @@ type AwningProps = {
 export function Awning({ tone = 'page' }: AwningProps) {
   const theme = useTheme();
   const [width, setWidth] = useState(0);
+  // Across the page it is as wide as the window, so it has stripes before it is measured, in the page from the
+  // server too.
+  const estimate = useWindowDimensions().width;
+  const across = width || (tone === 'page' ? estimate : 0);
   // Count from the width, so stripes are the same size on a card and across a wide screen.
-  const stripes = width ? Math.max(1, Math.round(width / STRIPE_WIDTH)) : 0;
+  const stripes = across ? Math.max(1, Math.round(across / STRIPE_WIDTH)) : 0;
   const [first, second] = {
     page: [theme.primary, theme.receipt],
     card: [theme.primary, theme.primaryMuted],

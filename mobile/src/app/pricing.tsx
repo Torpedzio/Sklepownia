@@ -9,11 +9,14 @@ import { SiteHeader } from '@/components/site-header';
 import { ThemedText } from '@/components/themed-text';
 import { PricingFaq } from '@/constants/content';
 import { Spacing } from '@/constants/theme';
-import { useApiQuery } from '@/hooks/use-api-query';
-import type { Plan } from '@/lib/types';
+import { usePlans } from '@/hooks/use-plans';
+import { loadPlans } from '@/lib/plans';
+
+// On the web the server puts the plans in the page (see usePlans).
+export const loader = loadPlans;
 
 export default function PricingScreen() {
-  const { data: plans, error } = useApiQuery<Plan[]>('/billing/plans/');
+  const { plans, error } = usePlans();
   const web = Platform.OS === 'web';
 
   return (

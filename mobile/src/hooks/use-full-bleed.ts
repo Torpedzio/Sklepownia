@@ -1,7 +1,8 @@
 import { useRef, useState, type ComponentRef } from 'react';
-import { Platform, useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
+import { Platform, View, type LayoutChangeEvent } from 'react-native';
 
 import { Spacing } from '@/constants/theme';
+import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
 /**
  * Lets a section inside the centered page column reach the page edges. Put `columnRef` and `onColumnLayout`
