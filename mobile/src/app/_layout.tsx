@@ -6,16 +6,18 @@ import {
   Figtree_700Bold,
 } from '@expo-google-fonts/figtree';
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, type Href, router, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { Platform, useColorScheme } from 'react-native';
+import { AppState, Platform, useColorScheme } from 'react-native';
 
 import { Colors, Fonts } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/context/auth';
 import { NotificationsProvider } from '@/context/notifications';
+import { configurePush, onPushTokenChange, openTappedNotifications, registerDevice } from '@/lib/push';
 
 SplashScreen.preventAutoHideAsync();
+configurePush();
 
 export default function RootLayout() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
@@ -55,10 +57,13 @@ export default function RootLayout() {
 function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { isLoading, user } = useAuth();
   const ready = fontsLoaded && !isLoading;
+  const signedIn = ready && !!user?.is_email_verified;
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
+
+  usePushNotifications(signedIn ? user.id : null);
 
   if (!ready) return null;
 
@@ -94,6 +99,7 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen name="billing/change" options={{ title: 'Zmień plan' }} />
         <Stack.Screen name="billing/return" options={{ title: 'Płatność' }} />
         <Stack.Screen name="delete-account" options={{ title: 'Usuń konto' }} />
+        <Stack.Screen name="notifications" options={{ title: 'Powiadomienia' }} />
       </Stack.Protected>
       <Stack.Screen name="about" options={{ title: 'Jak to działa', headerShown: nativeHeader }} />
       <Stack.Screen name="contact" options={{ title: 'Kontakt', headerShown: nativeHeader }} />
@@ -101,3 +107,27 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
     </Stack>
   );
 }
+
+
+/**
+ * For a signed-in user: sends the phone's push token to the platform (when notifications are allowed) on start,
+ * on coming back to the app and when the token changes, and opens the screen of a tapped notification.
+ */
+function usePushNotifications(userId: number | null) {
+  useEffect(() => {
+    if (userId === null) return;
+    const register = (force: boolean) => registerDevice({ force }).catch(() => {});
+    register(true);
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') register(false);
+    });
+    const stopTokens = onPushTokenChange(() => register(true));
+    const stopTaps = openTappedNotifications((url) => router.push(url as Href));
+    return () => {
+      appState.remove();
+      stopTokens();
+      stopTaps();
+    };
+  }, [userId]);
+}
+

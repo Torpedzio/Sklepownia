@@ -43,6 +43,7 @@ const ICONS = {
   trash: ['trash', 'delete'],
   document: ['doc.text', 'description'],
   chart: ['chart.bar', 'bar_chart'],
+  bell: ['bell', 'notifications'],
 } as const;
 
 export type IconName = keyof typeof ICONS;

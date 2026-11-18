@@ -14,6 +14,9 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from push import messages as push_messages
+from push import services as push
+
 from . import invoices
 from .gateways import get_gateway
 from .gateways.base import GatewayError, Payer, PaymentResult
@@ -367,6 +370,7 @@ def _end(subscription, status):
     subscription.next_attempt_at = None
     subscription.save(update_fields=["status", "next_attempt_at", "updated_at"])
     transaction.on_commit(lambda: _send("ended", subscription.pk))
+    push.notify(subscription.user_id, push_messages.plan_ended(subscription))
 
 
 def _notify(payment):
@@ -377,9 +381,10 @@ def _notify(payment):
         transaction.on_commit(lambda: _send("paid", payment.pk))
     elif payment.status == Payment.Status.FAILED and payment.kind == Payment.Kind.RENEWAL:
         # After the last attempt the plan has ended, and that e-mail says so; "we'll try again" would be wrong.
-        retrying = Subscription.objects.filter(pk=payment.subscription_id, status=Subscription.Status.PAST_DUE)
-        if retrying.exists():
+        retrying = Subscription.objects.filter(pk=payment.subscription_id, status=Subscription.Status.PAST_DUE).first()
+        if retrying:
             transaction.on_commit(lambda: _send("renewal_failed", payment.pk))
+            push.notify(payment.user_id, push_messages.renewal_failed(payment.plan, retrying.next_attempt_at))
 
 
 def _send(kind, object_id, context=None):

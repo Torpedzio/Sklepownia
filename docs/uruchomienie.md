@@ -75,6 +75,23 @@ zmienną `EXPO_PUBLIC_API_URL`.
 3. Po zmianie sieci powtórz punkt 2 z nowym IP i zeskanuj nowy kod QR
    (albo wpisz w Expo Go `exp://<IP>:8081`). Więcej: [obsluga.md](obsluga.md#zmiana-sieci-lub-adresu-ip).
 
+## Powiadomienia push
+
+W Expo Go i w przeglądarce powiadomienia nie działają (Expo Go na Androidzie nie ma ich od SDK 53).
+Ekran „Powiadomienia” mówi wtedy, dlaczego. Żeby je sprawdzić na telefonie:
+
+1. Konto Expo i projekt EAS: `cd mobile && npx eas-cli@latest init`. Dopisuje `extra.eas.projectId` do konfiguracji,
+   bez którego aplikacja nie dostanie tokenu.
+2. Klucze: dla Androida plik `google-services.json` z projektu Firebase i klucz FCM V1 wgrany przez
+   `npx eas-cli@latest credentials`; dla iOS klucz APNs utworzy EAS przy pierwszym buildzie.
+3. Build deweloperski: `npx eas-cli@latest build --profile development --platform android` (albo `ios`), instalacja
+   na telefonie, potem `npx expo start` jak zwykle.
+4. W aplikacji: Konto → Powiadomienia → „Włącz powiadomienia”. Telefon pojawi się na liście pod przełącznikami.
+
+Backend wysyła przez Expo Push bez dodatkowej konfiguracji. `EXPO_ACCESS_TOKEN` jest potrzebny tylko z włączonym
+„Enhanced Security for Push Notifications” w projekcie Expo. Bez telefonu można podejrzeć treść powiadomień
+w logu workera: `PUSH_SENDER=push.senders.log.LogSender` w `.env` i `docker compose restart worker`.
+
 ## Poczta w środowisku lokalnym
 
 Lokalnie całą pocztę przyjmuje Mailpit (usługa `mail` w [docker-compose.yml](../docker-compose.yml)) i nic nie wychodzi
@@ -117,6 +134,8 @@ Bez ustawień poczty w `.env` backend wypisuje wiadomości w logach (`EMAIL_BACK
 | `TPAY_NOTIFICATION_URL` | `http://localhost:8000/api/billing/notifications/` | Publiczny adres powiadomień o płatnościach |
 | `BILLING_RETURN_URL_PREFIXES` | `http://localhost:8081/,mobile://,exp://` | Dokąd operator może odesłać płacącego |
 | `FAKE_GATEWAY_DECLINE_RENEWALS` | `0` | `1` = symulowana bramka odrzuca odnowienia (test nieudanych płatności) |
+| `PUSH_SENDER` | `push.senders.expo.ExpoSender` | Wysyłka powiadomień push: Expo albo `push.senders.log.LogSender` (tylko log workera) |
+| `EXPO_ACCESS_TOKEN` | puste | Token dostępu Expo, gdy projekt wymaga go przy wysyłce push |
 | `CONTACT_EMAIL` | `kontakt@localhost` | Dokąd trafiają wiadomości z formularza kontaktowego |
 | `HANDBOOK_ROOT` | `/project` | Katalog repozytorium w kontenerze, z którego strona `/docs/` czyta dokumentację |
 | `SHOP_PROVISIONER` | `FakeProvisioner` | Symulacja albo prawdziwe sklepy ([architektura.md](architektura.md#provisionery)) |

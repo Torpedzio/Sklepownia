@@ -2,9 +2,12 @@ from smtplib import SMTPException
 
 from celery import shared_task
 
+from push import messages
+from push import services as push
+
 from . import sales
 from .emails import admin_access_message
-from .models import SalesSync, Shop, ShopOperation, ShopOrder
+from .models import ProvisioningJob, SalesSync, Shop, ShopOperation, ShopOrder
 from .provisioning import get_provisioner
 from .provisioning.operations import run_operation
 from .provisioning.runner import run_job
@@ -15,6 +18,11 @@ def provision_shop(job_id):
     shop = run_job(job_id)
     if shop is not None:
         send_admin_access_email.delay(shop.pk, "ready")
+        push.notify(shop.owner_id, messages.shop_ready(shop))
+        return
+    job = ProvisioningJob.objects.select_related("shop").get(pk=job_id)
+    if job.status == ProvisioningJob.Status.FAILED:
+        push.notify(job.shop.owner_id, messages.shop_failed(job.shop))
 
 
 @shared_task

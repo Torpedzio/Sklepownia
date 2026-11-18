@@ -58,6 +58,7 @@ export default function AccountScreen() {
               <View>
                 <LinkRow href="/shops" icon="store" label="Twoje sklepy" />
                 <LinkRow href="/billing" icon="card" label="Plan i płatności" />
+                <LinkRow href="/notifications" icon="bell" label="Powiadomienia" />
                 <LinkRow href="/help" icon="help" label="Porady i pomoc" />
                 <LinkRow href="/pricing" icon="percent" label="Cennik" />
                 <LinkRow href="/about" icon="category" label="Jak to działa" />
@@ -490,7 +491,7 @@ function Card({ title, description, children }: { title: string; description?: s
 }
 
 type LinkRowProps = {
-  href: '/shops' | '/billing' | '/help' | '/pricing' | '/about' | '/contact';
+  href: '/shops' | '/billing' | '/notifications' | '/help' | '/pricing' | '/about' | '/contact';
   icon: IconName;
   label: string;
   last?: boolean;

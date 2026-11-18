@@ -13,6 +13,9 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from push import messages
+from push import services as push
+
 from .models import SalesSync, Shop, ShopOrder
 from .provisioning import get_provisioner
 
@@ -29,6 +32,8 @@ BATCH = 500
 MAX_BATCHES = 10
 # Opening the overview reads the shop again when the copy is older than this; the button, after this.
 STALE_AFTER = timedelta(minutes=2)
+# Orders older than this aren't announced as new, even when they're new to the copy.
+ANNOUNCED_FOR = timedelta(days=7)
 REFRESH_AGAIN_AFTER = timedelta(seconds=30)
 # A queued read that hasn't finished by then is not waited for any more.
 REFRESH_TIMEOUT = timedelta(minutes=2)
@@ -54,27 +59,37 @@ def sync(shop_id):
         if state is None:
             return False
         since = max(state.cursor - OVERLAP, oldest) if state.cursor else oldest
+        # The first read copies what the shop already had: nothing of it is news.
+        announce = state.synced_at is not None
         provisioner = get_provisioner(shop.platform)
+        new_sales = []
         try:
             for _ in range(MAX_BATCHES):
                 orders = provisioner.read_orders(shop, since, BATCH)
-                _store(shop, [order for order in orders if order.placed_at >= oldest])
+                # A batch that fails to save is undone alone, so the state below can still be saved.
+                with transaction.atomic():
+                    stored = _store(shop, [order for order in orders if order.placed_at >= oldest])
+                new_sales += stored
                 if orders:
                     state.cursor = max(order.changed_at for order in orders)
                     since = state.cursor
                 if len(orders) < BATCH:
                     break
         except Exception:
+            # Batches read before the failure stay, and so does the cursor after them.
             logger.exception("Reading the orders of shop %s failed", shop.pk)
             state.attempted_at = timezone.now()
             state.error = SYNC_FAILED
-            state.save()
-            return False
-        state.synced_at = state.attempted_at = timezone.now()
-        state.error = ""
+        else:
+            state.synced_at = state.attempted_at = timezone.now()
+            state.error = ""
         state.save()
-    ShopOrder.objects.filter(shop=shop, placed_at__lt=oldest).delete()
-    return True
+    if not state.error:
+        ShopOrder.objects.filter(shop=shop, placed_at__lt=oldest).delete()
+    recent = [order for order in new_sales if order.placed_at >= now - ANNOUNCED_FOR]
+    if announce and recent:
+        push.notify(shop.owner_id, messages.new_orders(shop, sorted(recent, key=lambda order: order.placed_at)))
+    return not state.error
 
 
 def sync_all():
@@ -160,10 +175,15 @@ def overview(shop, now=None):
 
 
 def _store(shop, orders):
+    """Saves the orders; returns those that just became sales: unseen before, or unpaid until now."""
     # One row per order: an upsert may not touch the same row twice.
     orders = list({order.external_id: order for order in orders}.values())
     if not orders:
-        return
+        return []
+    known = dict(
+        shop.orders.filter(external_id__in=[order.external_id[:40] for order in orders])
+        .values_list("external_id", "status")
+    )
     ShopOrder.objects.bulk_create(
         [
             ShopOrder(
@@ -177,3 +197,7 @@ def _store(shop, orders):
         unique_fields=["shop", "external_id"],
         update_fields=["number", "status", "total", "currency", "items", "customer", "placed_at", "changed_at"],
     )
+    return [
+        order for order in orders
+        if order.status in SALE and known.get(order.external_id[:40], Status.UNFINISHED) == Status.UNFINISHED
+    ]

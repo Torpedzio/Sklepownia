@@ -24,6 +24,7 @@ backend/
 │   ├── shop_settings.py  sekcje ustawień sklepu: pola, etykiety, walidacja, wartości domyślne
 │   └── slugs.py       zasady adresów sklepów i lista zarezerwowanych
 ├── billing/           plany, dane do faktury, płatności, odnowienia, faktury (invoices.py, invoicing/), operatorzy płatności (gateways/)
+├── push/              powiadomienia push: telefony, tematy, wysyłka (senders/: Expo, log, pamięć), teksty (messages.py)
 ├── support/           formularz kontaktowy
 ├── handbook/          dokumentacja projektu (pliki Markdown) jako strony pod /docs/
 └── conftest.py        wspólne fixtures testów
@@ -183,6 +184,31 @@ Opis działania, stanów i operatorów: [platnosci.md](platnosci.md).
 - Blokada zakładania sklepów: `shops.services.active_plan` i `paid_shop_count`; brak planu to `402`.
 - Wspólny wygląd e-maili: [templates/email/](../backend/templates/email/) (`layout.html`, `rows.html`, `button.html`).
 
+## Aplikacja `push`
+
+Powiadomienia na telefony właścicieli. Przebieg: [architektura.md](architektura.md#powiadomienia-push), API: [api.md](api.md#powiadomienia-push-apipush).
+
+| Model | Opis |
+|---|---|
+| `PushDevice` | Telefon z tokenem Expo (unikalny), platformą i modelem; `last_seen_at` odświeża każde zgłoszenie z aplikacji |
+| `PushPreferences` | Tematy, o których właściciel chce wiedzieć (`new_orders`, `shops`, `billing`); bez wiersza wszystkie |
+| `PushTicket` | Powiadomienie przyjęte przez usługę push, czekające na sprawdzenie potwierdzenia (receipt) |
+
+- Inne aplikacje wołają `push.services.notify(user_id, notice)` z tekstem z [messages.py](../backend/push/messages.py).
+  `notify` nic nie robi, gdy użytkownik nie ma telefonów; inaczej po zatwierdzeniu transakcji kolejkuje `send_push`.
+- Wysyłkę wybiera `PUSH_SENDER`: `ExpoSender` (Expo Push API, paczki po 100, `EXPO_ACCESS_TOKEN` opcjonalnie),
+  `LogSender` (tylko log) albo `MemorySender` (testy, fixture `push_outbox`). Brak odpowiedzi albo `429`/`5xx`
+  od Expo to `PushUnavailable`: zadanie ponawia się z narastającym odstępem.
+- `DeviceNotRegistered` w odpowiedzi albo w potwierdzeniu usuwa telefon. Inne błędy potwierdzeń (np. złe klucze
+  FCM lub APNs) trafiają do logu workera jako błąd.
+- Gdzie powstają powiadomienia: `shops.sales.sync` (zamówienia, które właśnie stały się sprzedażą: nowe w kopii albo
+  wcześniej nieopłacone, złożone w ostatnich 7 dniach; pierwszy odczyt sklepu nic nie wysyła), `shops.tasks.provision_shop`
+  (gotowy sklep, błąd zakładania), `billing.services._notify` i `_end` (nieudana opłata, koniec planu).
+
+Nowe powiadomienie: funkcja w `messages.py` (temat, tytuł, treść, ekran aplikacji) i wywołanie `notify` w miejscu
+zdarzenia. Nowy temat: wartość w `Topic`, pole w `PushPreferences` z migracją, kanał w `CHANNELS` w
+[lib/push.ts](../mobile/src/lib/push.ts) i przełącznik na ekranie „Powiadomienia”.
+
 ## Aplikacja `support`
 
 `ContactMessage` zapisuje wiadomości z formularza kontaktowego (imię, e-mail, temat, treść, ewentualny użytkownik).
@@ -217,7 +243,9 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 | `shops.tasks.run_shop_operation` | Zmiana i odczyt ustawień, nowe hasło, usunięcie produktów przykładowych | Wykonuje operację (`run_operation`) |
 | `support.tasks.notify_about_contact_message` | Wysłanie formularza kontaktowego | Przekazuje wiadomość e-mailem |
 | `shops.tasks.sync_all_shop_orders` | Co `SHOP_ORDERS_SYNC_MINUTES` minut, domyślnie 15 (Celery beat) | Zleca odczyt zamówień działających sklepów, które nie były czytane od pół interwału |
-| `shops.tasks.sync_shop_orders` | Harmonogram, otwarcie podsumowania sprzedaży, przycisk „Odśwież” | Kopiuje zmienione zamówienia sklepu (`sales.sync`) |
+| `shops.tasks.sync_shop_orders` | Harmonogram, otwarcie podsumowania sprzedaży, przycisk „Odśwież” | Kopiuje zmienione zamówienia sklepu (`sales.sync`) i powiadamia o nowych |
+| `push.tasks.send_push` | Nowe zamówienie, koniec zakładania sklepu, nieudana opłata, koniec planu | Wysyła powiadomienie na telefony użytkownika; ponawia, gdy Expo nie odpowiada |
+| `push.tasks.check_push_receipts` | Co 15 minut (Celery beat) | Sprawdza potwierdzenia wysłanych powiadomień, usuwa telefony bez aplikacji |
 
 Zadania są kolejkowane przez `transaction.on_commit`, więc worker nigdy nie widzi niezatwierdzonych danych.
 Worker potwierdza zadanie dopiero po jego wykonaniu (`CELERY_TASK_ACKS_LATE`) i bierze naraz jedno

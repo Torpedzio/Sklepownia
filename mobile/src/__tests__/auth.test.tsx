@@ -5,6 +5,7 @@ import { Text } from 'react-native';
 import { AuthProvider, useAuth } from '@/context/auth';
 import { NotificationsProvider } from '@/context/notifications';
 import { ApiError, loadTokens, setOnSessionExpired, setTokens } from '@/lib/api';
+import { forgetDevice, registerDevice } from '@/lib/push';
 import { mockApi, type Routes } from '@/testing/api';
 
 jest.mock('@/lib/api', () => ({
@@ -14,6 +15,7 @@ jest.mock('@/lib/api', () => ({
   setTokens: jest.fn(async () => {}),
   setOnSessionExpired: jest.fn(),
 }));
+jest.mock('@/lib/push', () => ({ forgetDevice: jest.fn(async () => {}), registerDevice: jest.fn(async () => true) }));
 
 const anna = { id: 1, email: 'anna@example.com', first_name: 'Anna', is_email_verified: true };
 // The latest context value, for calling its actions from tests.
@@ -97,6 +99,8 @@ test('signing out forgets the session on the server and here', async () => {
   await act(() => auth().signOut());
 
   expect(api.sent('POST /auth/logout/')).toEqual([{ refresh: 'r' }]);
+  // The phone stops getting the account's notifications while the session still lets it say so.
+  expect(forgetDevice).toHaveBeenCalled();
   expect(screen.getByText('wylogowany')).toBeTruthy();
 });
 
@@ -118,6 +122,8 @@ test('a new password keeps this device signed in with fresh tokens', async () =>
   ]);
   expect(setTokens).toHaveBeenCalledWith({ access: 'a2', refresh: 'r2' });
   expect(screen.getByText('anna@example.com')).toBeTruthy();
+  // The new password signed out every phone; this one asks for its notifications back.
+  expect(registerDevice).toHaveBeenCalledWith({ force: true });
 
   await act(() => auth().signOutEverywhere());
 

@@ -78,9 +78,15 @@ def verify_email(user, code):
 
 
 def sign_out_everywhere(user):
-    """Every refresh token of the user stops working, so other devices are signed out at their next refresh."""
+    """
+    Every refresh token of the user stops working, so other devices are signed out at their next refresh.
+    No phone gets the user's notifications any more; the one still signed in sends its token again on its next start.
+    """
+    from push.services import forget_all_devices
+
     for token in OutstandingToken.objects.filter(user=user):
         BlacklistedToken.objects.get_or_create(token=token)
+    forget_all_devices(user)
 
 
 def _active_user(email):
@@ -133,6 +139,7 @@ def delete_account(user):
     """
     from billing.services import close_account
     from shops.services import ShopBeingSetUp, delete_all_shops
+    from push.models import PushPreferences
 
     with transaction.atomic():
         # The same lock as creating a shop, so no shop appears while the account goes.
@@ -157,6 +164,7 @@ def delete_account(user):
         EmailVerificationCode.objects.filter(user=user).delete()
         PasswordResetCode.objects.filter(user=user).delete()
         sign_out_everywhere(user)
+        PushPreferences.objects.filter(user=user).delete()
         if avatar:
             transaction.on_commit(lambda: default_storage.delete(avatar))
         transaction.on_commit(lambda: send_account_deleted_email.delay(email, shops))

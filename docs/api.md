@@ -118,6 +118,22 @@ Pola formularza `POST shops/`:
 | `description` | nie | Do 500 znaków, trafia do opisu witryny |
 | `include_sample_products` | nie | Domyślnie `true` |
 
+## Powiadomienia push: `/api/push/`
+
+Wymagają potwierdzonego e-maila. Wysyłka idzie przez usługę Expo Push w tle; aplikacja tylko zgłasza telefon
+i wybiera tematy.
+
+| Metoda i ścieżka | Opis |
+|---|---|
+| `POST push/devices/` | `{token, platform, name}`: token Expo (`ExponentPushToken[…]`), `ios` albo `android`, model telefonu. `201` dla nowego telefonu, `200` przy kolejnym zgłoszeniu. Telefon zalogowany na inne konto przechodzi do bieżącego. Zły format tokenu: `400`. |
+| `POST push/devices/forget/` | `{token}`: przy wylogowaniu telefon przestaje dostawać powiadomienia konta, `204` (także gdy go nie było) |
+| `GET push/preferences/` | `{new_orders, shops, billing, devices}`: tematy (domyślnie wszystkie włączone) i telefony `{name, platform, platform_display, last_seen_at}`, bez tokenów |
+| `PATCH push/preferences/` | Dowolne z `new_orders`, `shops`, `billing`; zwraca to samo co `GET` |
+
+Tematy: `new_orders` (nowe zamówienie w sklepie), `shops` (sklep gotowy, błąd zakładania), `billing` (nieudana opłata,
+koniec planu). Powiadomienie ma w `data.url` ścieżkę ekranu aplikacji, który otwiera, np. `/shops/7/sales`.
+Wylogowanie ze wszystkich urządzeń, zmiana i reset hasła oraz usunięcie konta usuwają wszystkie telefony konta.
+
 ## Płatności: `/api/billing/`
 
 Plany, dane do faktury, płatność kartą, anulowanie i powiadomienia od operatora: [platnosci.md](platnosci.md#api).

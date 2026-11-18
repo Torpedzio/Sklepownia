@@ -15,7 +15,7 @@ mobile/src/
 ├── components/     komponenty współdzielone; ui/ to podstawowe kontrolki
 ├── constants/      kolory i odstępy (theme), teksty (content, shop-guides), dane marki (brand)
 ├── context/        stan globalny: konto (auth) i powiadomienia (notifications)
-├── hooks/          useApiQuery, useTheme, useFullBleed
+├── hooks/          useApiQuery, useTheme, useFullBleed, usePushPermission
 └── lib/            klient API, przechowywanie tokenów, typy, drobne narzędzia
 ```
 
@@ -36,6 +36,7 @@ Zasada: w `app/` są tylko ekrany. Komponenty, hooki i narzędzia są poza tym k
 | `/help` | `app/(tabs)/help.tsx` | jw. Porady dotyczące prowadzenia sklepu. |
 | `/account` | `app/(tabs)/account.tsx` | jw. Wizytówka konta (zdjęcie profilowe zmieniane kliknięciem, potwierdzony e-mail, plan, staż), konto w skrócie (sklepy względem limitu, plan z następną płatnością, dane do faktury), dane profilu, bezpieczeństwo (zmiana hasła, wylogowanie wszędzie, usunięcie konta), skróty i wylogowanie. |
 | `/delete-account` | `app/delete-account.tsx` | jw. Usunięcie konta: co zniknie (sklepy z adresami, plan, dane), co zostanie (płatności), anulowanie planu jako alternatywa; usuwa po wpisaniu hasła i potwierdzeniu. Zablokowane, gdy sklep jest zakładany. |
+| `/notifications` | `app/notifications.tsx` | jw. Powiadomienia: stan na tym telefonie (włączenie, przejście do ustawień telefonu po odmowie, a w przeglądarce, Expo Go i symulatorze wyjaśnienie), przełączniki tematów i lista telefonów, które je dostają. Link w „Na skróty” na koncie. |
 | `/shops/new` | `app/shops/new.tsx` | jw. Formularz nowego sklepu (na telefonie jako okno modalne): najpierw system sklepu (WooCommerce, PrestaShop), pod nim motywy tej platformy. Bez planu zamiast formularza „Najpierw wybierz plan”. |
 | `/billing` | `app/billing/index.tsx` | jw. Plan i płatności: stan planu, karta, anulowanie i wznowienie, dane do faktury, historia płatności z linkami do faktur (PDF w przeglądarce). |
 | `/billing/change` | `app/billing/change.tsx` | jw. Zmiana planu: podgląd dopłaty albo kwoty na saldo, wybór sklepów, które zostają aktywne, potwierdzenie. |
@@ -68,6 +69,12 @@ na telefonie są natywnym paskiem zakładek (`app-tabs.tsx`), a w przeglądarce 
 - **[context/notifications.tsx](../mobile/src/context/notifications.tsx)** to `useNotify()` z metodami `success(tekst)` i `error(tekst)`.
   - Pokazuje pasek na górze ekranu: zielony na 4 s albo czerwony na 7 s.
   - Wynik każdej operacji (zapis, wysłanie, usunięcie, błąd serwera) zgłaszaj przez ten pasek. Błędy konkretnych pól pokazuj pod polami.
+
+- **[lib/push.ts](../mobile/src/lib/push.ts)** obsługuje powiadomienia push na telefonie.
+  - `pushBlocker()` mówi, dlaczego telefon ich nie dostanie: przeglądarka, Expo Go (moduł `expo-notifications` nie jest tam nawet ładowany, bo ostrzega przy imporcie), symulator, brak projektu EAS.
+  - `enablePush()` tworzy kanały Androida (po jednym na temat), pyta o zgodę i zgłasza token. `registerDevice()` zgłasza go po cichu, gdy zgoda już jest; `forgetDevice()` przy wylogowaniu.
+  - W `app/_layout.tsx` hook `usePushNotifications` zgłasza telefon po zalogowaniu, po powrocie do aplikacji i po zmianie tokenu, a dotknięte powiadomienie otwiera ekran z `data.url` (tylko ścieżki aplikacji).
+  - Zachęta `PushPrompt` na ekranie sprzedaży pojawia się, dopóki telefon nie był pytany o zgodę („Nie teraz” do zamknięcia aplikacji).
 
 Typy odpowiedzi API są w [lib/types.ts](../mobile/src/lib/types.ts). Po zmianie API zaktualizuj je ręcznie.
 
@@ -153,7 +160,7 @@ npm test                # testy (Jest z jest-expo i React Native Testing Library
 npm run test:coverage   # testy z pokryciem kodu; raport w coverage/lcov-report/index.html
 ```
 
-Podgląd na telefonie: [uruchomienie.md](uruchomienie.md#podgląd-na-telefonie).
+Podgląd na telefonie: [uruchomienie.md](uruchomienie.md#podgląd-na-telefonie). Powiadomienia push wymagają buildu aplikacji: [uruchomienie.md](uruchomienie.md#powiadomienia-push).
 
 ## Testy
 

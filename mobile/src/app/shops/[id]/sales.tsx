@@ -5,6 +5,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { backArrowOptions } from '@/components/back-link';
 import { Icon } from '@/components/icon';
 import { Page } from '@/components/page';
+import { PushPrompt } from '@/components/push-prompt';
 import { SalesChart } from '@/components/sales-chart';
 import { Badge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
@@ -119,6 +120,8 @@ export default function ShopSalesScreen() {
           onPress={readAgain}
         />
       </View>
+
+      <PushPrompt />
 
       {sales.error ? (
         <View style={[styles.card, { backgroundColor: theme.accentMuted, borderColor: theme.accent }]}>

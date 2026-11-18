@@ -28,10 +28,23 @@ def _test_settings(settings, tmp_path):
     settings.INVOICE_NUMBER_FORMAT = "FV/{year}/{month:02}/{number:04}"
     settings.FAKTUROWNIA_DOMAIN = ""
     settings.FAKTUROWNIA_API_TOKEN = ""
+    # Notifications stay in memory (push_outbox), never reach Expo.
+    settings.PUSH_SENDER = "push.senders.memory.MemorySender"
+    settings.EXPO_ACCESS_TOKEN = ""
     # Uploaded avatars go to a throwaway folder.
     settings.MEDIA_ROOT = tmp_path / "media"
     # Throttle counters live in the cache; keep tests independent.
     cache.clear()
+
+
+@pytest.fixture
+def push_outbox():
+    """Notifications sent during the test (push.senders.base.Message)."""
+    from push.senders.memory import MemorySender
+
+    MemorySender.reset()
+    yield MemorySender.outbox
+    MemorySender.reset()
 
 
 @pytest.fixture

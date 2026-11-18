@@ -3,6 +3,7 @@ import { createContext, use, useEffect, useState, type PropsWithChildren } from 
 import { useNotify } from '@/context/notifications';
 import { api, ApiError, loadTokens, setOnSessionExpired, setTokens } from '@/lib/api';
 import { avatarForm, type AvatarFile } from '@/lib/avatar';
+import { forgetDevice, registerDevice } from '@/lib/push';
 import type { Tokens, User } from '@/lib/types';
 
 type AuthContextValue = {
@@ -74,6 +75,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     async signOut() {
       const tokens = await loadTokens();
       if (tokens) {
+        // While still signed in: the phone stops getting this account's notifications.
+        await forgetDevice();
         await api('/auth/logout/', { method: 'POST', body: { refresh: tokens.refresh } }).catch(() => {});
       }
       await setTokens(null);
@@ -103,6 +106,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         body: { current_password: currentPassword, new_password: newPassword },
       });
       await setTokens(tokens);
+      // Changing the password signs out every phone, this one's notifications included; it gets them back.
+      await registerDevice({ force: true }).catch(() => {});
     },
     async signOutEverywhere() {
       await api('/auth/logout-everywhere/', { method: 'POST' });

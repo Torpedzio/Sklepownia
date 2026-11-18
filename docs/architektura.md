@@ -30,7 +30,7 @@
 | PostgreSQL | Konta, sklepy, konfiguracja, zaszyfrowane hasła sklepów, postęp zakładania | `db` w [docker-compose.yml](../docker-compose.yml) |
 | Redis | Kolejka zadań Celery | `redis` |
 | Worker Celery | Wykonuje długie zadania: zakładanie i usuwanie sklepów, wysyłkę e-maili, odnowienia planów | `worker` |
-| Celery beat | Zleca zadania według harmonogramu (`CELERY_BEAT_SCHEDULE`): co 15 minut odnowienia planów i odczyt zamówień ze sklepów, co 5 minut płatności i faktury czekające na wynik | `beat` |
+| Celery beat | Zleca zadania według harmonogramu (`CELERY_BEAT_SCHEDULE`): co 15 minut odnowienia planów, odczyt zamówień ze sklepów i potwierdzenia powiadomień push, co 5 minut płatności i faktury czekające na wynik | `beat` |
 | Tpay | Operator płatności: strona płatności kartą, zapisywanie i obciążanie karty, powiadomienia ([platnosci.md](platnosci.md)) | zewnętrzny |
 | Mailpit | Lokalny serwer SMTP: przyjmuje całą pocztę i pokazuje ją w przeglądarce. Na produkcji zastępuje go dostawca poczty. | `mail` |
 | Poczta sklepów | Przekaźnik, przez który sklepy wysyłają e-maile do klientów ([poczta sklepów](../infra/shops/README.md#poczta-sklepów)). Lokalnie drugi Mailpit, na produkcji przekaźnik do dostawcy poczty. | `shops-mail` |
@@ -94,6 +94,21 @@ wejść do kontenera sklepu. Podsumowanie liczy się z kopii, więc otwiera się
    harmonogramu albo po „Odśwież”.
 
 Usunięcie sklepu usuwa też kopię jego zamówień.
+
+## Powiadomienia push
+
+Aplikacja na telefonie (build, nie Expo Go) po zgodzie właściciela pobiera token Expo i zgłasza go
+(`POST /api/push/devices/`) przy starcie, po powrocie do aplikacji (najwyżej raz na godzinę) i po zmianie tokenu.
+
+1. Zdarzenie (nowe zamówienie przy odczycie sprzedaży, koniec zakładania sklepu, nieudana opłata, koniec planu)
+   woła `push.services.notify`. Po zatwierdzeniu transakcji worker wysyła powiadomienie na każdy telefon konta,
+   o ile właściciel chce ten temat.
+2. Expo Push przekazuje je do APNs (iOS) i FCM (Android). Odpowiedź (ticket) trafia do `PushTicket`.
+3. Co 15 minut beat sprawdza potwierdzenia: telefon, który nie ma już aplikacji, jest usuwany.
+4. Dotknięcie powiadomienia otwiera ekran z `data.url`, także gdy aplikacja była zamknięta.
+
+O nowym zamówieniu powiadomienie przychodzi przy najbliższym odczycie sklepu, czyli z opóźnieniem do
+`SHOP_ORDERS_SYNC_MINUTES`.
 
 ## Stany sklepu
 

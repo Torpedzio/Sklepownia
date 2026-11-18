@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'support',
     'handbook',
     'billing',
+    'push',
 ]
 
 MIDDLEWARE = [
@@ -210,6 +211,8 @@ SPECTACULAR_SETTINGS = {
         'ShopStatusEnum': 'shops.models.Shop.Status',
         'ProvisioningJobStatusEnum': 'shops.models.ProvisioningJob.Status',
         'ProvisioningStepStatusEnum': 'shops.models.ProvisioningStep.Status',
+        'PushDevicePlatformEnum': 'push.models.PushDevice.Platform',
+        'PlatformEnum': 'shops.platforms.Platform',
     },
 }
 
@@ -316,9 +319,15 @@ FAKTUROWNIA_KSEF = os.environ.get("FAKTUROWNIA_KSEF", "1") == "1"
 # How often the worker copies running shops' orders for the sales overview (shops/sales.py).
 SHOP_ORDERS_SYNC_MINUTES = int(os.environ.get("SHOP_ORDERS_SYNC_MINUTES", "15"))
 
+# Push notifications to the owners' phones: Expo's service, or push.senders.log.LogSender to only log them.
+PUSH_SENDER = os.environ.get("PUSH_SENDER", "push.senders.expo.ExpoSender")
+# Needed only with "enhanced security for push notifications" on in the Expo project.
+EXPO_ACCESS_TOKEN = os.environ.get("EXPO_ACCESS_TOKEN", "")
+
 CELERY_BEAT_SCHEDULE = {
     "renew-subscriptions": {"task": "billing.tasks.renew_subscriptions", "schedule": 15 * 60},
     "reconcile-payments": {"task": "billing.tasks.reconcile_payments", "schedule": 5 * 60},
     "process-invoices": {"task": "billing.tasks.process_invoices", "schedule": 5 * 60},
     "sync-shop-orders": {"task": "shops.tasks.sync_all_shop_orders", "schedule": SHOP_ORDERS_SYNC_MINUTES * 60},
+    "check-push-receipts": {"task": "push.tasks.check_push_receipts", "schedule": 15 * 60},
 }

@@ -346,3 +346,11 @@ export type ShopSales = {
   /** The latest orders, newest first. */
   recent: ShopOrder[];
 };
+
+/** What push notifications are about, and the phones that get them. */
+export type PushPreferences = {
+  new_orders: boolean;
+  shops: boolean;
+  billing: boolean;
+  devices: { name: string; platform: 'ios' | 'android'; platform_display: string; last_seen_at: string }[];
+};

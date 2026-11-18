@@ -22,7 +22,11 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   - zniżki, okresy próbne, plany roczne, inne metody płatności (BLIK, przelew), wypłata salda przy rezygnacji.
 - **Sprzedaż w aplikacji** jest tylko do podglądu: zamówienia obsługuje się w panelu sklepu. Kopia obejmuje 90 dni,
   sumy liczą tylko walutę sklepu, a nowe zamówienie pojawia się w aplikacji z opóźnieniem do 15 minut (od razu po
-  „Odśwież”). Brakuje powiadomień o nowym zamówieniu i zestawień dłuższych niż 30 dni.
+  „Odśwież”). Brakuje zestawień dłuższych niż 30 dni.
+- **Powiadomienia push** o nowym zamówieniu przychodzą przy odczycie sklepu, więc do 15 minut po złożeniu.
+  Od razu dawałby je webhook sklepu (WooCommerce `order.created`) wołający platformę. Aplikacja nie ma jeszcze
+  projektu EAS ani kluczy FCM i APNs, więc powiadomienia działają dopiero po ich dodaniu i w buildzie, nie w Expo Go.
+  Brakuje powiadomień o niskim stanie magazynu.
 - **Testy na urządzeniu:** testy aplikacji działają w Jest; zachowania zależne od urządzenia (przewijanie,
   klawiatura, animacje) sprawdza się ręcznie w Expo Go.
 - **Zdjęcia w przykładowych produktach.** Produkty przykładowe nie mają zdjęć, więc nowy sklep pokazuje szare zaślepki.
