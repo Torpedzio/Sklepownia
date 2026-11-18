@@ -45,7 +45,6 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
 - **Płatności, dalsze etapy** ([platnosci.md](platnosci.md)):
   - zawieszanie sklepów (stan `suspended`), gdy plan wygaśnie lub zostanie anulowany, i usuwanie po okresie przechowania;
   - zmiana karty z aplikacji (nowa płatność z zapisaniem karty);
-  - strona „Sklep niedostępny” pod adresem zawieszonego sklepu (dziś proxy odpowiada 404);
   - faktury korygujące (np. przy zwrocie) i własne połączenie z KSeF bez Fakturowni;
   - regulamin i polityka prywatności jako strony, do których prowadzą zgody przy płatności;
   - zniżki, okresy próbne, plany roczne, inne metody płatności (BLIK, przelew), wypłata salda przy rezygnacji.
@@ -68,6 +67,9 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   serwerze nie ma, więc treść pojawia się dopiero po pobraniu całego JS, a wyszukiwarki i podglądy linków jej nie
   widzą. Do zrobienia razem z SEO: strony publiczne renderowane na serwerze, z pierwszym renderem niezależnym od
   szerokości okna i motywu (inaczej hydratacja się nie zgodzi).
+- **Start kontenera sklepu:** przez kilka sekund od startu kontenera (zakładanie, przywrócenie, restart) Traefik
+  ma już regułę sklepu, a serwer w środku jeszcze nie odpowiada, więc gość dostaje `502` zamiast strony
+  „Sklep chwilowo niedostępny”. Zaradziłby healthcheck kontenera (Traefik pomija kontenery, które nie są zdrowe).
 - **Zdjęcia w przykładowych produktach.** Produkty przykładowe nie mają zdjęć, więc nowy sklep pokazuje szare zaślepki.
 - **Porady w innych językach.** Instrukcja logowania i porady podają polskie nazwy z paneli WordPressa,
   PrestaShop i Magento, także dla sklepów założonych w innym języku. Polski pakiet Magento nie tłumaczy kilku
@@ -103,7 +105,7 @@ Projekt działa dziś tylko lokalnie. Przed uruchomieniem dla użytkowników trz
    Trzeba go odseparować, np. przez proxy socketu ograniczające dozwolone operacje
    albo osobny agent na serwerze sklepów z własnym API.
 3. **Serwer aplikacji.** Gunicorn lub uvicorn zamiast `runserver`, `DJANGO_DEBUG=0`, konkretne `DJANGO_ALLOWED_HOSTS`
-   i `CORS_ALLOWED_ORIGINS`, pliki statyczne, kopie zapasowe PostgreSQL.
+   (z hostem z `SHOPS_FALLBACK_URL` serwera sklepów) i `CORS_ALLOWED_ORIGINS`, pliki statyczne, kopie zapasowe PostgreSQL.
 4. **Kopie zapasowe sklepów:** wolumenów sklepów i baz MariaDB (indeksy OpenSearch da się odbudować `indexer:reindex`).
 5. **Poczta:** dostawca SMTP dla platformy (zmienne `EMAIL_*`, zamiast Mailpit) z rekordami SPF i DKIM domeny.
    Dla sklepów przekaźnik na serwerze sklepów w miejsce `shops-mail` (np. Postfix), który trzyma dane logowania

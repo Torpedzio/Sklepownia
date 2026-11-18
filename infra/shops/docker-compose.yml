@@ -13,10 +13,18 @@ services:
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=shops
       - --entrypoints.web.address=:80
+      # Addresses without a running shop: the platform's "temporarily unavailable" page (traefik/fallback.yml).
+      - --providers.file.filename=/etc/traefik/fallback.yml
+    environment:
+      # Where the platform answers; locally the backend on this computer.
+      SHOPS_FALLBACK_URL: ${SHOPS_FALLBACK_URL:-http://host.docker.internal:8000}
+    extra_hosts:
+      - host.docker.internal:host-gateway
     ports:
       - "${SHOPS_HTTP_PORT:-8080}:80"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/fallback.yml:/etc/traefik/fallback.yml:ro
     # SELinux (Fedora) blocks access to the Docker socket otherwise.
     security_opt:
       - label=disable

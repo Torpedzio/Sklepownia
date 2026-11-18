@@ -34,7 +34,7 @@
 | Tpay | Operator płatności: strona płatności kartą, zapisywanie i obciążanie karty, powiadomienia ([platnosci.md](platnosci.md)) | zewnętrzny |
 | Mailpit | Lokalny serwer SMTP: przyjmuje całą pocztę i pokazuje ją w przeglądarce. Na produkcji zastępuje go dostawca poczty. | `mail` |
 | Poczta sklepów | Przekaźnik, przez który sklepy wysyłają e-maile do klientów ([poczta sklepów](../infra/shops/README.md#poczta-sklepów)). Lokalnie drugi Mailpit, na produkcji przekaźnik do dostawcy poczty. | `shops-mail` |
-| Traefik | Kieruje ruch do kontenera sklepu po nazwie hosta | `shops-proxy` w [infra/shops/](../infra/shops/) |
+| Traefik | Kieruje ruch do kontenera sklepu po nazwie hosta; adresy bez działającego sklepu do strony „Sklep chwilowo niedostępny” platformy | `shops-proxy` w [infra/shops/](../infra/shops/) |
 | MariaDB | Jedna instancja, osobna baza i użytkownik dla każdego sklepu | `shops-db` |
 | OpenSearch | Wyszukiwarka sklepów Magento, osobne indeksy dla każdego sklepu | `shops-search` |
 | Kontener sklepu | Jeden na sklep: WordPress + WooCommerce + motyw, PrestaShop albo Magento ([platformy](#platformy-sklepów)) | `shop-<id>`, obraz `shops/wordpress:7.1`, `prestashop/prestashop:9.2.1-apache` albo `shops/magento:4.0.0` |
@@ -157,6 +157,10 @@ Dozwolone przejścia są w `Shop.ALLOWED_TRANSITIONS` ([models.py](../backend/sh
 Niedozwolone przejście rzuca `InvalidTransition`; API zamienia je na `409 Conflict`
 (np. usunięcie sklepu w trakcie zakładania). Stan `suspended` ustawia zmiana na plan z mniejszym limitem sklepów
 ([platnosci.md](platnosci.md#zmiana-planu)); zawieszone sklepy nie liczą się do limitu.
+
+Pod adresem sklepu, którego kontener nie działa (zawieszony, jeszcze zakładany, restartujący się), gość widzi stronę
+platformy z nazwą sklepu i szyldem „Nieczynne” albo „Wkrótce otwarcie” (`503`), a pod adresem bez sklepu
+„Nie ma tu sklepu” (`404`) ([infra/shops/README.md](../infra/shops/README.md#adres-bez-działającego-sklepu)).
 
 ## Platformy sklepów
 

@@ -21,6 +21,7 @@ backend/
 │   ├── orders.py      zamówienie odczytane ze sklepu (Order), wspólne dla platform
 │   ├── sales.py       kopia zamówień ze sklepów i podsumowanie sprzedaży dla aplikacji
 │   ├── checklist.py   lista startowa nowego sklepu: kroki odhaczane same i liczenie produktów
+│   ├── unavailable.py strona pod adresem sklepu, którego kontener nie działa (szablon templates/shops/unavailable.html)
 │   ├── documents.py   regulamin i polityka prywatności sklepu ze wzorów (templates/shops/documents/), wersja wzorów
 │   ├── choices.py     branże, języki, waluty, kraje, zakres liczby kategorii
 │   ├── fields.py      EncryptedTextField (szyfrowanie Fernet)
@@ -235,6 +236,17 @@ Pola odpowiedzi i kroki: [api.md](api.md#lista-startowa).
 - Kroki zależą od platformy (sekcje ustawień w `platforms/__init__.py`) i od tego, czy sklep dostał produkty
   przykładowe.
 
+### Strona niedziałającego sklepu
+
+Traefik serwera sklepów wysyła adresy, pod którymi nie działa żaden kontener, na `/shop-unavailable/` z adresem
+w `X-Forwarded-Host` ([infra/shops/README.md](../infra/shops/README.md#adres-bez-działającego-sklepu)).
+Widok w [unavailable.py](../backend/shops/unavailable.py) szuka sklepu po slugu, gdy domena to
+`SHOPS_BASE_DOMAIN` (port i wielkość liter nie mają znaczenia), i pokazuje jego nazwę z tekstem w języku sklepu
+(`TEXTS`): „Wkrótce otwarcie” (`pending`, `provisioning`; `503`, `Retry-After: 300`) albo „Nieczynne” (pozostałe
+stany; `503`, `Retry-After: 3600`). Usunięty sklep, inny host i brak nagłówka dają `404` „Nie ma tu sklepu”.
+Odpowiedź nie trafia do pamięci podręcznej (`never_cache`), a widok przyjmuje każdą metodę bez CSRF (formularz
+wysłany do zamkniętego sklepu też dostaje stronę, a widok niczego nie zmienia).
+
 ### Kategorie
 
 [categories.py](../backend/shops/categories.py) zwraca nazwy kategorii dla branży i liczby kategorii (1–20).
@@ -390,6 +402,7 @@ Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od
 | `shops/tests/test_platforms.py` | Platformy przez API: wybór motywu i platformy, kroki, panel, sekcje ustawień, wybór provisionera |
 | `billing/tests/test_billing.py`, `billing/tests/test_tpay.py` | Płatności i bramka Tpay ([platnosci.md](platnosci.md#testy)) |
 | `shops/tests/test_emails.py` | E-mail z danymi logowania: po założeniu i ponowieniu, ponowne wysłanie i jego limit, nowe hasło, brak danych w API, uwaga o ustawieniach zgodna z sekcjami aplikacji na każdej platformie |
+| `shops/tests/test_unavailable.py` | Strona pod adresem niedziałającego sklepu: zawieszony i zakładany (kod, `Retry-After`, szyld), język sklepu, nieznane i obce adresy, usunięty sklep, formularz bez CSRF |
 | `shops/tests/test_commands.py` | Polecenia `update_shop_addresses` i `configure_shop_mail`, domyślne zachowanie `BaseProvisioner` |
 | `support/tests/test_contact.py` | Formularz kontaktowy i powiadomienie |
 | `handbook/tests/test_handbook.py` | Strony dokumentacji, odnośniki, kotwice, dostęp, kompletność menu |

@@ -1,0 +1,26 @@
+# Addresses no shop container answers (a suspended or restarting shop, one being set up, no shop at all) get
+# the platform's page for the shop's state instead of a bare 404: backend/shops/unavailable.py.
+# Shop containers register their own routers through Docker labels (backend/shops/provisioning/container.py).
+http:
+  routers:
+    shop-fallback:
+      rule: PathPrefix(`/`)
+      # Below every shop's Host(…) router.
+      priority: 1
+      entryPoints:
+        - web
+      middlewares:
+        - shop-fallback-path
+      service: shop-fallback
+  middlewares:
+    # Only the page is reachable this way, whatever path the visitor asked for.
+    shop-fallback-path:
+      replacePath:
+        path: /shop-unavailable/
+  services:
+    shop-fallback:
+      loadBalancer:
+        # The platform keeps its own Host; the shop's address goes in X-Forwarded-Host.
+        passHostHeader: false
+        servers:
+          - url: '{{ env "SHOPS_FALLBACK_URL" }}'

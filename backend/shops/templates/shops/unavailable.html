@@ -1,0 +1,98 @@
+<!doctype html>
+{% comment %}
+  Shown under a shop's address while no shop answers there (shops/unavailable.py). It belongs to the owner's shop,
+  so it carries the shop's name and no branding: a sign on the door, the way a closed shop says so.
+{% endcomment %}
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>{% if missing %}Nie ma tu sklepu{% else %}{{ name }}{% endif %}</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page: #F4F6FA;
+      --ink: #14213D;
+      --muted: #5B6478;
+      --cord: #9AA3B5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page: #0E1526;
+        --ink: #EEF1F8;
+        --muted: #A3ADC2;
+        --cord: #5B6478;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 48px 16px;
+      background: var(--page);
+      color: var(--ink);
+      font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main { width: 100%; max-width: 30rem; text-align: center; }
+    .hanger {
+      width: 16rem;
+      margin: 0 auto 40px;
+      transform-origin: 50% 6px;
+      animation: settle 1.6s ease-out both;
+    }
+    .hanger svg { display: block; width: 100%; height: 52px; }
+    /* The sign stays paper-white in the dark too, like a real one under a lamp. */
+    .sign {
+      margin-top: -2px;
+      padding: 16px 12px;
+      background: #FFFFFF;
+      color: #1D2433;
+      border: 2px solid #1D2433;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 1.45rem;
+      line-height: 1.2;
+      box-shadow: 0 14px 24px -16px rgba(20, 33, 61, 0.55);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 1.75rem;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }
+    p { margin: 0 0 8px; color: var(--muted); }
+    @keyframes settle {
+      0% { transform: rotate(-9deg); }
+      35% { transform: rotate(5deg); }
+      65% { transform: rotate(-4deg); }
+      100% { transform: rotate(-2deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .hanger { animation: none; transform: rotate(-2deg); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="hanger" aria-hidden="true">
+      <svg viewBox="0 0 256 52" preserveAspectRatio="none">
+        <path d="M128 6 L20 52 M128 6 L236 52" stroke="var(--cord)" stroke-width="2" fill="none"
+              vector-effect="non-scaling-stroke" />
+        <circle cx="128" cy="6" r="5" fill="var(--cord)" />
+      </svg>
+      <div class="sign">{% if missing %}Do wynajęcia{% else %}{{ sign }}{% endif %}</div>
+    </div>
+    {% if missing %}
+      <h1>Nie ma tu sklepu</h1>
+      <p>Pod tym adresem nie działa żaden sklep. Sprawdź, czy adres jest poprawny.</p>
+      <p lang="en">There is no shop at this address.</p>
+    {% else %}
+      <h1>{{ name }}</h1>
+      <p>{{ text }}</p>
+    {% endif %}
+  </main>
+</body>
+</html>

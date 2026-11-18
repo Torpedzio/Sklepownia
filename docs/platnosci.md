@@ -211,6 +211,8 @@ a data płatności się nie zmienia ([services.preview_change, change_plan](../b
 - **Niższy plan:** różnica za resztę okresu trafia na saldo (`Subscription.credit`). Odnowienie najpierw zużywa
   saldo; gdy pokrywa ono całą cenę, nie ma obciążenia karty (płatność z `gateway = "credit"`, kwota 0).
 - **Sklepy ponad limit nowego planu** są zawieszane (`suspended`): kontener zatrzymany, wolumen i baza zostają.
+  Gość pod adresem sklepu widzi stronę „Nieczynne” z nazwą sklepu (`503`,
+  [infra/shops/README.md](../infra/shops/README.md#adres-bez-działającego-sklepu)).
   Właściciel wybiera, które zostają aktywne (`keep_shops`), domyślnie najstarsze. Sklepu w trakcie zakładania
   nie da się zawiesić. Sklepy testowe nie liczą się do limitu i nigdy nie są zawieszane.
 - **Przywracanie:** po zmianie na plan z miejscem zawieszone sklepy wracają same (najstarsze pierwsze);

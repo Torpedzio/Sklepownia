@@ -8,6 +8,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from accounts.views import avatar_file
+from shops.unavailable import shop_unavailable
 
 
 @extend_schema(responses=inline_serializer("Health", {"status": serializers.CharField()}))
@@ -30,4 +31,6 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='docs'),
     path('docs/', include('handbook.urls')),
     path('media/avatars/<str:name>', avatar_file, name='avatar-file'),
+    # The shops' proxy sends here addresses no shop answers (infra/shops/traefik/fallback.yml).
+    path('shop-unavailable/', shop_unavailable, name='shop-unavailable'),
 ]

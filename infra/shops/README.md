@@ -21,7 +21,8 @@ Całość systemu: [docs/architektura.md](../../docs/architektura.md).
 
 ```
 przeglądarka ──▶ Traefik :8080 ──Host: <slug>.<SHOPS_BASE_DOMAIN>──▶ kontener shop-<id> (WooCommerce / PrestaShop / Magento)
-                                                                         │
+                      │                                                  │
+                      └── adres bez działającego sklepu ──▶ platforma: strona „Sklep chwilowo niedostępny”
                                        MariaDB (shops-db): osobna baza i użytkownik na sklep
                                        OpenSearch (shops-search): wyszukiwarka sklepów Magento, indeksy shop_<id>_*
                                        Mailpit (shops-mail): poczta wysłana przez sklepy, podgląd :8031
@@ -31,7 +32,7 @@ przeglądarka ──▶ Traefik :8080 ──Host: <slug>.<SHOPS_BASE_DOMAIN>─�
 
 ```bash
 cd infra/shops
-cp .env.example .env                       # wpisz SHOPS_DB_ROOT_PASSWORD
+cp .env.example .env                       # wpisz SHOPS_DB_ROOT_PASSWORD (i SHOPS_FALLBACK_URL poza tym komputerem)
 docker compose build wordpress magento     # obrazy sklepów; Magento buduje się ~10 min
 docker compose up -d                       # Traefik, MariaDB, OpenSearch i Mailpit sklepów
 ```
@@ -97,6 +98,33 @@ w Magento `web/unsecure/base_url` i `web/secure/base_url`. Trzeba je powtórzyć
 inny adres IP, np. w innej sieci Wi-Fi. Niektóre routery blokują domeny wskazujące na adresy prywatne
 (ochrona przed DNS rebinding); wtedy sslip.io nie zadziała w tej sieci.
 Sklepy ze skryptu `provision-shop.sh` mają adres ustalony przy zakładaniu i polecenie ich nie obejmuje.
+
+## Adres bez działającego sklepu
+
+Traefik zna tylko działające kontenery: zatrzymany kontener (sklep zawieszony przez plan, sklep w trakcie
+zakładania przed startem kontenera, kontener, który się restartuje) znika z jego reguł. Takie adresy łapie router
+`shop-fallback` z [traefik/fallback.yml](traefik/fallback.yml) (priorytet 1, więc reguła `Host` sklepu zawsze
+wygrywa) i wysyła je do platformy pod `SHOPS_FALLBACK_URL/shop-unavailable/`. Adres, o który pytał gość, idzie
+w nagłówku `X-Forwarded-Host`, który Traefik ustawia sam (wysłany przez gościa odrzuca).
+
+Platforma sprawdza sklep w swojej bazie ([unavailable.py](../../backend/shops/unavailable.py)) i odpowiada:
+
+| Sklep pod adresem | Odpowiedź |
+|---|---|
+| zawieszony, działający (kontener się restartuje) albo nieudany | `503`, `Retry-After: 3600`, szyld „Nieczynne” |
+| w kolejce albo w trakcie zakładania | `503`, `Retry-After: 300`, szyld „Wkrótce otwarcie” |
+| nie ma go, usunięty albo obca domena | `404`, „Nie ma tu sklepu” |
+
+Strona ma nazwę sklepu i jest w jego języku (polski, angielski, niemiecki), bez marki platformy.
+Kod `503` z `Retry-After` mówi wyszukiwarkom, że przerwa jest chwilowa, więc nie usuwają sklepu z wyników.
+
+`SHOPS_FALLBACK_URL` w `.env` to adres platformy widziany z kontenera Traefika: lokalnie backend na tym
+komputerze (`http://host.docker.internal:8000`). Traefik nie przekazuje adresu sklepu w nagłówku `Host`,
+więc w `DJANGO_ALLOWED_HOSTS` platformy musi być host z `SHOPS_FALLBACK_URL`. Zmiana pliku lub zmiennej
+wymaga odtworzenia proxy: `docker compose up -d proxy` (sprawdź najpierw, że żaden sklep się nie zakłada).
+
+Od startu kontenera do uruchomienia serwera w środku (kilka sekund) reguła sklepu już istnieje, więc gość
+dostaje wtedy `502 Bad Gateway` od Traefika, nie tę stronę.
 
 ## Uwagi techniczne
 
