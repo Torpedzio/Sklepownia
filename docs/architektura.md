@@ -30,7 +30,7 @@
 | PostgreSQL | Konta, sklepy, konfiguracja, zaszyfrowane hasła sklepów, postęp zakładania | `db` w [docker-compose.yml](../docker-compose.yml) |
 | Redis | Kolejka zadań Celery | `redis` |
 | Worker Celery | Wykonuje długie zadania: zakładanie i usuwanie sklepów, wysyłkę e-maili, odnowienia planów | `worker` |
-| Celery beat | Zleca zadania według harmonogramu (`CELERY_BEAT_SCHEDULE`): co 15 minut odnowienia planów | `beat` |
+| Celery beat | Zleca zadania według harmonogramu (`CELERY_BEAT_SCHEDULE`): co 15 minut odnowienia planów, co 5 minut płatności i faktury czekające na wynik | `beat` |
 | Tpay | Operator płatności: strona płatności kartą, zapisywanie i obciążanie karty, powiadomienia ([platnosci.md](platnosci.md)) | zewnętrzny |
 | Mailpit | Lokalny serwer SMTP: przyjmuje całą pocztę i pokazuje ją w przeglądarce. Na produkcji zastępuje go dostawca poczty. | `mail` |
 | Poczta sklepów | Przekaźnik, przez który sklepy wysyłają e-maile do klientów ([poczta sklepów](../infra/shops/README.md#poczta-sklepów)). Lokalnie drugi Mailpit, na produkcji przekaźnik do dostawcy poczty. | `shops-mail` |

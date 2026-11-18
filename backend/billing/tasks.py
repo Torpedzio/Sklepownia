@@ -2,7 +2,7 @@ from smtplib import SMTPException
 
 from celery import shared_task
 
-from . import emails, services
+from . import emails, invoices, services
 from .models import Payment, Subscription
 
 
@@ -29,3 +29,19 @@ def send_billing_email(kind, object_id, context=None):
         payment = Payment.objects.select_related("plan", "user", "subscription").get(pk=object_id)
         message = emails.payment_message(kind, payment)
     message.send()
+
+
+@shared_task
+def issue_invoice(invoice_id):
+    invoices.issue(invoice_id)
+
+
+@shared_task(autoretry_for=(OSError, SMTPException), retry_backoff=True, max_retries=5)
+def deliver_invoice(invoice_id):
+    invoices.deliver(invoice_id)
+
+
+@shared_task
+def process_invoices():
+    """Scheduled by Celery beat: retries issuing, follows KSeF, e-mails invoices that never left."""
+    invoices.process()

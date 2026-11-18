@@ -171,3 +171,83 @@ class Payment(models.Model):
     def reference(self):
         """Our id as the gateway carries it (Tpay: hiddenDescription / tr_crc)."""
         return f"payment-{self.pk}"
+
+
+class Invoice(models.Model):
+    """
+    The VAT invoice for a paid payment. Who issues it is set by INVOICE_ISSUER: the platform itself (its own numbers
+    and PDF) or an invoicing service that also sends it to KSeF. Kept for tax law, like the payment.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Do wystawienia"
+        ISSUED = "issued", "Wystawiona"
+
+    class Ksef(models.TextChoices):
+        NONE = "", "Poza KSeF"
+        SENDING = "sending", "Wysyłana do KSeF"
+        ACCEPTED = "accepted", "Przyjęta w KSeF"
+        REJECTED = "rejected", "Odrzucona przez KSeF"
+
+    # Rates as printed: a percentage, or "np" (not subject to Polish VAT, e.g. a company from abroad).
+    NOT_SUBJECT = "np"
+
+    payment = models.OneToOneField(Payment, on_delete=models.PROTECT, related_name="invoice")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    # Who issued it (the issuer's name), and its id there.
+    issuer = models.CharField(max_length=30, blank=True)
+    external_id = models.CharField(max_length=60, blank=True)
+    number = models.CharField(max_length=60, blank=True)
+    issue_date = models.DateField(null=True, blank=True)
+    sale_date = models.DateField()
+    seller = models.JSONField(default=dict, blank=True)
+    buyer = models.JSONField(default=dict)
+    item = models.CharField(max_length=250)
+    vat_rate = models.CharField(max_length=4)
+    net = models.DecimalField(max_digits=10, decimal_places=2)
+    vat = models.DecimalField(max_digits=10, decimal_places=2)
+    gross = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3)
+    # The document as it was issued; stored, because an issued invoice never changes.
+    pdf = models.BinaryField(default=b"", blank=True, editable=False)
+    ksef_status = models.CharField(max_length=20, choices=Ksef.choices, default=Ksef.NONE, blank=True)
+    ksef_number = models.CharField(max_length=60, blank=True)
+    # The last thing that went wrong, for the admin: the issuer refusing it or KSeF rejecting it.
+    error = models.CharField(max_length=1000, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    # The last try at issuing it or asking KSeF about it.
+    checked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    issued_at = models.DateTimeField(null=True, blank=True)
+    # When it was e-mailed to the payer.
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "faktura"
+        verbose_name_plural = "faktury"
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["number"], condition=~models.Q(number=""), name="unique_invoice_number"),
+        ]
+
+    def __str__(self):
+        return self.number or f"Faktura do płatności {self.payment_id} (do wystawienia)"
+
+    @property
+    def is_final(self):
+        """Issued and, when it goes to KSeF, accepted there: only then the payer gets it."""
+        return self.status == self.Status.ISSUED and self.ksef_status in (self.Ksef.NONE, self.Ksef.ACCEPTED)
+
+    @property
+    def filename(self):
+        return "Faktura-" + "".join(char if char.isalnum() else "-" for char in self.number) + ".pdf"
+
+
+class InvoiceSequence(models.Model):
+    """The last number used in a month, for invoices the platform numbers itself."""
+
+    period = models.CharField(max_length=7, unique=True, help_text="RRRR-MM")
+    last = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.period}: {self.last}"

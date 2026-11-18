@@ -61,6 +61,7 @@ Użytkownik i panel admina widzą komunikat skrócony.
 | Krok kończy się „Wystąpił nieoczekiwany błąd” | Szczegóły w logach workera. Po naprawie przyczyny użyj „Spróbuj ponownie” w aplikacji. |
 | Płatność wisi na „Sprawdzamy płatność…” | Z symulowaną bramką: płatność nie została opłacona na stronie testowej. Z Tpay: powiadomienie nie dociera (lokalnie zwykle tak jest), ekran pyta Tpay sam co kilka sekund. Szczegóły w panelu admina: Płatności → Płatności, i w `docker compose logs backend`. |
 | Odnowienia planów się nie wykonują | Działa `beat`? `docker compose ps beat`, `docker compose logs beat`. Zadanie wykonuje worker: `docker compose logs worker`. |
+| Faktura „w przygotowaniu” nie przychodzi | Panel admina: Płatności → Faktury, kolumna błędu. `pending`: wystawienie się nie udało (np. brak `INVOICE_SELLER_*` albo Fakturownia nie odpowiada); `process_invoices` ponawia co jakiś czas, akcja „Wystaw teraz” od razu. `rejected`: KSeF odrzucił fakturę; popraw ją w Fakturowni, wyślij tam do KSeF i użyj akcji „Sprawdź ponownie w KSeF”. |
 | Właściciel nie może założyć sklepu („Wybierz plan”) | Brak aktywnego planu albo zaległa płatność. Stan w panelu admina: Płatności → Subskrypcje; plan można tam nadać ręcznie. |
 | Aplikacja w przeglądarce pokazuje stary kod | Pamięć podręczna Metro: `npx expo start -c`. |
 

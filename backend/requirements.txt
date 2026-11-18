@@ -9,3 +9,4 @@ cryptography
 docker~=7.2
 Markdown~=3.8
 Pillow~=12.0
+fpdf2~=2.8

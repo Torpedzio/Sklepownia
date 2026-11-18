@@ -5,7 +5,7 @@
 SZCZEGÓŁY
 {% for label, value in rows %}{{ label }}: {{ value }}
 {% endfor %}
-Plan, kartę i dane do faktury zobaczysz w aplikacji: Konto → Plan i płatności.
+Plan, kartę, faktury i dane do faktur zobaczysz w aplikacji: Konto → Plan i płatności.
 
 --
 {{ platform }}. Wiadomość wysłana na {{ recipient }}.

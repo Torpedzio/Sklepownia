@@ -58,7 +58,26 @@ def payment_message(kind, payment):
         intro = (f"Nie udało się pobrać opłaty z zapisanej karty. Spróbujemy ponownie "
                  f"{_date(subscription.next_attempt_at)}. Sprawdź, czy karta jest ważna i ma środki. "
                  "Do tego czasu sklepy działają, ale nowych nie założysz.")
+    if kind == "paid" and payment.amount:
+        intro += " Fakturę wyślemy w osobnej wiadomości."
     return _message(payment.user.email, subject, heading, intro, rows)
+
+
+def invoice_message(invoice):
+    payment = invoice.payment
+    rows = [
+        ("Numer", invoice.number),
+        ("Data wystawienia", formats.date_format(invoice.issue_date, "j E Y")),
+        ("Kwota brutto", _money(invoice.gross, invoice.currency)),
+        ("Nabywca", _payer(invoice.buyer)),
+    ]
+    if invoice.ksef_number:
+        rows.append(("Numer KSeF", invoice.ksef_number))
+    what = "dopłatę do planu" if payment.kind == Payment.Kind.UPGRADE else "plan"
+    intro = f"W załączniku faktura za {what} {payment.plan.name}."
+    message = _message(payment.user.email, f"Faktura {invoice.number}", "Faktura za płatność", intro, rows)
+    message.attach(invoice.filename, bytes(invoice.pdf), "application/pdf")
+    return message
 
 
 def plan_changed_message(subscription, old_plan, charged, credit_added, suspended, resumed):
@@ -78,6 +97,8 @@ def plan_changed_message(subscription, old_plan, charged, credit_added, suspende
     if suspended:
         intro += (" Sklepy ponad limit planu są zawieszone: nie widzą ich klienci, ale nic z nich nie znika."
                   " Przywrócisz je w aplikacji po zmianie planu albo usunięciu innego sklepu.")
+    if Decimal(charged):
+        intro += " Fakturę za dopłatę wyślemy w osobnej wiadomości."
     if subscription.current_period_end:
         intro += (f" Następna płatność {_date(subscription.current_period_end)}: "
                   f"{_money(max(plan.price - subscription.credit, 0), plan.currency)}.")

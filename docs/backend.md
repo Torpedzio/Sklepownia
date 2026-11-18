@@ -21,7 +21,7 @@ backend/
 │   ├── services.py    create_shop, retry_shop, delete_shop, get_settings, update_settings, start_operation
 │   ├── shop_settings.py  sekcje ustawień sklepu: pola, etykiety, walidacja, wartości domyślne
 │   └── slugs.py       zasady adresów sklepów i lista zarezerwowanych
-├── billing/           plany, dane do faktury, płatności, odnowienia, operatorzy płatności (gateways/)
+├── billing/           plany, dane do faktury, płatności, odnowienia, faktury (invoices.py, invoicing/), operatorzy płatności (gateways/)
 ├── support/           formularz kontaktowy
 ├── handbook/          dokumentacja projektu (pliki Markdown) jako strony pod /docs/
 └── conftest.py        wspólne fixtures testów
@@ -150,9 +150,14 @@ Opis działania, stanów i operatorów: [platnosci.md](platnosci.md).
 | `BillingProfile` | Dane do faktury użytkownika: osoba albo firma z NIP, adres. |
 | `Subscription` | Plan użytkownika (jeden na konto): stan, okres, anulowanie, zapisana karta (token zaszyfrowany), ponowienia, zgody. |
 | `Payment` | Jedna płatność: pierwsza albo odnowienie, kwota, stan, identyfikatory u operatora, opłacony okres, dane do faktury z chwili płatności. |
+| `Invoice` | Faktura opłaconej płatności: numer, daty, sprzedawca i nabywca (kopie danych), kwoty netto, VAT i brutto, PDF, stan w KSeF, data wysłania e-mailem. Jak płatność zostaje po usunięciu konta. |
+| `InvoiceSequence` | Ostatni numer faktury w miesiącu, dla faktur numerowanych przez platformę. |
 
 - `services.py` prowadzi cały cykl: `start_checkout`, `apply_result` (idempotentne zastosowanie wyniku),
   `check_with_gateway`, `renew_due` i `renew`, `cancel`, `resume`. Widoki tylko je wołają.
+- `invoices.py`: faktura powstaje w `_mark_paid` (`create_for`), wystawia ją `issue` przez wystawcę z `INVOICE_ISSUER`
+  ([invoicing/](../backend/billing/invoicing/): `platform.py` z PDF w `pdf.py`, `fakturownia.py`; VAT w `tax.py`),
+  `check_ksef` śledzi KSeF, `deliver` wysyła e-mail z PDF. PDF używa fontu DejaVu (pakiet `fonts-dejavu-core` w obrazie).
 - Blokada zakładania sklepów: `shops.services.active_plan` i `paid_shop_count`; brak planu to `402`.
 - Wspólny wygląd e-maili: [templates/email/](../backend/templates/email/) (`layout.html`, `rows.html`, `button.html`).
 
@@ -183,6 +188,9 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 | `shops.tasks.send_admin_access_email` | Koniec zakładania, nowe hasło, prośba z aplikacji | Wysyła właścicielowi e-mail ze szczegółami sklepu i danymi logowania ([emails.py](../backend/shops/emails.py)); przy błędzie serwera pocztowego ponawia |
 | `billing.tasks.renew_subscriptions` | Co 15 minut (Celery beat) | Odnawia plany, ponawia nieudane odnowienia, kończy anulowane i niezapłacone |
 | `billing.tasks.reconcile_payments` | Co 5 minut (Celery beat) | Pyta operatora o płatności, które wciąż czekają; po dobie oznacza je jako niedokończone |
+| `billing.tasks.issue_invoice` | Po opłaceniu płatności | Wystawia fakturę (numer, PDF, wysyłka do KSeF przez Fakturownię) |
+| `billing.tasks.deliver_invoice` | Gdy faktura jest gotowa | Wysyła ją e-mailem z PDF; ponawia przy błędzie SMTP |
+| `billing.tasks.process_invoices` | Co 5 minut (Celery beat) | Ponawia nieudane wystawienia, pyta o stan w KSeF, wysyła faktury, których e-mail nie wyszedł |
 | `billing.tasks.send_billing_email` | Opłacona płatność, nieudane odnowienie, koniec planu | Wysyła e-mail o planie i płatności |
 | `shops.tasks.run_shop_operation` | Zmiana i odczyt ustawień, nowe hasło, usunięcie produktów przykładowych | Wykonuje operację (`run_operation`) |
 | `support.tasks.notify_about_contact_message` | Wysłanie formularza kontaktowego | Przekazuje wiadomość e-mailem |

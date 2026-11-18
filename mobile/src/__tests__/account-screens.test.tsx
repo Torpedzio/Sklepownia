@@ -504,7 +504,7 @@ describe('deleting the account', () => {
     expect(await screen.findByText('Palarnia')).toBeTruthy();
     expect(screen.getByText('herbaciarnia.sklepy.localhost')).toBeTruthy();
     expect(screen.getByText(/Plan Standard przestanie działać od razu/)).toBeTruthy();
-    expect(screen.getByText(/Opłacone płatności z danymi z faktur/)).toBeTruthy();
+    expect(screen.getByText(/Opłacone płatności i ich faktury/)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Przejdź do planu i płatności' }));
     expect(router.push).toHaveBeenCalledWith('/billing');
 

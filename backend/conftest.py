@@ -21,6 +21,13 @@ def _test_settings(settings, tmp_path):
     settings.TPAY_CLIENT_ID = ""
     settings.TPAY_CLIENT_SECRET = ""
     settings.TPAY_SECURITY_CODE = ""
+    # Invoices are numbered here, never sent to Fakturownia from .env.
+    settings.INVOICE_ISSUER = "billing.invoicing.platform.PlatformIssuer"
+    settings.INVOICE_SELLER = {"name": "Sklepownia sp. z o.o.", "tax_id": "5260001246", "street": "Prosta 20",
+                               "postal_code": "00-850", "city": "Warszawa", "bank_account": ""}
+    settings.INVOICE_NUMBER_FORMAT = "FV/{year}/{month:02}/{number:04}"
+    settings.FAKTUROWNIA_DOMAIN = ""
+    settings.FAKTUROWNIA_API_TOKEN = ""
     # Uploaded avatars go to a throwaway folder.
     settings.MEDIA_ROOT = tmp_path / "media"
     # Throttle counters live in the cache; keep tests independent.

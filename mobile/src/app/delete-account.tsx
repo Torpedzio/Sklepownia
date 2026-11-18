@@ -113,7 +113,7 @@ function DeleteForm({ shops, billing }: { shops: Shop[]; billing: BillingOvervie
         <ThemedText type="heading">Co zostanie</ThemedText>
         <ThemedText themeColor="textSecondary">
           {paid
-            ? 'Opłacone płatności z danymi z faktur, bo przepisy podatkowe każą je przechowywać. Twój adres e-mail nie będzie już z nimi powiązany. '
+            ? 'Opłacone płatności i ich faktury, bo przepisy podatkowe każą je przechowywać. Kopie faktur masz w e-mailach od nas. Twój adres e-mail nie będzie już z nimi powiązany. '
             : 'Nic, co by Cię identyfikowało. '}
           Na ten sam adres założysz nowe konto, jeśli zechcesz.
         </ThemedText>

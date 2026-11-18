@@ -12,6 +12,7 @@ urlpatterns = [
     path("billing/subscription/resume/", views.resume, name="billing-resume"),
     path("billing/subscription/change-preview/", views.change_preview, name="billing-change-preview"),
     path("billing/subscription/change/", views.change_plan, name="billing-change"),
+    path("billing/invoices/<str:token>/", views.invoice_pdf, name="billing-invoice-pdf"),
     path("billing/notifications/", views.gateway_notification, name="billing-notifications"),
     path("billing/fake-gateway/<int:payment_id>/", views.fake_gateway_page, name="billing-fake-gateway"),
 ]

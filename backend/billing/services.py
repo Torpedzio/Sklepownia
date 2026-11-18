@@ -14,6 +14,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from . import invoices
 from .gateways import get_gateway
 from .gateways.base import GatewayError, Payer, PaymentResult
 from .models import BillingProfile, Payment, Plan, Subscription
@@ -342,6 +343,7 @@ def _mark_paid(payment, result, now, start, end):
         payment.gateway_title = result.title
     payment.error = ""
     payment.save()
+    invoices.create_for(payment)
 
 
 def _fail(payment, error):

@@ -40,6 +40,7 @@ const ICONS = {
   history: ['clock.arrow.circlepath', 'history'],
   camera: ['camera.fill', 'photo_camera'],
   trash: ['trash', 'delete'],
+  document: ['doc.text', 'description'],
 } as const;
 
 export type IconName = keyof typeof ICONS;

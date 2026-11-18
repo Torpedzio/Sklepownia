@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Linking } from 'react-native';
 
 import BillingScreen from '@/app/billing';
 import ChangePlanScreen from '@/app/billing/change';
@@ -11,7 +12,15 @@ import { NotificationsProvider } from '@/context/notifications';
 import { ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
 import { goToPayment } from '@/lib/payment';
-import type { BillingOverview, BillingProfile, Payment, Plan, PlanChangePreview, Subscription } from '@/lib/types';
+import type {
+  BillingOverview,
+  BillingProfile,
+  Invoice,
+  Payment,
+  Plan,
+  PlanChangePreview,
+  Subscription,
+} from '@/lib/types';
 import { mockApi } from '@/testing/api';
 
 jest.mock('expo-router', () => require('@/testing/router'));
@@ -109,9 +118,21 @@ function payment(overrides: Partial<Payment> = {}): Payment {
     error: '',
     created_at: '2026-11-05T10:00:00Z',
     paid_at: '2026-11-05T10:01:00Z',
+    invoice: null,
     ...overrides,
   };
 }
+
+const invoice = (overrides: Partial<Invoice> = {}): Invoice => ({
+  number: 'FV/2026/11/0001',
+  issue_date: '2026-11-05',
+  gross: '49.00',
+  currency: 'PLN',
+  ksef_number: '',
+  ready: true,
+  url: 'http://localhost:8000/api/billing/invoices/podpisany-link/',
+  ...overrides,
+});
 
 const overview = (overrides: Partial<BillingOverview> = {}): BillingOverview => ({
   subscription: null,
@@ -337,6 +358,25 @@ describe('plan and payments', () => {
     expect(screen.getByText('Visa •••• 4242')).toBeTruthy();
     expect(screen.getByText('Pierwsza płatność, plan Standard')).toBeTruthy();
     expect(screen.getByText('Anna Nowak')).toBeTruthy();
+  });
+
+  test('a paid payment links to its invoice', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    await open(overview({ subscription: subscription(), profile: person, payments: [payment({ invoice: invoice() })] }));
+
+    await fireEvent.press(await screen.findByRole('link', { name: 'Pobierz fakturę FV/2026/11/0001' }));
+
+    expect(openURL).toHaveBeenCalledWith('http://localhost:8000/api/billing/invoices/podpisany-link/');
+  });
+
+  test('an invoice still being issued is announced, not linked', async () => {
+    await open(overview({
+      subscription: subscription(),
+      payments: [payment({ invoice: invoice({ number: '', ready: false, url: null }) })],
+    }));
+
+    expect(await screen.findByText('Faktura w przygotowaniu. Wyślemy ją e-mailem.')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Pobierz fakturę/ })).toBeNull();
   });
 
   test('cancelling asks first and keeps the plan until the period ends', async () => {

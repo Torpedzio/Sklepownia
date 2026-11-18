@@ -37,7 +37,7 @@ Zasada: w `app/` są tylko ekrany. Komponenty, hooki i narzędzia są poza tym k
 | `/account` | `app/(tabs)/account.tsx` | jw. Wizytówka konta (zdjęcie profilowe zmieniane kliknięciem, potwierdzony e-mail, plan, staż), konto w skrócie (sklepy względem limitu, plan z następną płatnością, dane do faktury), dane profilu, bezpieczeństwo (zmiana hasła, wylogowanie wszędzie, usunięcie konta), skróty i wylogowanie. |
 | `/delete-account` | `app/delete-account.tsx` | jw. Usunięcie konta: co zniknie (sklepy z adresami, plan, dane), co zostanie (płatności), anulowanie planu jako alternatywa; usuwa po wpisaniu hasła i potwierdzeniu. Zablokowane, gdy sklep jest zakładany. |
 | `/shops/new` | `app/shops/new.tsx` | jw. Formularz nowego sklepu (na telefonie jako okno modalne): najpierw system sklepu (WooCommerce, PrestaShop), pod nim motywy tej platformy. Bez planu zamiast formularza „Najpierw wybierz plan”. |
-| `/billing` | `app/billing/index.tsx` | jw. Plan i płatności: stan planu, karta, anulowanie i wznowienie, dane do faktury, historia płatności. |
+| `/billing` | `app/billing/index.tsx` | jw. Plan i płatności: stan planu, karta, anulowanie i wznowienie, dane do faktury, historia płatności z linkami do faktur (PDF w przeglądarce). |
 | `/billing/change` | `app/billing/change.tsx` | jw. Zmiana planu: podgląd dopłaty albo kwoty na saldo, wybór sklepów, które zostają aktywne, potwierdzenie. |
 | `/billing/checkout` | `app/billing/checkout.tsx` | jw. Wybór planu, dane do faktury, zgody i przejście do płatności. |
 | `/billing/return` | `app/billing/return.tsx` | jw. Powrót ze strony płatności (`?payment=<id>`): czeka na wynik i prowadzi do zakładania sklepu. |

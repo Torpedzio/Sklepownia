@@ -287,7 +287,34 @@ FAKE_GATEWAY_DECLINE_RENEWALS = os.environ.get("FAKE_GATEWAY_DECLINE_RENEWALS", 
 # Where the gateway may send the payer back: the web app and the mobile app's links (exp:// in Expo Go).
 BILLING_RETURN_URL_PREFIXES = env_list("BILLING_RETURN_URL_PREFIXES", "http://localhost:8081/,mobile://,exp://")
 
+# Invoices for paid plans. Who issues them: billing.invoicing.platform.PlatformIssuer (numbered and rendered here,
+# outside KSeF; the default) or billing.invoicing.fakturownia.FakturowniaIssuer (Fakturownia numbers them and sends
+# company invoices to KSeF).
+INVOICE_ISSUER = os.environ.get("INVOICE_ISSUER", "billing.invoicing.platform.PlatformIssuer")
+# The seller printed on invoices the platform issues. Fakturownia uses the company set up in its account.
+INVOICE_SELLER = {
+    "name": os.environ.get("INVOICE_SELLER_NAME", ""),
+    "tax_id": os.environ.get("INVOICE_SELLER_TAX_ID", ""),
+    "street": os.environ.get("INVOICE_SELLER_STREET", ""),
+    "postal_code": os.environ.get("INVOICE_SELLER_POSTAL_CODE", ""),
+    "city": os.environ.get("INVOICE_SELLER_CITY", ""),
+    "bank_account": os.environ.get("INVOICE_SELLER_BANK_ACCOUNT", ""),
+}
+if DEBUG and not INVOICE_SELLER["name"]:
+    # Local development works without a company; such invoices say they are test documents.
+    INVOICE_SELLER.update(name=f"{PLATFORM_NAME} (dane testowe)", tax_id="5260001246", street="Testowa 1",
+                          postal_code="00-001", city="Warszawa", test=True)
+# Numbers of invoices the platform issues; the counter starts over every month.
+INVOICE_NUMBER_FORMAT = os.environ.get("INVOICE_NUMBER_FORMAT", "FV/{year}/{month:02}/{number:04}")
+# Fakturownia: the account's subdomain (firma for firma.fakturownia.pl) and API token
+# (Ustawienia → Ustawienia konta → Integracja → Kod autoryzacyjny API).
+FAKTUROWNIA_DOMAIN = os.environ.get("FAKTUROWNIA_DOMAIN", "")
+FAKTUROWNIA_API_TOKEN = os.environ.get("FAKTUROWNIA_API_TOKEN", "")
+# 1 = invoices for companies go to KSeF (the account needs KSeF connected: Ustawienia → KSeF).
+FAKTUROWNIA_KSEF = os.environ.get("FAKTUROWNIA_KSEF", "1") == "1"
+
 CELERY_BEAT_SCHEDULE = {
     "renew-subscriptions": {"task": "billing.tasks.renew_subscriptions", "schedule": 15 * 60},
     "reconcile-payments": {"task": "billing.tasks.reconcile_payments", "schedule": 5 * 60},
+    "process-invoices": {"task": "billing.tasks.process_invoices", "schedule": 5 * 60},
 }

@@ -11,7 +11,7 @@ from rest_framework.response import Response
 
 from accounts.permissions import IsEmailVerified
 
-from . import services
+from . import invoices, services
 from .gateways import get_gateway
 from .gateways.base import InvalidNotification
 from .gateways.fake import FakeGateway
@@ -53,11 +53,11 @@ def overview(request):
     services.latest_pending(user)
     subscription = Subscription.objects.select_related("plan").filter(user=user).first()
     profile = BillingProfile.objects.filter(user=user).first()
-    payments = Payment.objects.filter(user=user).select_related("plan")[:PAYMENT_HISTORY_LENGTH]
+    payments = Payment.objects.filter(user=user).select_related("plan", "invoice")[:PAYMENT_HISTORY_LENGTH]
     return Response({
         "subscription": SubscriptionSerializer(subscription).data if subscription else None,
         "profile": BillingProfileSerializer(profile).data if profile else None,
-        "payments": PaymentSerializer(payments, many=True).data,
+        "payments": PaymentSerializer(payments, many=True, context={"request": request}).data,
     })
 
 
@@ -112,7 +112,7 @@ def payment_detail(request, payment_id):
     """One payment. While it is pending, the gateway is asked about it too."""
     payment = get_object_or_404(Payment.objects.select_related("plan"), pk=payment_id, user=request.user)
     payment = services.check_with_gateway(payment)
-    return Response(PaymentSerializer(payment).data)
+    return Response(PaymentSerializer(payment, context={"request": request}).data)
 
 
 @extend_schema(request=None, responses={200: SubscriptionSerializer})
@@ -204,6 +204,23 @@ def gateway_notification(request):
         return HttpResponse("FALSE", status=400, content_type="text/plain")
     services.apply_result(result)
     return HttpResponse(gateway.notification_ack, content_type="text/plain")
+
+
+def invoice_pdf(request, token):
+    """An invoice's PDF behind a signed link from the app (`invoice.url`). Not part of the app's API."""
+    invoice = invoices.from_link(token)
+    if invoice is None or not invoice.is_final:
+        return HttpResponse("Link do faktury wygasł. Otwórz ją ponownie w aplikacji: Konto → Plan i płatności.",
+                            status=404, content_type="text/plain; charset=utf-8")
+    return _pdf_response(invoice)
+
+
+def _pdf_response(invoice):
+    response = HttpResponse(bytes(invoice.pdf), content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{invoice.filename}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex"
+    return response
 
 
 def fake_gateway_page(request, payment_id):

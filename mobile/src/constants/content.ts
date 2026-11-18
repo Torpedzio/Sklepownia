@@ -210,6 +210,6 @@ export const PricingFaq = [
   {
     question: 'Czy dostanę fakturę?',
     answer:
-      'Tak. Przy wyborze planu podajesz dane do faktury: osoby prywatnej albo firmy z NIP-em. Zmienisz je później w zakładce Plan i płatności.',
+      'Tak, po każdej płatności. Przy wyborze planu podajesz dane do faktury: osoby prywatnej albo firmy z NIP-em. Fakturę wyślemy e-mailem, a wszystkie znajdziesz w zakładce Plan i płatności. Tam też zmienisz dane do kolejnych faktur.',
   },
 ];

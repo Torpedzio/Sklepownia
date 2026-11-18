@@ -247,6 +247,21 @@ export type Payment = {
   error: string;
   created_at: string;
   paid_at: string | null;
+  /** The invoice of a paid payment; null when there is none (e.g. a renewal paid from the balance). */
+  invoice: Invoice | null;
+};
+
+export type Invoice = {
+  /** Empty until it is issued. */
+  number: string;
+  issue_date: string | null;
+  gross: string;
+  currency: string;
+  ksef_number: string;
+  /** Issued (and accepted in KSeF when it goes there): it can be downloaded. */
+  ready: boolean;
+  /** The PDF, a signed link valid for a day; null until ready. */
+  url: string | null;
 };
 
 export type BillingOverview = {

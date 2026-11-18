@@ -17,7 +17,7 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   - zawieszanie sklepów (stan `suspended`), gdy plan wygaśnie lub zostanie anulowany, i usuwanie po okresie przechowania;
   - zmiana karty z aplikacji (nowa płatność z zapisaniem karty);
   - strona „Sklep niedostępny” pod adresem zawieszonego sklepu (dziś proxy odpowiada 404);
-  - faktury VAT przez KSeF (integracja z programem do faktur po opłaceniu);
+  - faktury korygujące (np. przy zwrocie) i własne połączenie z KSeF bez Fakturowni;
   - regulamin i polityka prywatności jako strony, do których prowadzą zgody przy płatności;
   - zniżki, okresy próbne, plany roczne, inne metody płatności (BLIK, przelew), wypłata salda przy rezygnacji.
 - **Testy na urządzeniu:** testy aplikacji działają w Jest; zachowania zależne od urządzenia (przewijanie,

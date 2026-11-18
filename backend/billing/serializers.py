@@ -3,7 +3,8 @@ from rest_framework import serializers
 
 from shops.choices import Country
 
-from .models import BillingProfile, Payment, Plan, Subscription
+from . import invoices
+from .models import BillingProfile, Invoice, Payment, Plan, Subscription
 from .services import allowed_return_url
 from .validators import normalize_nip, validate_nip, validate_polish_postal_code
 
@@ -81,15 +82,37 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         return SavedCardSerializer(subscription).data if subscription.card_tail else None
 
 
+class InvoiceSerializer(serializers.ModelSerializer):
+    ready = serializers.BooleanField(source="is_final", read_only=True,
+                                     help_text="Wystawiona (i przyjęta w KSeF, gdy tam trafia): można ją pobrać.")
+    url = serializers.SerializerMethodField(help_text="PDF faktury, link ważny dobę; null, dopóki nie jest gotowa.")
+
+    class Meta:
+        model = Invoice
+        fields = ["number", "issue_date", "gross", "currency", "ksef_number", "ready", "url"]
+
+    def get_url(self, invoice) -> str | None:
+        request = self.context.get("request")
+        if not invoice.is_final or request is None:
+            return None
+        return invoices.download_url(invoice, request)
+
+
 class PaymentSerializer(serializers.ModelSerializer):
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     plan_name = serializers.CharField(source="plan.name", read_only=True)
+    invoice = serializers.SerializerMethodField(help_text="Faktura opłaconej płatności; null, gdy jej nie ma.")
 
     class Meta:
         model = Payment
         fields = ["id", "kind", "kind_display", "status", "status_display", "plan_name", "amount", "credit_used",
-                  "currency", "gateway_title", "period_start", "period_end", "error", "created_at", "paid_at"]
+                  "currency", "gateway_title", "period_start", "period_end", "error", "created_at", "paid_at",
+                  "invoice"]
+
+    def get_invoice(self, payment) -> InvoiceSerializer(allow_null=True):
+        invoice = getattr(payment, "invoice", None)
+        return InvoiceSerializer(invoice, context=self.context).data if invoice else None
 
 
 class BillingOverviewSerializer(serializers.Serializer):

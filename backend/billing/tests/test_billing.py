@@ -159,8 +159,8 @@ def test_paying_activates_the_plan_and_saves_the_card(client, user, django_captu
         or subscription.current_period_end.month != subscription.current_period_start.month
     assert subscription.terms_accepted_at and subscription.immediate_start_consent_at
     assert Payment.objects.get(pk=payment_id).billing_details["full_name"] == "Anna Nowak"
-    assert mailoutbox[-1].subject == "Plan Standard jest aktywny"
-    assert "4242" in mailoutbox[-1].body
+    activated = next(message for message in mailoutbox if message.subject == "Plan Standard jest aktywny")
+    assert "4242" in activated.body
 
     me = client.get("/api/auth/me/").data
     assert (me["plan"], me["can_create_shops"]) == ("Standard", True)
@@ -287,7 +287,7 @@ def test_renewal_charges_the_saved_card_and_continues_the_period(user, plan, dja
     assert payment.period_start == old_end
     assert subscription.current_period_start == old_end
     assert subscription.current_period_end > timezone.now() + timedelta(days=27)
-    assert mailoutbox[-1].subject == "Opłaciliśmy plan Standard na kolejny okres"
+    assert "Opłaciliśmy plan Standard na kolejny okres" in [message.subject for message in mailoutbox]
 
 
 def test_plans_not_due_are_left_alone(user, plan):

@@ -1,6 +1,6 @@
 import { Link, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { backArrowOptions } from '@/components/back-link';
 import { BillingProfileForm, EMPTY_PROFILE } from '@/components/billing-profile-form';
@@ -17,7 +17,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { api, ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
 import { formatDate, formatMoney } from '@/lib/format';
-import type { BillingOverview, BillingProfile, Payment, Subscription } from '@/lib/types';
+import type { BillingOverview, BillingProfile, Invoice, Payment, Subscription } from '@/lib/types';
 
 const STATUS_TONE: Record<Subscription['status'], [ThemeColor, ThemeColor]> = {
   active: ['success', 'primaryMuted'],
@@ -265,6 +265,7 @@ function History({ payments }: { payments: Payment[] }) {
                 {payment.error}
               </ThemedText>
             ) : null}
+            {payment.invoice ? <InvoiceLink invoice={payment.invoice} /> : null}
           </View>
           <View style={styles.amount}>
             <ThemedText type="smallBold">{formatMoney(payment.amount, payment.currency)}</ThemedText>
@@ -275,6 +276,31 @@ function History({ payments }: { payments: Payment[] }) {
         </View>
       ))}
     </Card>
+  );
+}
+
+function InvoiceLink({ invoice }: { invoice: Invoice }) {
+  const notify = useNotify();
+  const { url } = invoice;
+  if (!invoice.ready || !url) {
+    return (
+      <ThemedText type="small" themeColor="textSecondary">
+        Faktura w przygotowaniu. Wyślemy ją e-mailem.
+      </ThemedText>
+    );
+  }
+  const open = () => Linking.openURL(url).catch(() => notify.error('Nie udało się otworzyć faktury.'));
+  return (
+    <Pressable
+      onPress={open}
+      accessibilityRole="link"
+      accessibilityLabel={`Pobierz fakturę ${invoice.number}`}
+      style={({ pressed }) => [styles.invoice, pressed && styles.pressed]}>
+      <Icon name="document" size={15} color="primary" />
+      <ThemedText type="small" themeColor="primary">
+        Faktura {invoice.number}
+      </ThemedText>
+    </Pressable>
   );
 }
 
@@ -334,5 +360,15 @@ const styles = StyleSheet.create({
   },
   amount: {
     alignItems: 'flex-end',
+  },
+  invoice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: Spacing.one,
+    paddingVertical: Spacing.half,
+  },
+  pressed: {
+    opacity: 0.6,
   },
 });
