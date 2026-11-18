@@ -47,7 +47,8 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
   - Przy każdym odświeżeniu backend wydaje nowy token odświeżania, a stary trafia na czarną listę (`token_blacklist`).
   - Wylogowanie dopisuje token odświeżania do czarnej listy.
 - **Potwierdzony e-mail** jest wymagany do zakładania i ponawiania sklepów (`IsEmailVerified`).
-- **`GET /api/auth/me/`** zwraca dane konta razem z `shop_limit`, żeby aplikacja mogła zablokować przycisk nowego sklepu.
+- **`GET /api/auth/me/`** zwraca dane konta razem z `shop_limit`, żeby aplikacja mogła zablokować przycisk nowego
+  sklepu, i `magento_shop_limit`, który ekran konta pokazuje obok sklepów Magento.
 - **Usunięcie konta** (`delete_account`) to anonimizacja, nie skasowanie wiersza, bo płatności (`Payment.user`, `PROTECT`)
   trzeba przechowywać dla przepisów podatkowych.
   - E-mail zmienia się na `deleted-{id}@deleted.invalid`, a imię, nazwisko, zdjęcie i hasło znikają.

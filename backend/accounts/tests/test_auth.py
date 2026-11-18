@@ -64,6 +64,7 @@ def test_me_reports_the_plan_and_its_shop_limit(auth_client):
     assert response.status_code == 200
     assert response.data["plan"] == "Standard"
     assert response.data["shop_limit"] == 3
+    assert response.data["magento_shop_limit"] == 1
     assert response.data["can_create_shops"] is True
 
 
@@ -72,7 +73,9 @@ def test_me_without_a_plan_cannot_create_shops(api_client, unsubscribed_user):
 
     data = api_client.get("/api/auth/me/").data
 
-    assert (data["plan"], data["shop_limit"], data["can_create_shops"]) == (None, 0, False)
+    assert (data["plan"], data["shop_limit"], data["magento_shop_limit"], data["can_create_shops"]) == (
+        None, 0, 0, False,
+    )
 
 
 def test_verify_email_with_correct_code(api_client, django_capture_on_commit_callbacks, mailoutbox):

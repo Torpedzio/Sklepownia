@@ -8,6 +8,9 @@ from .models import User
 
 class UserSerializer(serializers.ModelSerializer):
     shop_limit = serializers.SerializerMethodField(help_text="Ile sklepów pozwala plan; 0 bez aktywnego planu.")
+    magento_shop_limit = serializers.SerializerMethodField(
+        help_text="Ile z tych sklepów może działać na Magento; 0 bez planu albo w planie bez Magento.",
+    )
     plan = serializers.SerializerMethodField(help_text="Nazwa aktywnego planu albo null.")
     can_create_shops = serializers.SerializerMethodField()
     avatar_url = serializers.SerializerMethodField(help_text="Adres zdjęcia profilowego albo null.")
@@ -15,7 +18,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "email", "first_name", "last_name", "is_email_verified", "date_joined", "shop_limit",
-                  "plan", "can_create_shops", "avatar_url"]
+                  "magento_shop_limit", "plan", "can_create_shops", "avatar_url"]
         read_only_fields = ["id", "email", "is_email_verified", "date_joined"]
 
     def _plan(self, user):
@@ -30,6 +33,10 @@ class UserSerializer(serializers.ModelSerializer):
     def get_shop_limit(self, user) -> int:
         plan = self._plan(user)
         return plan.max_shops if plan else 0
+
+    def get_magento_shop_limit(self, user) -> int:
+        plan = self._plan(user)
+        return plan.max_magento_shops if plan else 0
 
     def get_plan(self, user) -> str | None:
         plan = self._plan(user)

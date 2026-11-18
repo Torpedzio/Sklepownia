@@ -32,7 +32,7 @@ Ten plik jest przeglądem: co jest gdzie i jakie obowiązują zasady.
 | `POST password-reset/` | nie | `{email}` → `204`. Wysyła kod do ustawienia nowego hasła (ważny 15 min). Odpowiedź jest taka sama dla adresu bez konta i dla ponownej prośby w ciągu 60 s (wtedy nic nie wychodzi), żeby nie dało się sprawdzać, kto ma konto. |
 | `POST password-reset/confirm/` | nie | `{email, code, new_password}` → `{access, refresh}`: nowe hasło i od razu zalogowanie. Inne urządzenia są wylogowane, właściciel dostaje e-mail o zmianie, a niepotwierdzony adres staje się potwierdzony (kod dowodzi dostępu do skrzynki). `400` z `{code: [...]}` przy złym, wygasłym albo zablokowanym kodzie (5 prób; dla nieznanego adresu ten sam komunikat) albo `{new_password: [...]}` przy słabym haśle, po którym kod dalej działa. |
 | `POST delete-account/` | tak | `{password}` → `204`. Usuwa konto ze wszystkimi sklepami: plan kończy się od razu (bez zwrotu za resztę okresu), karta, dane do faktury i zdjęcie znikają, a konto zostaje zanonimizowane i wylogowane wszędzie. Opłacone płatności zostają dla przepisów podatkowych. Na dawny adres idzie potwierdzenie z listą usuniętych sklepów, a adres jest od razu wolny. `400` z `{password: [...]}` przy złym haśle; `409 {detail}`, gdy sklep jest w kolejce albo właśnie zakładany, albo dla konta administratora (to usuwa się w panelu). |
-| `GET me/` | tak | Dane konta: `id, email, first_name, last_name, is_email_verified, date_joined, shop_limit, plan, can_create_shops, avatar_url` |
+| `GET me/` | tak | Dane konta: `id, email, first_name, last_name, is_email_verified, date_joined, shop_limit, magento_shop_limit, plan, can_create_shops, avatar_url` |
 | `PATCH me/` | tak | Zmiana `first_name`, `last_name` |
 | `PUT avatar/` | tak | `multipart/form-data` z polem `avatar` (JPG, PNG, WebP albo GIF do 10 MB) → dane konta. Serwer przycina zdjęcie do kwadratu 512×512, zapisuje jako WebP bez metadanych (EXIF, GPS) i usuwa poprzednie. `400` z `{avatar: [...]}`, gdy plik nie jest obsługiwanym zdjęciem. |
 | `DELETE avatar/` | tak | Usuwa zdjęcie profilowe → dane konta z `avatar_url: null`. |
@@ -196,7 +196,8 @@ Wylogowanie ze wszystkich urządzeń, zmiana i reset hasła oraz usunięcie kont
 ## Płatności: `/api/billing/`
 
 Plany, dane do faktury, płatność kartą, anulowanie i powiadomienia od operatora: [platnosci.md](platnosci.md#api).
-`GET auth/me/` zwraca też `plan` (nazwa albo `null`), `shop_limit` (0 bez planu) i `can_create_shops`.
+`GET auth/me/` zwraca też `plan` (nazwa albo `null`), `shop_limit` (0 bez planu), `magento_shop_limit`
+(ile z tych sklepów może działać na Magento; 0 bez planu albo w planie bez Magento) i `can_create_shops`.
 
 ## Kontakt: `/api/contact/`
 

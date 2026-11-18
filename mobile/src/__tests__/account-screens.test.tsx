@@ -31,6 +31,7 @@ const anna: User = {
   is_email_verified: true,
   date_joined: '2026-10-01T12:00:00Z',
   shop_limit: 3,
+  magento_shop_limit: 1,
   plan: 'Standard',
   can_create_shops: true,
   avatar_url: null,
@@ -407,25 +408,25 @@ describe('account overview and security', () => {
     },
     payments: [],
   };
-  const shopOf = (id: number, status: Shop['status'], isTest = false): Shop => ({
+  const shopOf = (id: number, status: Shop['status'], isTest = false, platform: Shop['platform'] = 'woocommerce') => ({
     id,
     name: `Sklep ${id}`,
     slug: `sklep-${id}`,
     url: '',
     status,
     status_display: status,
-    platform: 'woocommerce',
-    platform_display: 'WooCommerce',
+    platform,
+    platform_display: platform,
     is_test: isTest,
     created_at: '2026-11-01T10:00:00Z',
   });
 
-  async function open(actions: Record<string, jest.Mock> = {}) {
+  async function open(
+    actions: Record<string, jest.Mock> = {},
+    shops: Shop[] = [shopOf(1, 'active'), shopOf(2, 'suspended'), shopOf(3, 'active', true)],
+  ) {
     signedIn(anna, { updateProfile: jest.fn(), signOut: jest.fn(), ...actions });
-    mockApi({
-      'GET /shops/': [[shopOf(1, 'active'), shopOf(2, 'suspended'), shopOf(3, 'active', true)]],
-      'GET /billing/': billing,
-    });
+    mockApi({ 'GET /shops/': [shops], 'GET /billing/': billing });
     await renderScreen(<AccountScreen />);
   }
 
@@ -441,6 +442,26 @@ describe('account overview and security', () => {
 
     await fireEvent.press(screen.getByRole('link', { name: /^Plan: Standard/ }));
     expect(router.push).toHaveBeenCalledWith('/billing');
+  });
+
+  test('with a Magento shop, says how many of the Magento shops the plan allows are in use', async () => {
+    await open({}, [
+      shopOf(1, 'active'),
+      shopOf(2, 'active', false, 'magento'),
+      // Suspended and test shops don't use up the plan, on Magento neither.
+      shopOf(3, 'suspended', false, 'magento'),
+      shopOf(4, 'active', true, 'magento'),
+    ]);
+
+    expect(await screen.findByText('2 z 3 w planie')).toBeTruthy();
+    expect(screen.getByText('W tym 1 z 1 na Magento. 1 zawieszony, 1 testowy poza planem')).toBeTruthy();
+  });
+
+  test('without a Magento shop the tile says nothing about Magento', async () => {
+    await open({}, [shopOf(1, 'active')]);
+
+    expect(await screen.findByText('1 z 3 w planie')).toBeTruthy();
+    expect(screen.getByText('Wszystkie działają')).toBeTruthy();
   });
 
   test('changes the password and reports field errors', async () => {

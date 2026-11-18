@@ -216,8 +216,12 @@ function Overview({
   billing: BillingOverview | undefined;
 }) {
   const paid = shops?.filter((shop) => !shop.is_test) ?? [];
-  const counted = paid.filter((shop) => shop.status !== 'suspended').length;
-  const suspended = paid.length - counted;
+  const counted = paid.filter((shop) => shop.status !== 'suspended');
+  const suspended = paid.length - counted.length;
+  // Plans allow only some of their shops on Magento; that count matters once there is one.
+  const magento = counted.filter((shop) => shop.platform === 'magento').length;
+  const magentoNote =
+    user.plan && magento && user.magento_shop_limit ? `W tym ${magento} z ${user.magento_shop_limit} na Magento` : '';
   const tests = (shops?.length ?? 0) - paid.length;
   const subscription = billing?.subscription;
   const running = subscription && ['active', 'past_due'].includes(subscription.status);
@@ -249,10 +253,15 @@ function Overview({
             shops === undefined
               ? '…'
               : user.plan
-                ? `${counted} z ${user.shop_limit} w planie`
+                ? `${counted.length} z ${user.shop_limit} w planie`
                 : `${shops.length} ${plural(shops.length, ['sklep', 'sklepy', 'sklepów'])}`
           }
-          note={shopNotes.join(', ') || (user.plan ? 'Wszystkie działają' : 'Wybierz plan, żeby założyć nowy')}
+          note={[
+            magentoNote,
+            shopNotes.join(', ') || (user.plan ? 'Wszystkie działają' : 'Wybierz plan, żeby założyć nowy'),
+          ]
+            .filter(Boolean)
+            .join('. ')}
         />
         <Tile
           href="/billing"

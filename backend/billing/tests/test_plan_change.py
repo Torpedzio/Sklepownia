@@ -89,7 +89,8 @@ def test_upgrade_waits_for_the_surcharge_then_keeps_the_billing_date(
     assert subscription.current_period_end == halfway.current_period_end
     assert mailoutbox[-1].subject == "Zmieniliśmy plan na Biznes"
     assert "25,00 PLN" in mailoutbox[-1].body
-    assert client.get("/api/auth/me/").data["shop_limit"] == 10
+    me = client.get("/api/auth/me/").data
+    assert (me["shop_limit"], me["magento_shop_limit"]) == (10, 5)
 
 
 def test_a_declined_surcharge_changes_nothing(client, halfway, plans, django_capture_on_commit_callbacks):

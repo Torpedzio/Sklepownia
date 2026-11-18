@@ -7,6 +7,8 @@ export type User = {
   date_joined: string;
   /** How many shops the active plan allows; 0 without a plan. Test shops don't count. */
   shop_limit: number;
+  /** How many of those may run on Magento; 0 without a plan or in a plan without Magento. */
+  magento_shop_limit: number;
   /** Name of the active plan, or null. */
   plan: string | null;
   can_create_shops: boolean;
