@@ -64,7 +64,12 @@ na telefonie są natywnym paskiem zakładek (`app-tabs.tsx`), a w przeglądarce 
 - **[lib/token-storage.ts](../mobile/src/lib/token-storage.ts):** tokeny trzyma w `expo-secure-store` na telefonie i w `localStorage` w przeglądarce.
 - **[hooks/use-api-query.ts](../mobile/src/hooks/use-api-query.ts)** to `useApiQuery<T>(ścieżka, {refetchInterval, enabled})`.
   - Pobiera dane przy każdym wejściu na ekran i odświeża je w odstępach zależnych od danych. Tak lista i szczegóły śledzą zakładanie sklepu.
-  - Zwraca `{data, error, isLoading, isRefreshing, refresh}`.
+  - Zwraca `{data, error, isLoading, isStale, isRefreshing, refresh}`.
+  - Dane trzyma w pamięci podręcznej ([lib/query-cache.ts](../mobile/src/lib/query-cache.ts)) według ścieżki, wspólnej dla wszystkich ekranów. Ekran otwarty ponownie od razu pokazuje ostatnie dane, a świeże podmienia, gdy przyjdą. Ekrany pytające o tę samą ścieżkę jednocześnie dzielą jedno zapytanie.
+  - `isStale` mówi, że dane są kopią z wcześniejszej wizyty. Ekran, który na pierwsze dane reaguje (np. ogłasza koniec zakładania sklepu albo czyta ustawienia ze sklepu), czeka na świeże.
+  - `refresh()` po zmianie zawsze wysyła nowe zapytanie, a odpowiedź na wcześniejsze, jeszcze trwające, przepada.
+  - Zalogowanie i wylogowanie (także wygaśnięcie sesji) czyści pamięć w `setTokens`, a odpowiedzi na zapytania wysłane wcześniej przepadają. Nowe tokeny tej samej sesji (po zmianie hasła) jej nie czyszczą.
+  - Testy zaczynają z pustą pamięcią ([jest.setup.ts](../mobile/jest.setup.ts)).
 - **[context/auth.tsx](../mobile/src/context/auth.tsx)** to `useAuth()`: `user`, `signIn`, `signUp`, `signOut`, `verifyEmail`, `resendCode`, `updateProfile`.
 - **[context/notifications.tsx](../mobile/src/context/notifications.tsx)** to `useNotify()` z metodami `success(tekst)` i `error(tekst)`.
   - Pokazuje pasek na górze ekranu: zielony na 4 s albo czerwony na 7 s.
@@ -99,6 +104,9 @@ Strona `/docs/` rysuje ten sam wzór w SVG ([page.html](../backend/handbook/temp
 
 Kolory pobieraj przez `useTheme()`, nie wpisuj ich na sztywno. Wyjątek to zdjęcia i podglądy.
 Czcionki: Bricolage Grotesque w nagłówkach, Figtree w tekście, czcionka maszynowa tylko na paragonie.
+Na telefonie aplikacja czeka na nie pod ekranem startowym (to pliki w aplikacji), a gdy się nie wczytają, zostaje
+czcionka systemowa. W przeglądarce strona nie czeka: do czasu pobrania czcionek tekst jest w czcionce systemowej
+(`font-display: swap` i zapasowe kroje w `Fonts`).
 Ikony: `Icon` z nazwami z listy w [components/icon.tsx](../mobile/src/components/icon.tsx).
 Na iOS to symbole SF, na Androidzie i w przeglądarce Material Symbols.
 

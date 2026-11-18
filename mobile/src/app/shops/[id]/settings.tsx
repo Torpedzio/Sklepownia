@@ -96,6 +96,7 @@ export default function ShopSettingsScreen() {
   const {
     data: settings,
     error,
+    isStale,
     refresh,
   } = useApiQuery<ShopSettings>(`/shops/${id}/settings/`, {
     refetchInterval: (data) => (data?.busy ? POLL_MS : false),
@@ -110,9 +111,10 @@ export default function ShopSettingsScreen() {
   // The operation whose end this screen reports; operations finished before it opened stay quiet.
   const [watched, setWatched] = useState<number | null>(null);
   const announced = useRef(new Set<number>());
-  // A change still running when the screen opens (e.g. after leaving it mid-save) is reported too.
+  // A change still running when the screen opens (e.g. after leaving it mid-save) is reported too. Settings kept
+  // from an earlier visit may show one that has ended since, so this waits for fresh ones.
   const [adopted, setAdopted] = useState(false);
-  if (settings && !adopted) {
+  if (settings && !isStale && !adopted) {
     setAdopted(true);
     if (settings.busy && settings.operation) setWatched(settings.operation.id);
   }
@@ -120,7 +122,7 @@ export default function ShopSettingsScreen() {
   // Read the settings from the shop once on opening, so changes made in its panel show up.
   const readOnOpen = useRef(false);
   useEffect(() => {
-    if (!settings || readOnOpen.current) return;
+    if (!settings || isStale || readOnOpen.current) return;
     readOnOpen.current = true;
     if (settings.busy) return;
     const age = settings.synced_at ? Date.now() - new Date(settings.synced_at).getTime() : Infinity;
@@ -128,7 +130,7 @@ export default function ShopSettingsScreen() {
     api<ShopSettings>(`/shops/${id}/settings/refresh/`, { method: 'POST' })
       .then(refresh)
       .catch(() => {});
-  }, [settings, id, refresh]);
+  }, [settings, isStale, id, refresh]);
 
   const operation = settings?.operation;
   // Once a change is in the shop, its edits are the saved values, so they stop being drafts.

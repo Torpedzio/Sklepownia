@@ -32,6 +32,7 @@ export default function ShopScreen() {
   const {
     data: shop,
     error,
+    isStale,
     refresh,
   } = useApiQuery<ShopDetail>(`/shops/${id}/`, {
     refetchInterval: (data) => (data && IN_PROGRESS.includes(data.status) ? 1500 : false),
@@ -47,17 +48,19 @@ export default function ShopScreen() {
   const notify = useNotify();
   const [busy, setBusy] = useState(false);
 
-  // Announce the end of setup only when it happens on screen, not for shops that were done already.
+  // Announce the end of setup only when it happens on screen, not for shops that were done already (a copy kept
+  // from an earlier visit may still show the setup).
   const status = shop?.status;
   const name = shop?.name;
   const previousStatus = useRef<ShopStatus>(undefined);
   useEffect(() => {
+    if (isStale) return;
     const previous = previousStatus.current;
     previousStatus.current = status;
     if (!previous || !IN_PROGRESS.includes(previous)) return;
     if (status === 'active') notify.success(`Sklep „${name}” jest gotowy. Możesz dodawać produkty.`);
     if (status === 'failed') notify.error(`Zakładanie sklepu „${name}” zatrzymało się. Spróbuj ponownie.`);
-  }, [status, name, notify]);
+  }, [status, name, notify, isStale]);
 
   if (!shop) {
     return (

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Linking } from 'react-native';
 
@@ -6,7 +6,7 @@ import ShopSettingsScreen from '@/app/shops/[id]/settings';
 import { NotificationsProvider } from '@/context/notifications';
 import { ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
-import type { ShopOperation } from '@/lib/types';
+import type { ShopOperation, ShopSettings } from '@/lib/types';
 import { mockApi, type Routes } from '@/testing/api';
 import { shopSettings } from '@/testing/fixtures';
 
@@ -61,6 +61,27 @@ test('asks the shop for its current settings when the last read is old', async (
   });
 
   await waitFor(() => expect(api.sent('POST /shops/7/settings/refresh/')).toHaveLength(1));
+});
+
+test('a change that ended while the screen was closed is not announced on coming back', async () => {
+  await open(undefined, {
+    [SETTINGS]: shopSettings({}, { ...fresh, busy: true, operation: operation({ status: 'running' }) }),
+  });
+  expect(await screen.findByText('Wprowadzamy zmiany w sklepie…')).toBeTruthy();
+  await screen.unmount();
+
+  // Back later: the copy from the last visit shows until the shop's settings arrive.
+  let answer!: (settings: ShopSettings) => void;
+  const { api } = await open(undefined, {
+    [SETTINGS]: () => new Promise<ShopSettings>((resolve) => (answer = resolve)),
+  });
+  expect(screen.getByText('Wprowadzamy zmiany w sklepie…')).toBeTruthy();
+  const done = operation({ status: 'succeeded', changed_fields: ['Nazwa sklepu'] });
+  await act(async () => answer(shopSettings({}, { ...fresh, operation: done })));
+
+  expect(await screen.findByText(/Odczytane ze sklepu dziś/)).toBeTruthy();
+  expect(screen.queryByText('Zapisano w sklepie: nazwa sklepu.')).toBeNull();
+  expect(api.sent('POST /shops/7/settings/refresh/')).toHaveLength(0);
 });
 
 test('the menu switches sections through the address', async () => {

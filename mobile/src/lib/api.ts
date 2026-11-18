@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 
+import { clearQueryCache } from './query-cache';
 import { readTokens, writeTokens } from './token-storage';
 import type { Tokens } from './types';
 
@@ -50,6 +51,9 @@ export async function loadTokens() {
 }
 
 export async function setTokens(next: Tokens | null) {
+  // Signing in or out: what the screens loaded belongs to the previous session. New tokens for the same session
+  // (after a password change) keep it.
+  if (!next || !tokens) clearQueryCache();
   tokens = next;
   await writeTokens(next);
 }

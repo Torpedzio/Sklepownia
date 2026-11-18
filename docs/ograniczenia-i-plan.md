@@ -62,6 +62,12 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   Ukrytej listy nie da się jeszcze przywrócić z aplikacji (API to umie: `PATCH … {hidden: false}`).
 - **Testy na urządzeniu:** testy aplikacji działają w Jest; zachowania zależne od urządzenia (przewijanie,
   klawiatura, animacje) sprawdza się ręcznie w Expo Go.
+- **Pamięć podręczna danych** w aplikacji jest tylko w pamięci: po ponownym uruchomieniu aplikacji albo odświeżeniu
+  strony ekrany zaczynają od ładowania, a bez sieci aplikacja nie pokaże ostatnich danych.
+- **Strona w przeglądarce przychodzi z serwera pusta.** Układ główny czeka na sprawdzenie zalogowania, którego na
+  serwerze nie ma, więc treść pojawia się dopiero po pobraniu całego JS, a wyszukiwarki i podglądy linków jej nie
+  widzą. Do zrobienia razem z SEO: strony publiczne renderowane na serwerze, z pierwszym renderem niezależnym od
+  szerokości okna i motywu (inaczej hydratacja się nie zgodzi).
 - **Zdjęcia w przykładowych produktach.** Produkty przykładowe nie mają zdjęć, więc nowy sklep pokazuje szare zaślepki.
 - **Porady w innych językach.** Instrukcja logowania i porady podają polskie nazwy z paneli WordPressa,
   PrestaShop i Magento, także dla sklepów założonych w innym języku. Polski pakiet Magento nie tłumaczy kilku

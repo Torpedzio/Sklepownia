@@ -59,13 +59,17 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
+// On the web the page shows before the fonts arrive (font-display: swap), in the system font meanwhile.
+const withFallback = (font: string) =>
+  Platform.OS === 'web' ? `${font}, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` : font;
+
 export const Fonts = {
-  display: 'BricolageGrotesque_700Bold',
-  displayMedium: 'BricolageGrotesque_600SemiBold',
-  body: 'Figtree_400Regular',
-  bodyMedium: 'Figtree_500Medium',
-  bodySemiBold: 'Figtree_600SemiBold',
-  bodyBold: 'Figtree_700Bold',
+  display: withFallback('BricolageGrotesque_700Bold'),
+  displayMedium: withFallback('BricolageGrotesque_600SemiBold'),
+  body: withFallback('Figtree_400Regular'),
+  bodyMedium: withFallback('Figtree_500Medium'),
+  bodySemiBold: withFallback('Figtree_600SemiBold'),
+  bodyBold: withFallback('Figtree_700Bold'),
   mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace, Menlo, Consolas, monospace' }),
 };
 

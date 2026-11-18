@@ -5,7 +5,7 @@ import {
   Figtree_600SemiBold,
   Figtree_700Bold,
 } from '@expo-google-fonts/figtree';
-import { useFonts } from 'expo-font';
+import { FontDisplay, useFonts, type FontSource } from 'expo-font';
 import { DarkTheme, DefaultTheme, type Href, router, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -19,16 +19,23 @@ import { configurePush, onPushTokenChange, openTappedNotifications, registerDevi
 SplashScreen.preventAutoHideAsync();
 configurePush();
 
+// The web shows the page at once in a system font (see `Fonts`) and swaps these in when they arrive. On a phone
+// they are files in the app, loaded while the splash screen is up.
+const font = (source: number): FontSource => ({ uri: source, display: FontDisplay.SWAP });
+const waitForFonts = Platform.OS !== 'web';
+
 export default function RootLayout() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
-  const [fontsLoaded] = useFonts({
-    BricolageGrotesque_600SemiBold,
-    BricolageGrotesque_700Bold,
-    Figtree_400Regular,
-    Figtree_500Medium,
-    Figtree_600SemiBold,
-    Figtree_700Bold,
+  const [fontsLoaded, fontsError] = useFonts({
+    BricolageGrotesque_600SemiBold: font(BricolageGrotesque_600SemiBold),
+    BricolageGrotesque_700Bold: font(BricolageGrotesque_700Bold),
+    Figtree_400Regular: font(Figtree_400Regular),
+    Figtree_500Medium: font(Figtree_500Medium),
+    Figtree_600SemiBold: font(Figtree_600SemiBold),
+    Figtree_700Bold: font(Figtree_700Bold),
   });
+  // Fonts that failed to load leave the system font instead of the splash screen for good.
+  const fontsReady = !waitForFonts || fontsLoaded || !!fontsError;
   const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
   const colors = Colors[scheme];
   const navigationTheme = {
@@ -47,16 +54,17 @@ export default function RootLayout() {
     <ThemeProvider value={navigationTheme}>
       <NotificationsProvider>
         <AuthProvider>
-          <RootNavigator fontsLoaded={fontsLoaded} />
+          <RootNavigator fontsReady={fontsReady} />
         </AuthProvider>
       </NotificationsProvider>
     </ThemeProvider>
   );
 }
 
-function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
+function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
+  // Without a saved session the account check needs no request, so visitors don't wait for it.
   const { isLoading, user } = useAuth();
-  const ready = fontsLoaded && !isLoading;
+  const ready = fontsReady && !isLoading;
   const signedIn = ready && !!user?.is_email_verified;
 
   useEffect(() => {

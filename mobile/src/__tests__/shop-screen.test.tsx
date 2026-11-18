@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Linking } from 'react-native';
 
@@ -114,6 +114,24 @@ test('the end of setup is announced when it happens on screen', async () => {
   } finally {
     jest.useRealTimers();
   }
+});
+
+test('opened again, the shop shows at once, and a setup that ended meanwhile is not announced', async () => {
+  await open(shopDetail({ status: 'provisioning' }));
+  await screen.findByText('Zakładamy Twój sklep…');
+  await screen.unmount();
+
+  // Back on the screen later: the copy from the last visit shows while the shop is read again.
+  let answer!: (shop: ShopDetail) => void;
+  await open(shopDetail(), {
+    [SHOP]: () => new Promise<ShopDetail>((resolve) => (answer = resolve)),
+    'GET /shops/7/settings/': shopSettings(),
+  });
+  expect(screen.getByText('Zakładamy Twój sklep…')).toBeTruthy();
+  await act(async () => answer(shopDetail()));
+
+  expect(await screen.findByText('Ustawienia w skrócie')).toBeTruthy();
+  expect(screen.queryByText('Sklep „Palarnia” jest gotowy. Możesz dodawać produkty.')).toBeNull();
 });
 
 test('a failed setup can be retried', async () => {
