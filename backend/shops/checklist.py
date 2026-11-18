@@ -103,7 +103,10 @@ def _steps(shop, checklist):
     # Where the app can't change a setting, it's set in the shop's panel and can't be checked from here.
     if "payments" in sections:
         payments = values["payments"]
-        steps[Step.PAYMENTS] = payments["bank_transfer_enabled"] or payments["cash_on_delivery_enabled"]
+        steps[Step.PAYMENTS] = any(
+            payments.get(field)
+            for field in ("bank_transfer_enabled", "cash_on_delivery_enabled", "przelewy24_enabled", "payu_enabled")
+        )
     if "shipping" in sections:
         shipping = values["shipping"]
         steps[Step.SHIPPING] = (

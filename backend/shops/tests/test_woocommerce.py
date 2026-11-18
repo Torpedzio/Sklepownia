@@ -190,6 +190,12 @@ def wordpress_state(**overrides):
             "free_shipping": {"enabled": False, "cost": "", "min_amount": "199"},
         },
         "tax_rate": "19.0000",
+        "online": {
+            # Without the plugin WordPress has no p24_mode, which the plugin reads as sandbox.
+            "przelewy24": {"active": False, "enabled": False, "sandbox": True, "merchant_id": "", "keys": False},
+            "payu": {"active": True, "enabled": True, "sandbox": True, "pos_id": "300746", "client_id": "300746",
+                     "keys": True},
+        },
     }
     state.update(overrides)
     return f"\n{OUTPUT_MARKER}{json.dumps(state)}"
@@ -210,6 +216,10 @@ def test_read_settings_turns_wordpress_options_into_sections(provisioner, shell,
         "payments": {
             "bank_transfer_enabled": True, "bank_account_name": "Jan",
             "bank_account_number": "DE89370400440532013000", "bank_name": "", "cash_on_delivery_enabled": False,
+            "przelewy24_enabled": False, "przelewy24_sandbox": False, "przelewy24_merchant_id": "",
+            "przelewy24_keys_saved": False,
+            "payu_enabled": True, "payu_sandbox": True, "payu_pos_id": "300746", "payu_client_id": "300746",
+            "payu_keys_saved": True,
         },
         "shipping": {
             "courier_enabled": True, "courier_cost": "12.50",
@@ -843,3 +853,141 @@ def test_products_are_counted_with_the_samples_apart(provisioner, shell, shop):
     # Older shops' samples have no mark, only the name.
     assert data == {"name_pattern": "/^Przykładowy produkt \\d+$/u"}
     assert "LIKE %s" in script and "'trash'" not in script
+
+
+# --- online payments ---
+
+P24_KEYS = {"przelewy24_crc_key": "0123456789abcdef", "przelewy24_api_key": "0123456789abcdef0123456789abcdef"}
+PAYU_KEYS = {"payu_md5_key": "13a980d4f851f3d9a1cfc792fb1f5e50", "payu_client_secret": "12f071174cb7eb79d4aac5bc2f07563f"}
+
+
+@pytest.fixture
+def archives(monkeypatch):
+    """The checked archives the worker would hand the shop, without downloading anything."""
+    fetched = []
+
+    def fetch(package):
+        fetched.append(package)
+        return f"archiwum {package.folder}".encode()
+
+    monkeypatch.setattr("shops.provisioning.packages.fetch", fetch)
+    return fetched
+
+
+def plugin_state(shell, installed, active):
+    shell.on_php("get_plugins()", output=f"\n{OUTPUT_MARKER}" + json.dumps({"installed": installed, "active": active}))
+
+
+def change_payments(provisioner, shop, **changed):
+    from shops.shop_settings import _operator_defaults
+
+    payments = {**settings_values()["payments"], **_operator_defaults(), **changed}
+    provisioner.apply_settings(shop, {"payments": changed}, settings_values(payments=payments))
+
+
+def index_of(shell, snippet):
+    """Where in the run the PHP script containing `snippet`, or the WP-CLI command (tuple), came."""
+    for i, call in enumerate(shell.calls):
+        args = call["args"]
+        if isinstance(snippet, tuple) and tuple(args[: len(snippet)]) == snippet:
+            return i
+        if isinstance(snippet, str) and args[0] == "eval" and snippet in args[1]:
+            return i
+    raise AssertionError(f"{snippet} did not run")
+
+
+def uploaded(provisioner):
+    """(folder, {name: content}) of what was put in the container."""
+    import io
+    import tarfile
+
+    folder, data = provisioner.client.containers.get.return_value.put_archive.call_args.args
+    with tarfile.open(fileobj=io.BytesIO(data)) as archive:
+        return folder, {member.name: archive.extractfile(member).read() for member in archive.getmembers()}
+
+
+def test_turning_on_przelewy24_installs_its_checked_plugin_with_the_account_written_first(
+    provisioner, shell, shop, archives,
+):
+    plugin_state(shell, installed=False, active=False)
+
+    change_payments(provisioner, shop, przelewy24_enabled=True, przelewy24_merchant_id="123456", **P24_KEYS)
+
+    assert [package.folder for package in archives] == ["woo-przelewy24"]
+    assert uploaded(provisioner) == ("/tmp", {"woo-przelewy24-1.2.1.zip": b"archiwum woo-przelewy24"})
+    assert shell.wp() == [
+        ["plugin", "install", "/tmp/woo-przelewy24-1.2.1.zip"],
+        ["plugin", "activate", "woo-przelewy24"],
+    ]
+    assert ["rm", "-f", "/tmp/woo-przelewy24-1.2.1.zip"] in [call["args"] for call in shell.calls]
+    [(_, account)] = shell.php("p24_merchant_id")
+    assert account == {
+        "sandbox": False, "merchant_id": "123456",
+        "crc_key": "0123456789abcdef", "api_key": "0123456789abcdef0123456789abcdef",
+    }
+    # Activating asks Przelewy24 for the account's payment methods, so the account is there by then.
+    assert index_of(shell, "p24_merchant_id") < index_of(shell, ("plugin", "activate"))
+    [(_, gateways)] = shell.php("payment_gateways()->payment_gateways() as $id")
+    assert gateways == {"prefix": "p24-", "main": "p24-online-payments", "enabled": True, "fresh": True,
+                        "options": {}}
+
+
+def test_turning_on_payu_sets_it_up_after_activating_with_its_own_defaults_off(provisioner, shell, shop, archives):
+    plugin_state(shell, installed=False, active=False)
+
+    change_payments(provisioner, shop, payu_enabled=True, payu_sandbox=True, payu_pos_id="300746",
+                    payu_client_id="300746", **PAYU_KEYS)
+
+    assert [package.folder for package in archives] == ["woo-payu-payment-gateway"]
+    [(_, account)] = shell.php("payu_settings_option_name")
+    assert account == {
+        "sandbox": True, "pos_id": "300746", "client_id": "300746", "fresh": True,
+        "md5_key": "13a980d4f851f3d9a1cfc792fb1f5e50", "client_secret": "12f071174cb7eb79d4aac5bc2f07563f",
+    }
+    # Activating adds PayU's defaults, which the account settings build on.
+    assert index_of(shell, ("plugin", "activate")) < index_of(shell, "payu_settings_option_name")
+    [(_, gateways)] = shell.php("payment_gateways()->payment_gateways() as $id")
+    assert gateways == {
+        "prefix": "payu", "main": "payustandard", "enabled": True, "fresh": True,
+        "options": {"payustandard": {"sandbox": "yes", "use_global": "yes", "enable_for_virtual": "yes"}},
+    }
+
+
+def test_keys_left_blank_keep_the_shops_own(provisioner, shell, shop, archives):
+    plugin_state(shell, installed=True, active=True)
+
+    change_payments(provisioner, shop, przelewy24_enabled=True, przelewy24_merchant_id="654321")
+
+    assert archives == []
+    assert shell.wp() == []
+    [(_, account)] = shell.php("p24_merchant_id")
+    assert account == {"sandbox": False, "merchant_id": "654321"}
+    [(_, gateways)] = shell.php("payment_gateways()->payment_gateways() as $id")
+    assert gateways["fresh"] is False
+
+
+def test_turning_off_keeps_the_plugin_for_payments_on_their_way(provisioner, shell, shop, archives):
+    plugin_state(shell, installed=True, active=True)
+
+    change_payments(provisioner, shop, payu_enabled=False)
+
+    assert shell.wp() == []
+    [(_, gateways)] = shell.php("payment_gateways()->payment_gateways() as $id")
+    assert gateways["enabled"] is False
+
+
+def test_turning_off_an_operator_the_shop_never_had_does_nothing(provisioner, shell, shop, archives):
+    plugin_state(shell, installed=False, active=False)
+
+    change_payments(provisioner, shop, przelewy24_enabled=False, przelewy24_merchant_id="")
+
+    assert archives == []
+    assert shell.wp() == []
+    assert shell.php("p24_merchant_id") == []
+
+
+def test_operators_untouched_by_the_change_are_left_alone(provisioner, shell, shop, archives):
+    change_payments(provisioner, shop, cash_on_delivery_enabled=True)
+
+    assert shell.php("get_plugins()") == []
+    assert archives == []

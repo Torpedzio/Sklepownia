@@ -272,6 +272,9 @@ SHOPS_SMTP_PORT = int(os.environ.get("SHOPS_SMTP_PORT", "1025"))
 SHOPS_MAIL_DOMAIN = os.environ.get("SHOPS_MAIL_DOMAIN") or (
     SHOPS_BASE_DOMAIN if "." in SHOPS_BASE_DOMAIN else f"sklepy.{SHOPS_BASE_DOMAIN}"
 )
+# Where the worker keeps the plugins it installs in shops on demand (shops/provisioning/packages.py),
+# so each is downloaded once. Any folder the worker can write to; losing it only means downloading again.
+SHOPS_PACKAGE_CACHE = os.environ.get("SHOPS_PACKAGE_CACHE", "/tmp/sklepownia-packages")
 
 
 # Billing

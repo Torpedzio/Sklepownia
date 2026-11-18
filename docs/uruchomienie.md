@@ -148,6 +148,7 @@ Bez ustawień poczty w `.env` backend wypisuje wiadomości w logach (`EMAIL_BACK
 | `SHOPS_DB_CONTAINER`, `SHOPS_PROXY_CONTAINER`, `SHOPS_SEARCH_CONTAINER` | `shops-db`, `shops-proxy`, `shops-search` | Nazwy kontenerów serwera sklepów |
 | `SHOPS_CONTAINER_MEMORY` | `512m` | Limit pamięci kontenera sklepu bez planu i sklepu testowego |
 | `SHOPS_MAGENTO_MEMORY` | `1536m` | Najmniejszy limit pamięci sklepu Magento, niezależnie od planu |
+| `SHOPS_PACKAGE_CACHE` | `/tmp/sklepownia-packages` | Folder workera na pobrane wtyczki płatności (sprawdzane sumą SHA-256, pobierane raz) |
 | `FAKE_PROVISIONER_STEP_DELAY` | `2` | Sekundy na krok w symulacji |
 | `FAKE_PROVISIONER_FAIL_AT_STEP` | puste | Klucz kroku, na którym symulacja ma się wysypać |
 

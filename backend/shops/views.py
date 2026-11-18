@@ -123,6 +123,8 @@ def _settings_payload(shop):
     return {
         "values": stored.values,
         "sections": list(platform_info(shop.platform).settings_sections),
+        "payment_operators": list(platform_info(shop.platform).payment_operators),
+        "server_ip": shop.server.public_ip if shop.server else None,
         "panel_name": platform_info(shop.platform).panel_name,
         "synced_at": stored.synced_at,
         "operation": ShopOperationSerializer(operation).data if operation else None,
@@ -346,6 +348,7 @@ class ShopViewSet(
             data=request.data, partial=True, context={
                 "current": services.get_settings(shop).values,
                 "sections": platform_info(shop.platform).settings_sections,
+                "operators": platform_info(shop.platform).payment_operators,
                 "platform": shop.platform,
             },
         )

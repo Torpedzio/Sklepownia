@@ -6,8 +6,12 @@ from accounts.models import User
 from config.celery import app as celery_app
 
 
+def _no_downloads(package):
+    raise AssertionError(f"Tests must not download {package.url}")
+
+
 @pytest.fixture(autouse=True)
-def _test_settings(settings, tmp_path):
+def _test_settings(settings, tmp_path, monkeypatch):
     celery_app.conf.task_always_eager = True
     settings.SHOP_PROVISIONER = "shops.provisioning.fake.FakeProvisioner"
     settings.SHOPS_BASE_DOMAIN = "localhost"
@@ -33,6 +37,9 @@ def _test_settings(settings, tmp_path):
     settings.EXPO_ACCESS_TOKEN = ""
     # Uploaded avatars go to a throwaway folder.
     settings.MEDIA_ROOT = tmp_path / "media"
+    # Plugins for shops are never fetched from their makers; tests that install one give the archive themselves.
+    settings.SHOPS_PACKAGE_CACHE = str(tmp_path / "packages")
+    monkeypatch.setattr("shops.provisioning.packages._download", _no_downloads)
     # Throttle counters live in the cache; keep tests independent.
     cache.clear()
 

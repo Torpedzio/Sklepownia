@@ -3,7 +3,10 @@ What every platform shares on the shop node from infra/shops: a shop is its own 
 the Traefik proxy, with its files in a volume and a separate database in the shared MariaDB.
 """
 
+import io
+import posixpath
 import secrets
+import tarfile
 import time
 from functools import cached_property
 
@@ -225,6 +228,17 @@ class ContainerProvisioner(BaseProvisioner):
             user="www-data",
             environment={"FILE": path, "CONTENT": content},
         )
+
+    def _upload(self, shop, path, data):
+        """Put `data` (bytes) in the shop's container as the file `path`, readable for everyone."""
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w") as archive:
+            info = tarfile.TarInfo(posixpath.basename(path))
+            info.size, info.mode, info.mtime = len(data), 0o644, int(time.time())
+            archive.addfile(info, io.BytesIO(data))
+        container = self.client.containers.get(container_name(shop))
+        if not container.put_archive(posixpath.dirname(path), buffer.getvalue()):
+            raise CommandError(f"uploading {path} failed")
 
     def _exec(self, container_name, command, user="", environment=None):
         container = self.client.containers.get(container_name)

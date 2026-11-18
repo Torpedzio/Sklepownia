@@ -131,6 +131,17 @@ export type ShopSettingsValues = {
     bank_account_number: string;
     bank_name: string;
     cash_on_delivery_enabled: boolean;
+    przelewy24_enabled: boolean;
+    przelewy24_sandbox: boolean;
+    przelewy24_merchant_id: string;
+    /** The shop has the CRC and API keys for the chosen mode. Keys are only ever sent, never returned. */
+    przelewy24_keys_saved: boolean;
+    payu_enabled: boolean;
+    payu_sandbox: boolean;
+    payu_pos_id: string;
+    payu_client_id: string;
+    /** The shop has the second MD5 key and the client_secret for the chosen mode. */
+    payu_keys_saved: boolean;
   };
   shipping: {
     courier_enabled: boolean;
@@ -165,10 +176,16 @@ export type ShopOperation = {
   finished_at: string | null;
 };
 
+export type PaymentOperator = 'przelewy24' | 'payu';
+
 export type ShopSettings = {
   values: ShopSettingsValues;
   /** Sections the app can change on the shop's platform; the rest is set in the admin panel. */
   sections: SettingsSection[];
+  /** Online payment operators the app sets up on the shop's platform. */
+  payment_operators: PaymentOperator[];
+  /** The address the shop connects to operators from; Przelewy24 wants it in its panel. Null until known. */
+  server_ip: string | null;
   /** The admin panel as owners know it, e.g. "panel WordPressa". */
   panel_name: string;
   synced_at: string | null;

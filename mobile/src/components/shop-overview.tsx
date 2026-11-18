@@ -41,14 +41,18 @@ export function ShopOverview({ shopId, settings }: { shopId: number; settings: S
 export function missingForSales(settings: ShopSettings) {
   const { values } = settings;
   const missing: string[] = [];
-  if (
-    supports(settings, 'payments') &&
-    !values.payments.bank_transfer_enabled &&
-    !values.payments.cash_on_delivery_enabled
-  )
-    missing.push('płatności');
+  if (supports(settings, 'payments') && !paymentMethods(values.payments).length) missing.push('płatności');
   if (supports(settings, 'shipping') && !hasShipping(values.shipping)) missing.push('wysyłkę');
   return missing;
+}
+
+function paymentMethods(payments: ShopSettings['values']['payments']) {
+  return [
+    payments.bank_transfer_enabled && 'przelew tradycyjny',
+    payments.cash_on_delivery_enabled && 'płatność przy odbiorze',
+    payments.przelewy24_enabled && 'Przelewy24',
+    payments.payu_enabled && 'PayU',
+  ].filter((method): method is string => Boolean(method));
 }
 
 /** Whether the app can change `section` on the shop's platform; the rest is set in the shop's panel. */
@@ -99,10 +103,7 @@ function allTiles({ values, options }: ShopSettings): Tile[] {
   const label = (choices: Choice[], value: string) => choices.find((choice) => choice.value === value)?.label ?? value;
   const money = (amount: string) => `${amount.replace('.', ',')} ${currency}`;
 
-  const paymentMethods = [
-    payments.bank_transfer_enabled && 'przelew tradycyjny',
-    payments.cash_on_delivery_enabled && 'płatność przy odbiorze',
-  ].filter(Boolean);
+  const methods = paymentMethods(payments);
   const freeFrom = Number(shipping.free_shipping_min_amount);
   const shippingMethods = [
     shipping.courier_enabled && `kurier ${money(shipping.courier_cost)}`,
@@ -126,8 +127,8 @@ function allTiles({ values, options }: ShopSettings): Tile[] {
       section: 'platnosci',
       title: 'Płatności',
       icon: 'card',
-      value: paymentMethods.length ? capitalize(paymentMethods.join(', ')) : 'Brak. Klienci nie mają jak zapłacić.',
-      missing: !paymentMethods.length,
+      value: methods.length ? capitalize(methods.join(', ')) : 'Brak. Klienci nie mają jak zapłacić.',
+      missing: !methods.length,
     },
     {
       key: 'shipping',

@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-
 
 import { backArrowOptions } from '@/components/back-link';
 import { Icon } from '@/components/icon';
+import { OnlinePayment } from '@/components/online-payment';
 import { Page } from '@/components/page';
 import { SettingsMenu, SettingsPane, type SettingsMenuItem } from '@/components/settings-menu';
 import { SettingsSection } from '@/components/settings-section';
@@ -12,6 +13,7 @@ import { ShopLoginSteps } from '@/components/shop-login-guide';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { ChipSelect } from '@/components/ui/chip-select';
+import { Note } from '@/components/ui/note';
 import { SwitchRow } from '@/components/ui/switch-row';
 import { TextField } from '@/components/ui/text-field';
 import { Radius, Spacing, WideBreakpoint } from '@/constants/theme';
@@ -21,7 +23,15 @@ import { useTheme } from '@/hooks/use-theme';
 import { api, ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
 import { panelLocative } from '@/lib/format';
-import { changedFields, type Drafts, type FieldErrors, formatTime, sectionErrors, toApi } from '@/lib/settings-form';
+import {
+  changedFields,
+  type Drafts,
+  type FieldErrors,
+  fieldList,
+  formatTime,
+  sectionErrors,
+  toApi,
+} from '@/lib/settings-form';
 import type { SettingsSection as Section, ShopOperation, ShopSettings, ShopSettingsValues } from '@/lib/types';
 
 // Read the shop again on opening when the last read is older than this.
@@ -63,6 +73,7 @@ export default function ShopSettingsScreen() {
   const { id, section: sectionSlug } = useLocalSearchParams<{ id: string; section?: string }>();
   const { width } = useWindowDimensions();
   const wide = width >= WideBreakpoint;
+  const theme = useTheme();
   const notify = useNotify();
   const {
     data: settings,
@@ -123,7 +134,7 @@ export default function ShopSettingsScreen() {
       return;
     }
     if (operation.kind === 'update_settings') {
-      notify.success(`Zapisano w sklepie: ${operation.changed_fields.join(', ').toLowerCase()}.`);
+      notify.success(`Zapisano w sklepie: ${fieldList(operation.changed_fields)}.`);
     } else if (operation.kind === 'reset_admin_password') {
       notify.success('Nowe hasło administratora wysłaliśmy na Twój adres e-mail.');
     } else if (operation.kind === 'remove_sample_products') {
@@ -398,10 +409,34 @@ export default function ShopSettingsScreen() {
                   value={get('payments', 'cash_on_delivery_enabled')}
                   onChange={(value) => set('payments', 'cash_on_delivery_enabled', value)}
                 />
-                <Note>
-                  Płatności internetowe (np. Przelewy24, PayU, karty) wymagają umowy z operatorem płatności. Na razie
-                  włączysz je w panelu sklepu.
-                </Note>
+                {settings.payment_operators.length ? (
+                  <>
+                    <View style={[styles.subsection, { borderTopColor: theme.border }]}>
+                      <ThemedText type="heading">Płatności online</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Klient płaci od razu, a pieniądze trafiają na Twoje konto u operatora. Przy pierwszym włączeniu
+                        zainstalujemy w sklepie oficjalną wtyczkę operatora, więc zapis potrwa do minuty.
+                      </ThemedText>
+                    </View>
+                    {settings.payment_operators.map((operator) => (
+                      <OnlinePayment
+                        key={operator}
+                        operator={operator}
+                        saved={values.payments}
+                        value={(field) => get('payments', field as keyof ShopSettingsValues['payments'] & string)}
+                        onChange={(field, value) => set('payments', field, value)}
+                        error={(field) => fieldError('payments', field)}
+                        serverIp={settings.server_ip}
+                      />
+                    ))}
+                    <Note>Innych operatorów (np. Tpay, Stripe) włączysz w panelu sklepu.</Note>
+                  </>
+                ) : (
+                  <Note>
+                    Płatności internetowe (np. Przelewy24, PayU, karty) wymagają umowy z operatorem płatności. Na razie
+                    włączysz je w panelu sklepu.
+                  </Note>
+                )}
                 <Button
                   title="Przejdź do ustawień ręcznych"
                   icon="chevron"
@@ -674,17 +709,6 @@ function History({ operations }: { operations: ShopOperation[] | undefined }) {
   );
 }
 
-function Note({ children, warning }: { children: string; warning?: boolean }) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.note, { backgroundColor: warning ? theme.accentMuted : theme.surfaceMuted }]}>
-      <ThemedText type="small" themeColor={warning ? 'text' : 'textSecondary'}>
-        {children}
-      </ThemedText>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
@@ -712,9 +736,10 @@ const styles = StyleSheet.create({
   short: {
     maxWidth: 200,
   },
-  note: {
-    padding: Spacing.three,
-    borderRadius: Radius.medium,
+  subsection: {
+    gap: Spacing.one,
+    paddingTop: Spacing.three,
+    borderTopWidth: 1,
   },
   action: {
     flexDirection: 'row',

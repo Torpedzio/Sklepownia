@@ -6,13 +6,23 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
 
 - **Hasło w e-mailu:** dane logowania do panelu przychodzą zwykłym e-mailem. Bezpieczniejsze będzie logowanie
   jednym kliknięciem z aplikacji, bez przesyłania hasła.
-- **Płatności i wysyłka** nie są konfigurowane. Właściciel robi to sam w panelu WooCommerce.
 - **Logowanie do panelu sklepu jednym kliknięciem.** Teraz aplikacja pokazuje login i hasło administratora.
   Pomysł: wtyczka „must-use” w WordPressie i jednorazowe linki logowania wydawane przez backend.
 - **Atrybuty produktów według branży** (rozmiar, kolor, materiał), żeby filtry w sklepie miały z czego filtrować.
-- **Ustawienia sklepu w aplikacji** obejmują podstawy, zakupy, płatności przelewem i przy odbiorze, wysyłkę w kraju sklepu,
-  jedną stawkę VAT, region i motyw. Brakuje płatności internetowych (Przelewy24, PayU, karty), logo i kolorów motywu,
-  wysyłki za granicę oraz regulaminu i polityki prywatności.
+- **Ustawienia sklepu w aplikacji** obejmują podstawy, zakupy, płatności (przelew, przy odbiorze, Przelewy24 i PayU),
+  wysyłkę w kraju sklepu, jedną stawkę VAT, region i motyw. Brakuje logo i kolorów motywu, wysyłki za granicę oraz
+  regulaminu i polityki prywatności.
+- **Płatności online w sklepach** (Przelewy24, PayU):
+  - tylko WooCommerce i PrestaShop; w Magento właściciel instaluje moduł operatora w panelu;
+  - wtyczki i moduły instalujemy w wersji przypiętej w kodzie i nie aktualizujemy ich z aplikacji (aktualizacja to
+    nowa wersja w `ONLINE_PAYMENTS`, sprawdzona na sklepie; właściciel może też zaktualizować wtyczkę w panelu);
+  - konto Przelewy24 w PrestaShop i punkt PayU ustawiamy dla domyślnej waluty sklepu; inne waluty są w panelu;
+  - przy pierwszej instalacji włączamy tylko główną płatność operatora: raty, „Kup teraz, zapłać później”
+    i widżety kredytowe PayU są wyłączone, a osobne metody (np. BLIK jako osobny przycisk) włącza się w panelu;
+  - aplikacja nie sprawdza kluczy u operatora: błędny klucz wyjdzie dopiero przy pierwszej płatności.
+    Sprawdzenie kluczy w API operatora (sandbox) i płatność testowa z aplikacji to następny krok;
+  - adres IP serwera dla panelu Przelewy24 trzeba wpisać ręcznie w panelu admina (`Server.public_ip`);
+  - inni operatorzy (Tpay, Stripe, PayPal) tylko w panelu sklepu.
 - **Płatności, dalsze etapy** ([platnosci.md](platnosci.md)):
   - zawieszanie sklepów (stan `suspended`), gdy plan wygaśnie lub zostanie anulowany, i usuwanie po okresie przechowania;
   - zmiana karty z aplikacji (nowa płatność z zapisaniem karty);

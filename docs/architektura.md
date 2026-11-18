@@ -81,6 +81,14 @@ Backend trzyma ostatnio odczytany stan (`ShopSettings`), a pracę na sklepie wyk
 Na jednym sklepie trwa najwyżej jedna operacja. Operacja starsza niż 15 minut przestaje blokować kolejne
 (np. gdy worker padł w jej trakcie). Po błędzie worker i tak czyta sklep, bo część zmian mogła już wejść.
 
+Płatności online (Przelewy24, PayU w WooCommerce i PrestaShop) idą tą samą drogą, z dwiema różnicami:
+
+- Klucze operatora nie zostają u nas. Czekają zaszyfrowane w operacji, worker wpisuje je do sklepu i je usuwa,
+  a ustawienia i historia pamiętają tylko, że sklep ma klucze.
+- Przy pierwszym włączeniu worker pobiera oficjalną wtyczkę lub moduł operatora z jego strony, w wersji i z sumą
+  SHA-256 zapisanymi w kodzie, i instaluje w sklepie. Z operatorem łączy się potem sam sklep, przy płatnościach
+  klientów; platforma nie rozmawia z API operatorów.
+
 ## Sprzedaż w aplikacji
 
 Zamówienia zostają w sklepie, a platforma trzyma ich kopię z ostatnich 90 dni (`ShopOrder`), bo tylko worker może
@@ -182,6 +190,9 @@ więc po zmianie domeny trzeba przenieść istniejące sklepy poleceniem `update
 
 - Hasła sklepów (baza, administrator panelu, hasło API WordPressa) są zaszyfrowane w bazie kluczem Fernet `FIELD_ENCRYPTION_KEY`
   (`EncryptedTextField`). Każde hasło jest zapisywane, zanim zostanie użyte, żeby ponowiona próba go nie zgubiła.
+- Klucze płatności online sklepów są tylko w sklepie. Platforma trzyma je zaszyfrowane wyłącznie do końca operacji,
+  która je zapisuje, i nigdy nie oddaje ich w API ani w panelu admina.
+- Wtyczki instalowane w sklepach pobieramy tylko z przypiętych adresów i instalujemy tylko, gdy suma SHA-256 się zgadza.
 - Login i hasło administratora sklepu nie wychodzą przez API. Trafiają tylko e-mailem na adres konta właściciela:
   po założeniu sklepu, po zmianie hasła i na prośbę (`send-admin-access`, najwyżej 5 razy na godzinę).
   Aplikacja pokazuje tylko adres panelu i adres, na który wysłano dane.

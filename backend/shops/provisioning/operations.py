@@ -32,7 +32,7 @@ def run_operation(operation_id):
     provisioner = get_provisioner(shop.platform)
     try:
         if operation.kind == Kind.UPDATE_SETTINGS:
-            _update_settings(provisioner, shop, operation.changes)
+            _update_settings(provisioner, shop, operation.changes, operation.secret_values)
         elif operation.kind == Kind.SYNC_SETTINGS:
             _sync(provisioner, shop)
         elif operation.kind == Kind.RESET_ADMIN_PASSWORD:
@@ -54,8 +54,10 @@ def run_operation(operation_id):
     return operation
 
 
-def _update_settings(provisioner, shop, changes):
+def _update_settings(provisioner, shop, changes, keys):
     stored = _stored(shop)
+    # The shop gets the payment keys; the platform keeps the settings without them.
+    changes = shop_settings.reveal(changes, keys)
     values = shop_settings.merge(stored.values, changes)
     # The provisioning steps reused for language and theme read the shop's config, so it gets the new values first.
     _apply_to_shop(shop, changes)
@@ -63,7 +65,7 @@ def _update_settings(provisioner, shop, changes):
     with transaction.atomic():
         shop.save(update_fields=["name", "updated_at"])
         shop.config.save()
-        stored.values = values
+        stored.values = shop_settings.conceal(values, keys)
         stored.save(update_fields=["values", "updated_at"])
     _sync_quietly(provisioner, shop)
 
@@ -108,4 +110,6 @@ def _stored(shop):
 def _finish(operation, status):
     operation.status = status
     operation.finished_at = timezone.now()
-    operation.save(update_fields=["status", "error", "result", "finished_at"])
+    # Applied or not, the keys are gone: a failed change is typed again.
+    operation.secrets = ""
+    operation.save(update_fields=["status", "error", "result", "secrets", "finished_at"])

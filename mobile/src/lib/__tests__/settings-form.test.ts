@@ -1,4 +1,4 @@
-import { changedFields, formatTime, sectionErrors, toApi } from '@/lib/settings-form';
+import { changedFields, fieldList, formatTime, sectionErrors, toApi } from '@/lib/settings-form';
 
 describe('changedFields', () => {
   test('keeps only edits that differ from the saved values', () => {
@@ -11,6 +11,19 @@ describe('changedFields', () => {
 
   test('no draft means no changes', () => {
     expect(changedFields({ name: 'Palarnia' }, undefined)).toEqual({});
+  });
+
+  test('a payment key, never returned by the API, is a change once typed', () => {
+    expect(changedFields({}, { przelewy24_crc_key: '' })).toEqual({});
+    expect(changedFields({}, { przelewy24_crc_key: 'abc' })).toEqual({ przelewy24_crc_key: 'abc' });
+  });
+});
+
+describe('fieldList', () => {
+  test('starts labels in lower case, but not names and acronyms', () => {
+    expect(fieldList(['Nazwa sklepu', 'Stawka VAT', 'ID sprzedawcy Przelewy24', 'OAuth client_id PayU'])).toBe(
+      'nazwa sklepu, stawka VAT, ID sprzedawcy Przelewy24, OAuth client_id PayU',
+    );
   });
 });
 

@@ -154,6 +154,87 @@ test('bank transfer asks for the account and the menu marks unsaved edits', asyn
   ]);
 });
 
+test('an online payment operator asks for its account and keys and sends them to the shop', async () => {
+  const saved = shopSettings(
+    { payments: { przelewy24_enabled: true, przelewy24_merchant_id: '123456', przelewy24_keys_saved: true } },
+    {
+      ...fresh,
+      operation: operation({
+        status: 'succeeded',
+        changes: { payments: {} },
+        changed_fields: ['Płatności Przelewy24', 'ID sprzedawcy Przelewy24', 'Klucz CRC Przelewy24'],
+      }),
+    },
+  );
+  const { api } = await open('platnosci', {
+    [SETTINGS]: [shopSettings({}, fresh), saved],
+    [SAVE]: shopSettings({}, { ...fresh, busy: true, operation: operation() }),
+  });
+
+  expect(screen.queryByLabelText('ID sprzedawcy')).toBeNull();
+  await fireEvent.press(await screen.findByRole('switch', { name: 'Przelewy24' }));
+  await fireEvent.changeText(screen.getByLabelText('ID sprzedawcy'), '123456');
+  await fireEvent.changeText(screen.getByLabelText('Klucz CRC'), '0123456789abcdef');
+  await fireEvent.changeText(screen.getByLabelText('Klucz API'), 'fedcba9876543210fedcba9876543210');
+
+  expect(screen.getByLabelText('Klucz CRC')).toHaveProp('secureTextEntry', true);
+  expect(screen.getByText(/dodaj adres IP serwera sklepu: 203\.0\.113\.7\./)).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Zapisz' }));
+
+  expect(api.sent(SAVE)).toEqual([
+    {
+      payments: {
+        przelewy24_enabled: true,
+        przelewy24_merchant_id: '123456',
+        przelewy24_crc_key: '0123456789abcdef',
+        przelewy24_api_key: 'fedcba9876543210fedcba9876543210',
+      },
+    },
+  ]);
+  // Labels that start with a name keep its capital letter.
+  const fields = 'płatności Przelewy24, ID sprzedawcy Przelewy24, klucz CRC Przelewy24';
+  expect(await screen.findByText(`Zapisano w sklepie: ${fields}.`)).toBeTruthy();
+  // The keys are in the shop now; the screen forgets them.
+  expect(screen.getByLabelText('Klucz CRC')).toHaveProp('value', '');
+  expect(screen.getByLabelText('Klucz CRC')).toHaveProp('placeholder', '••••••••');
+});
+
+test('keys already in the shop are not asked for again, unless the mode changes', async () => {
+  const { api } = await open('platnosci', {
+    [SETTINGS]: shopSettings(
+      { payments: { payu_enabled: true, payu_pos_id: '300746', payu_client_id: '300746', payu_keys_saved: true } },
+      fresh,
+    ),
+    [SAVE]: shopSettings({}, { ...fresh, busy: true, operation: operation() }),
+  });
+
+  expect(await screen.findByLabelText('Drugi klucz (MD5)')).toHaveProp('placeholder', '••••••••');
+  expect(screen.getAllByText('Zapisany w sklepie. Wpisz nowy tylko, jeśli chcesz go zmienić.')).toHaveLength(2);
+
+  await fireEvent.changeText(screen.getByLabelText('Id punktu płatności (pos_id)'), '300747');
+  await fireEvent.press(screen.getByRole('button', { name: 'Zapisz' }));
+  expect(api.sent(SAVE)).toEqual([{ payments: { payu_pos_id: '300747' } }]);
+
+  await fireEvent.press(screen.getByRole('switch', { name: 'Tryb testowy' }));
+  expect(screen.getByLabelText('Drugi klucz (MD5)')).toHaveProp('placeholder', '32 znaki');
+  expect(screen.queryByText('Zapisany w sklepie. Wpisz nowy tylko, jeśli chcesz go zmienić.')).toBeNull();
+});
+
+test('without operators the app sets up, online payments are left to the shop panel', async () => {
+  await open('platnosci', { [SETTINGS]: shopSettings({}, { ...fresh, payment_operators: [] }) });
+
+  expect(await screen.findByText(/Na razie\s+włączysz je w panelu sklepu\./)).toBeTruthy();
+  expect(screen.queryByRole('switch', { name: 'Przelewy24' })).toBeNull();
+});
+
+test('without the server address Przelewy24 says to ask for it', async () => {
+  await open('platnosci', {
+    [SETTINGS]: shopSettings({ payments: { przelewy24_enabled: true } }, { ...fresh, server_ip: null }),
+  });
+
+  expect(await screen.findByText(/Napisz do nas, a podamy adres IP/)).toBeTruthy();
+});
+
 test('shipping prices typed with a comma are sent as numbers', async () => {
   const { api } = await open('wysylka', {
     [SETTINGS]: shopSettings({ shipping: { courier_enabled: true } }, fresh),

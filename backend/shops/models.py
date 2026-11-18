@@ -1,3 +1,5 @@
+import json
+
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -17,6 +19,8 @@ class Server(models.Model):
 
     name = models.CharField(max_length=100, unique=True)
     hostname = models.CharField(max_length=255)
+    # The address the shops' requests come from, e.g. to payment operators; Przelewy24 only answers listed ones.
+    public_ip = models.GenericIPAddressField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     max_shops = models.PositiveIntegerField(default=50)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -234,8 +238,10 @@ class ShopOperation(models.Model):
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="operations")
     kind = models.CharField(max_length=30, choices=Kind.choices)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
-    # For settings changes: only the changed fields, {section: {field: new value}}.
+    # For settings changes: only the changed fields, {section: {field: new value}}; keys as SECRET_PLACEHOLDER.
     changes = models.JSONField(default=dict, blank=True)
+    # The keys of a settings change (JSON like `changes`), until the operation ends: they're kept only in the shop.
+    secrets = EncryptedTextField(blank=True)
     # What came out of it, e.g. {"removed": 6} for removed sample products.
     result = models.JSONField(default=dict, blank=True)
     error = models.TextField(blank=True)
@@ -251,6 +257,10 @@ class ShopOperation(models.Model):
 
     def __str__(self):
         return f"{self.get_kind_display()} – {self.shop}"
+
+    @property
+    def secret_values(self):
+        return json.loads(self.secrets) if self.secrets else {}
 
 
 class ShopOrder(models.Model):

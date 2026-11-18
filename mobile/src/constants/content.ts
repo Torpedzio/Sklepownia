@@ -162,7 +162,7 @@ export const Faq = [
   {
     question: 'Jak mój sklep przyjmie płatności od klientów?',
     answer:
-      'Przelew i płatność przy odbiorze włączysz w aplikacji, w ustawieniach sklepu. Płatności online, np. BLIK i karty, dodasz w panelu sklepu wtyczką albo modułem wybranego operatora.',
+      'Przelew i płatność przy odbiorze włączysz w aplikacji, w ustawieniach sklepu. Tam też podłączysz płatności online Przelewy24 i PayU (BLIK, szybkie przelewy, karty) w sklepie WooCommerce i PrestaShop, jeśli masz konto sprzedawcy u operatora. W sklepie Magento płatności online dodasz w panelu sklepu modułem operatora.',
   },
   {
     question: 'Czy mogę zmienić wygląd sklepu później?',

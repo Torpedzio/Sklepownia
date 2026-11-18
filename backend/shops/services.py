@@ -1,3 +1,4 @@
+import json
 from collections import Counter
 from datetime import timedelta
 
@@ -281,7 +282,9 @@ def update_settings(shop, user, changes):
     Returns the operation, or None when nothing would change.
     """
     current = get_settings(shop).values
-    changes = shop_settings.diff(current, shop_settings.normalize(changes))
+    # Payment keys travel with the operation, not in its changes: see ShopOperation.secrets.
+    changes, keys = shop_settings.split_secrets(shop_settings.normalize(changes))
+    changes = shop_settings.diff(current, changes)
     region = changes.get("region", {})
     # A new country brings its time zone and standard VAT rate, unless the owner picks them too.
     if "country" in region:
@@ -291,12 +294,14 @@ def update_settings(shop, user, changes):
         rate = shop_settings.suggested_vat_rate(region["country"])
         if "standard_rate" not in changes.get("taxes", {}) and rate != current["taxes"]["standard_rate"]:
             changes.setdefault("taxes", {})["standard_rate"] = rate
-    if not changes:
+    if not changes and not keys:
         return None
-    return start_operation(shop, user, ShopOperation.Kind.UPDATE_SETTINGS, changes)
+    return start_operation(
+        shop, user, ShopOperation.Kind.UPDATE_SETTINGS, shop_settings.with_placeholders(changes, keys), secrets=keys,
+    )
 
 
-def start_operation(shop, user, kind, changes=None):
+def start_operation(shop, user, kind, changes=None, secrets=None):
     with transaction.atomic():
         # Locks the shop, so two requests can't both pass the checks below.
         shop = Shop.objects.select_for_update().get(pk=shop.pk)
@@ -304,6 +309,11 @@ def start_operation(shop, user, kind, changes=None):
             raise ShopNotActive()
         if current_operation(shop) is not None:
             raise OperationInProgress()
-        operation = ShopOperation.objects.create(shop=shop, kind=kind, changes=changes or {}, requested_by=user)
+        # Keys of an operation that never finished (the worker died) don't stay around either.
+        shop.operations.filter(created_at__lt=timezone.now() - OPERATION_TIMEOUT).exclude(secrets="").update(secrets="")
+        operation = ShopOperation.objects.create(
+            shop=shop, kind=kind, changes=changes or {}, secrets=json.dumps(secrets) if secrets else "",
+            requested_by=user,
+        )
         transaction.on_commit(lambda: run_shop_operation.delay(operation.pk))
     return operation

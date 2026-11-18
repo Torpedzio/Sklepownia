@@ -9,9 +9,21 @@ export type FieldErrors = Partial<Record<SettingsSection, Record<string, string>
 // Money and rates are typed by people, who may use a comma.
 const DECIMAL_FIELDS = new Set(['courier_cost', 'free_shipping_min_amount', 'standard_rate']);
 
-/** The edits that differ from the saved values; text fields compare as text, so "5" equals 5. */
+/**
+ * The edits that differ from the saved values; text fields compare as text, so "5" equals 5. Fields the settings
+ * don't return (payment keys, only ever sent) count as empty.
+ */
 export function changedFields(saved: Record<string, unknown>, draft: Draft | undefined) {
-  return Object.fromEntries(Object.entries(draft ?? {}).filter(([key, value]) => String(value) !== String(saved[key])));
+  return Object.fromEntries(
+    Object.entries(draft ?? {}).filter(([key, value]) => String(value) !== String(saved[key] ?? '')),
+  );
+}
+
+/** Field labels in a sentence: "nazwa sklepu, stawka VAT, płatności PayU" (names and acronyms keep their capitals). */
+export function fieldList(labels: string[]) {
+  return labels
+    .map((label) => (/^\p{Lu}\p{Lu}/u.test(label) ? label : label.charAt(0).toLowerCase() + label.slice(1)))
+    .join(', ');
 }
 
 /** A typed value in the form the API accepts. */

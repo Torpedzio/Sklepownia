@@ -5,7 +5,7 @@ from .models import ProvisioningJob, ProvisioningStep, Server, Shop, ShopConfig,
 
 @admin.register(Server)
 class ServerAdmin(admin.ModelAdmin):
-    list_display = ["name", "hostname", "is_active", "max_shops", "created_at"]
+    list_display = ["name", "hostname", "public_ip", "is_active", "max_shops", "created_at"]
 
 
 @admin.register(ShopTemplate)
@@ -51,6 +51,8 @@ class ShopOperationAdmin(admin.ModelAdmin):
     list_display = ["id", "shop", "kind", "status", "requested_by", "created_at", "finished_at"]
     list_filter = ["kind", "status"]
     search_fields = ["shop__name", "shop__slug"]
+    # Payment keys on their way to the shop: nobody reads them here.
+    exclude = ["secrets"]
     readonly_fields = [
         "shop", "kind", "status", "changes", "result", "error", "requested_by", "created_at", "started_at", "finished_at",
     ]

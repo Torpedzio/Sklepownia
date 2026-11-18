@@ -6,6 +6,7 @@ The section serializers below are the schema: they validate input, give every fi
 """
 
 import re
+from dataclasses import dataclass
 from decimal import Decimal
 
 from rest_framework import serializers
@@ -14,6 +15,34 @@ from .choices import COUNTRY_TIMEZONES, VAT_RATES, Country, Currency, Language, 
 from .models import ShopTemplate
 
 MONEY = {"max_digits": 10, "decimal_places": 2, "min_value": Decimal("0")}
+# Stands for a key in the change history (ShopOperation.changes); the key itself never leaves the operation.
+SECRET_PLACEHOLDER = "••••••••"
+
+
+class SecretField(serializers.CharField):
+    """
+    A key the app only writes: it goes to the shop, and the platform neither stores nor shows it (see split_secrets).
+    Left blank, the shop keeps the key it has.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(write_only=True, required=False, allow_blank=True, **kwargs)
+
+
+def _digits(value, label):
+    value = re.sub(r"\s", "", value)
+    if value and not re.fullmatch(r"\d+", value):
+        raise serializers.ValidationError(f"{label} składa się z samych cyfr.")
+    return value
+
+
+def _hex_key(value, length):
+    value = re.sub(r"\s", "", value).lower()
+    if value and not re.fullmatch(rf"[0-9a-f]{{{length}}}", value):
+        # 16 znaków, 32 znaki.
+        chars = "znaki" if length % 10 in (2, 3, 4) and length % 100 not in (12, 13, 14) else "znaków"
+        raise serializers.ValidationError(f"Klucz ma {length} {chars}: cyfry i litery od a do f.")
+    return value
 
 
 class GeneralSection(serializers.Serializer):
@@ -40,6 +69,47 @@ class PaymentsSection(serializers.Serializer):
     bank_account_number = serializers.CharField(label="Numer konta", max_length=42, allow_blank=True)
     bank_name = serializers.CharField(label="Nazwa banku", max_length=100, allow_blank=True)
     cash_on_delivery_enabled = serializers.BooleanField(label="Płatność przy odbiorze")
+    # Online payments: the operator's plugin is installed in the shop the first time it's turned on.
+    przelewy24_enabled = serializers.BooleanField(label="Płatności Przelewy24")
+    przelewy24_sandbox = serializers.BooleanField(label="Tryb testowy Przelewy24")
+    przelewy24_merchant_id = serializers.CharField(label="ID sprzedawcy Przelewy24", max_length=15, allow_blank=True)
+    przelewy24_crc_key = SecretField(label="Klucz CRC Przelewy24")
+    przelewy24_api_key = SecretField(label="Klucz API Przelewy24")
+    przelewy24_keys_saved = serializers.BooleanField(
+        label="Klucze Przelewy24 w sklepie", read_only=True,
+        help_text="Sklep ma klucz CRC i klucz API do wybranego trybu (testowego albo produkcyjnego).",
+    )
+    payu_enabled = serializers.BooleanField(label="Płatności PayU")
+    payu_sandbox = serializers.BooleanField(label="Tryb testowy PayU")
+    payu_pos_id = serializers.CharField(label="Id punktu płatności PayU", max_length=15, allow_blank=True)
+    payu_client_id = serializers.CharField(label="OAuth client_id PayU", max_length=15, allow_blank=True)
+    payu_md5_key = SecretField(label="Drugi klucz MD5 PayU")
+    payu_client_secret = SecretField(label="OAuth client_secret PayU")
+    payu_keys_saved = serializers.BooleanField(
+        label="Klucze PayU w sklepie", read_only=True,
+        help_text="Sklep ma drugi klucz MD5 i client_secret do wybranego trybu (testowego albo produkcyjnego).",
+    )
+
+    def validate_przelewy24_merchant_id(self, value):
+        return _digits(value, "ID sprzedawcy")
+
+    def validate_przelewy24_crc_key(self, value):
+        return _hex_key(value, 16)
+
+    def validate_przelewy24_api_key(self, value):
+        return _hex_key(value, 32)
+
+    def validate_payu_pos_id(self, value):
+        return _digits(value, "Id punktu płatności")
+
+    def validate_payu_client_id(self, value):
+        return _digits(value, "client_id")
+
+    def validate_payu_md5_key(self, value):
+        return _hex_key(value, 32)
+
+    def validate_payu_client_secret(self, value):
+        return _hex_key(value, 32)
 
     def validate_bank_account_number(self, value):
         number = re.sub(r"[\s-]", "", value).upper()
@@ -100,6 +170,34 @@ FIELD_LABELS = {
     for section, serializer in SECTIONS.items()
 }
 
+# Keys the app writes to the shop but never keeps: {section: (field, …)}.
+SECRET_FIELDS = {
+    section: tuple(name for name, field in serializer().fields.items() if isinstance(field, SecretField))
+    for section, serializer in SECTIONS.items()
+}
+
+
+@dataclass(frozen=True)
+class Operator:
+    """An online payment operator, as the payments section has it: fields named <key>_…"""
+
+    key: str
+    name: str
+    # What identifies the owner's account, kept in the settings.
+    ids: tuple
+    # What signs the payments: written to the shop, never kept (SecretField).
+    keys: tuple
+
+
+OPERATORS = {
+    "przelewy24": Operator(
+        "przelewy24", "Przelewy24", ids=("przelewy24_merchant_id",), keys=("przelewy24_crc_key", "przelewy24_api_key"),
+    ),
+    "payu": Operator(
+        "payu", "PayU", ids=("payu_pos_id", "payu_client_id"), keys=("payu_md5_key", "payu_client_secret"),
+    ),
+}
+
 
 def default_settings(shop):
     """Settings of a freshly provisioned shop, used until the shop has been read for the first time."""
@@ -120,6 +218,7 @@ def default_settings(shop):
             "bank_account_number": "",
             "bank_name": "",
             "cash_on_delivery_enabled": False,
+            **_operator_defaults(),
         },
         "shipping": {
             "courier_enabled": False,
@@ -141,6 +240,15 @@ def default_settings(shop):
         },
         "appearance": {"theme": config.template.slug},
     }
+
+
+def _operator_defaults():
+    """Every operator off, without an account, in production mode."""
+    values = {}
+    for key, operator in OPERATORS.items():
+        values.update({f"{key}_enabled": False, f"{key}_sandbox": False, f"{key}_keys_saved": False})
+        values.update({field: "" for field in operator.ids})
+    return values
 
 
 def suggested_vat_rate(country):
@@ -169,6 +277,14 @@ class SettingsUpdateSerializer(serializers.Serializer):
         for section in attrs:
             if section not in sections:
                 errors[section] = ["Tę część ustawień zmienisz w panelu sklepu."]
+        # Online payment operators the platform can set up (context["operators"]).
+        operators = self.context.get("operators", tuple(OPERATORS))
+        given = attrs.get("payments", {})
+        for key, operator in OPERATORS.items():
+            if key not in operators and any(field.startswith(f"{key}_") for field in given):
+                errors.setdefault("payments", {})[f"{key}_enabled"] = [
+                    f"Płatności {operator.name} włączysz w panelu sklepu.",
+                ]
         theme = attrs.get("appearance", {}).get("theme")
         platform = self.context.get("platform")
         if theme is not None and platform and theme.platform != platform:
@@ -185,6 +301,9 @@ class SettingsUpdateSerializer(serializers.Serializer):
             }
             if missing:
                 errors["payments"] = missing
+        missing = _operator_errors(self.context["current"]["payments"], payments, attrs.get("payments", {}))
+        if missing:
+            errors["payments"] = {**errors.get("payments", {}), **missing}
         shopping = merged["shopping"]
         if not shopping["guest_checkout"] and not shopping["signup_at_checkout"]:
             errors["shopping"] = {
@@ -193,6 +312,79 @@ class SettingsUpdateSerializer(serializers.Serializer):
         if errors:
             raise serializers.ValidationError(errors)
         return attrs
+
+
+def _operator_errors(current, payments, given):
+    """
+    What's missing for the operators being changed (`given` has their fields) that will be on:
+    their ids, and their keys unless the shop has them.
+    """
+    errors = {}
+    for key, operator in OPERATORS.items():
+        if not payments[f"{key}_enabled"] or not any(field.startswith(f"{key}_") for field in given):
+            continue
+        for field in operator.ids:
+            if not payments[field]:
+                errors[field] = [f"Wpisz z panelu {operator.name}."]
+        # Test and production accounts have different keys, so a new mode needs them again.
+        mode_changed = payments[f"{key}_sandbox"] != current[f"{key}_sandbox"]
+        if mode_changed or not payments[f"{key}_keys_saved"]:
+            message = (
+                "Klucze testowe i produkcyjne są różne. Wpisz klucz do nowego trybu."
+                if mode_changed and payments[f"{key}_keys_saved"]
+                else f"Wpisz z panelu {operator.name}."
+            )
+            for field in operator.keys:
+                if not payments.get(field):
+                    errors[field] = [message]
+    return errors
+
+
+def split_secrets(changes):
+    """
+    `changes` (normalized input) without the keys, and the keys given, both {section: {field: value}}.
+    A key left blank isn't a change: the shop keeps the one it has.
+    """
+    rest, keys = {}, {}
+    for section, fields in changes.items():
+        secret = SECRET_FIELDS.get(section, ())
+        rest[section] = {name: value for name, value in fields.items() if name not in secret}
+        given = {name: value for name, value in fields.items() if name in secret and value}
+        if given:
+            keys[section] = given
+    return {section: fields for section, fields in rest.items() if fields}, keys
+
+
+def with_placeholders(changes, keys):
+    """`changes` with SECRET_PLACEHOLDER for every key given, so the history says a key was changed."""
+    result = {section: dict(fields) for section, fields in changes.items()}
+    for section, fields in keys.items():
+        result.setdefault(section, {}).update({name: SECRET_PLACEHOLDER for name in fields})
+    return result
+
+
+def reveal(changes, keys):
+    """`changes` of an operation with its keys in place of the placeholders: what the shop gets."""
+    result = {section: dict(fields) for section, fields in changes.items()}
+    for section, fields in keys.items():
+        result.setdefault(section, {}).update(fields)
+    return result
+
+
+def conceal(values, keys):
+    """
+    `values` (settings after a change) as the platform keeps them: without keys, and with every operator
+    whose keys were just written marked as having them.
+    """
+    result = {section: dict(fields) for section, fields in values.items()}
+    for section, fields in result.items():
+        for name in SECRET_FIELDS.get(section, ()):
+            fields.pop(name, None)
+    given = keys.get("payments", {})
+    for key, operator in OPERATORS.items():
+        if any(name in given for name in operator.keys) and "payments" in result:
+            result["payments"][f"{key}_keys_saved"] = True
+    return result
 
 
 def normalize(validated):

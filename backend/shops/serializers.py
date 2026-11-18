@@ -6,7 +6,7 @@ from .models import (
     ProvisioningJob, ProvisioningStep, Shop, ShopChecklist, ShopConfig, ShopOperation, ShopOrder, ShopTemplate,
 )
 from .platforms import Platform, platform_info
-from .shop_settings import SECTIONS, describe
+from .shop_settings import OPERATORS, SECTIONS, describe
 from .slugs import normalize_slug, slug_error
 
 DEFAULT_CATEGORY_COUNT = 5
@@ -208,6 +208,14 @@ class ShopSettingsSerializer(serializers.Serializer):
     sections = serializers.ListField(
         child=serializers.CharField(),
         help_text="Sekcje, które aplikacja może zmieniać na platformie sklepu; pozostałe ustawia się w panelu.",
+    )
+    payment_operators = serializers.ListField(
+        child=serializers.ChoiceField(choices=list(OPERATORS)),
+        help_text="Operatorzy płatności online, których aplikacja ustawia na platformie sklepu.",
+    )
+    server_ip = serializers.IPAddressField(
+        allow_null=True,
+        help_text="Adres IP, z którego sklep łączy się z operatorami; Przelewy24 wymaga dodania go w swoim panelu.",
     )
     panel_name = serializers.CharField(help_text="Jak właściciel zna panel sklepu, np. „panel WordPressa”.")
     synced_at = serializers.DateTimeField(allow_null=True, help_text="Kiedy ustawienia odczytano ze sklepu.")

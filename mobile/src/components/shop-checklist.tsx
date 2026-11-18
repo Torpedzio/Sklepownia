@@ -115,7 +115,7 @@ export function ShopChecklist({ shop, onOpenSettings }: Props) {
   const steps: Record<ChecklistStepKey, Step> = {
     payments: {
       title: 'Ustaw płatności',
-      description: 'Przelew tradycyjny albo płatność przy odbiorze. Bez tego klienci nie zapłacą za zamówienie.',
+      description: 'Przelew, płatność przy odbiorze albo płatności online. Bez tego klienci nie zapłacą za zamówienie.',
       action: { title: 'Ustaw płatności', icon: 'card', onPress: () => onOpenSettings('platnosci') },
     },
     shipping: {

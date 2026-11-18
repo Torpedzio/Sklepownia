@@ -12,7 +12,7 @@ a platforma w około dwie minuty uruchamia działający sklep w osobnym kontener
   kategorie dobrane do branży i opcjonalnie przykładowe produkty.
 - Podgląd postępu zakładania krok po kroku i ponowienie kroku, który się nie udał.
 - Dane logowania do panelu WordPressa wysyłane e-mailem, nigdy pokazywane w aplikacji.
-- Ustawienia sklepu (płatności, wysyłka, podatki, region, wygląd) zmieniane z aplikacji.
+- Ustawienia sklepu (płatności, także Przelewy24 i PayU, wysyłka, podatki, region, wygląd) zmieniane z aplikacji.
 - Powiadomienia push o nowych zamówieniach, gotowym sklepie i płatnościach za plan, z wyborem tematów.
 - Sprzedaż sklepu w aplikacji: przychód dziś, z 7 i 30 dni, wykres dzienny, zamówienia do obsłużenia i ostatnie zamówienia.
 - Lista startowa nowego sklepu: płatności, wysyłka, pierwszy produkt, usunięcie przykładowych, powiadomienia i próbne zamówienie, odhaczane same.

@@ -131,6 +131,8 @@ Ruch na ekranie (Reanimated) respektuje systemowe ograniczenie ruchu.
 | `Badge` | Znacznik z kropką i nazwą stanu; `StatusBadge` (sklep) i statusy zamówień (`ORDER_STATUS_COLORS` w [lib/sales.ts](../mobile/src/lib/sales.ts)) go używają |
 | `ShopChecklist` | Lista startowa nowego sklepu (`GET /shops/{id}/checklist/`): pasek postępu i kroki, które platforma odhacza sama (płatności, wysyłka, własny produkt, bez produktów przykładowych, powiadomienia, próbne zamówienie). Rozwinięty jest jeden krok: dotknięty albo następny do zrobienia, z opisem i przyciskiem (sekcja ustawień, panel sklepu, usunięcie przykładowych produktów, ekran powiadomień, sklep). Gdy trwa liczenie albo zmiana w sklepie (`refreshing`), co 2,5 s pyta ponownie. „Ukryj listę” pyta o potwierdzenie, a po zrobieniu wszystkich kroków ukrywa ją od razu. |
 | `ShopOverview` | Kafelki ze stanem ustawień sklepu; brak płatności lub wysyłki jest wyróżniony (`missingForSales`), kafelek otwiera swoją sekcję ustawień |
+| `OnlinePayment` | Operator płatności online w sekcji „Płatności” (Przelewy24, PayU; tylko operatorzy z `payment_operators`): włącznik, tryb testowy, identyfikatory i klucze. Pola kluczy są ukryte; gdy sklep ma już klucze w tym trybie, są puste z kropkami i podpowiedzią, że nowy klucz wpisuje się tylko przy zmianie. Przy Przelewy24 adres IP serwera do wpisania w panelu operatora (`server_ip`). |
+| `Note` | Szara (albo ostrzegawcza, `warning`) ramka z krótką uwagą pod polami formularza |
 
 Hook `useFullBleed` pozwala sekcji wyjść z wyśrodkowanej kolumny na całą szerokość strony.
 

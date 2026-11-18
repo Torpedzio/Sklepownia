@@ -45,7 +45,7 @@ test('tapping another step opens it instead', async () => {
 
   await fireEvent.press(await screen.findByRole('button', { name: 'Złóż próbne zamówienie' }));
 
-  expect(screen.queryByText(/Przelew tradycyjny albo płatność przy odbiorze/)).toBeNull();
+  expect(screen.queryByText(/Przelew, płatność przy odbiorze albo płatności online/)).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Otwórz sklep' }));
   expect(openURL).toHaveBeenCalledWith('http://palarnia.localhost:8080');
 

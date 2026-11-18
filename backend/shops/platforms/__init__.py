@@ -24,6 +24,8 @@ class PlatformInfo:
     steps: list
     # Settings sections (shops/shop_settings.py) the app can change on this platform.
     settings_sections: tuple
+    # Online payment operators (shop_settings.OPERATORS) the app sets up in the payments section.
+    payment_operators: tuple = ()
     # Path of the admin panel, when it's the same for every shop (PrestaShop gives each shop its own).
     admin_path: str = ""
     # How long setting up takes, as the app says it: "To potrwa <setup_time>".
@@ -50,6 +52,7 @@ PLATFORMS = {
             ("health_check", "Końcowe sprawdzenie"),
         ],
         settings_sections=ALL_SECTIONS,
+        payment_operators=("przelewy24", "payu"),
         admin_path="wp-admin",
     ),
     Platform.PRESTASHOP: PlatformInfo(
@@ -67,6 +70,7 @@ PLATFORMS = {
         ],
         # Shipping, taxes, region and the shopping rules are set in the PrestaShop panel for now.
         settings_sections=("general", "availability", "payments", "appearance"),
+        payment_operators=("przelewy24", "payu"),
     ),
     Platform.MAGENTO: PlatformInfo(
         description="System dla dużych sklepów: rozbudowany katalog, wiele magazynów i wersji językowych. "
@@ -82,7 +86,8 @@ PLATFORMS = {
             ("configure_navigation", "Menu, wyszukiwarka i filtry"),
             ("health_check", "Końcowe sprawdzenie"),
         ],
-        # Opening and closing the shop, the shopping rules and the theme are set in the Magento panel.
+        # Opening and closing the shop, the shopping rules and the theme are set in the Magento panel,
+        # and so are online payments for now.
         settings_sections=("general", "payments", "shipping", "taxes", "region"),
         setup_time="około minuty",
     ),

@@ -15,11 +15,14 @@ from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
 from ..orders import Order, customer_label, from_timestamp
+from ..shop_settings import OPERATORS
 from . import Platform
+from ..provisioning import packages
 from ..provisioning.base import ProductCount, ProvisioningError
 from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_name, db_name, mail_relay,
 )
+from ..provisioning.packages import Package
 
 SAMPLE_PRODUCT_CATEGORIES = 3
 SAMPLE_PRODUCTS_PER_CATEGORY = 2
@@ -50,6 +53,25 @@ MAIL_MODULE = "sklepowniamail"
 MAIL_MODULE_FILE = Path(__file__).parent / "files" / "prestashop" / MAIL_MODULE / f"{MAIL_MODULE}.php"
 # Modules that fill a new shop's home page with demo slides and lorem ipsum.
 DEMO_MODULES = ["ps_imageslider", "ps_customtext", "ps_banner"]
+
+# Online payment operators' modules, installed the first time the owner turns the operator on.
+ONLINE_PAYMENTS = {
+    "przelewy24": Package(
+        title="modułu Przelewy24",
+        folder="przelewy24payment",
+        version="1.2.1",
+        url="https://www.przelewy24.pl/storage/app/media/do-pobrania/gotowe-wtyczki/prestashop/release/"
+        "przelewy24_prestashop1.7.6-9_1.2.1_p24.zip",
+        sha256="eaf261598e4a1eb85ddc88be8aabcafe3ab02c03841a236247266f02465d0df1",
+    ),
+    "payu": Package(
+        title="modułu PayU",
+        folder="payu",
+        version="3.6.1",
+        url="https://github.com/PayU-EMEA/plugin_prestashop/releases/download/v3.6.1/payu_prestashop_plugin_3.6.1.zip",
+        sha256="1f66c1dcb26dedb37899eaf197a2262843233b49878fea4e7c702d328666b22e",
+    ),
+}
 
 # Runs before every script: PrestaShop with its default shop, language and first employee as the context.
 # `$d` holds the data passed in (see _php).
@@ -200,7 +222,47 @@ Tools::clearSf2Cache();
 Tools::clearAllCache();
 """
 
-READ_SETTINGS_PHP = """
+# The operators as the shop has them, for the shop's default currency (both keep an account per currency).
+# Keys are only checked, not read.
+ONLINE_PAYMENTS_PHP = """
+function sklepownia_online_payments($installed) {
+    $context = Context::getContext();
+    $db = Db::getInstance();
+    $currency = new Currency((int) Configuration::get('PS_CURRENCY_DEFAULT'));
+    $przelewy24 = array(
+        'active' => $installed('przelewy24payment'), 'sandbox' => false, 'merchant_id' => '', 'keys' => false,
+    );
+    if (Module::isInstalled('przelewy24payment')) {
+        $account = $db->getRow('SELECT id_account, test_mode FROM ' . _DB_PREFIX_ . 'przelewy24_account'
+            . ' WHERE id_shop = ' . (int) $context->shop->id . ' AND id_currency = ' . (int) $currency->id);
+        if ($account) {
+            $przelewy24['sandbox'] = (bool) $account['test_mode'];
+            $credentials = $db->getRow('SELECT * FROM ' . _DB_PREFIX_ . 'przelewy24_credentials_config'
+                . ' WHERE id_account = ' . (int) $account['id_account']
+                . ' AND test_mode = ' . (int) $account['test_mode']);
+            if ($credentials) {
+                $przelewy24['merchant_id'] = (string) $credentials['id_merchant'];
+                $przelewy24['keys'] = $credentials['salt'] !== '' && $credentials['api_key'] !== '';
+            }
+        }
+    }
+    $sandbox = (bool) Configuration::get('PAYU_SANDBOX');
+    $payu_value = function ($name) use ($currency, $sandbox) {
+        $values = Tools::unSerialize((string) Configuration::get(($sandbox ? 'SANDBOX_' : '') . $name));
+        return is_array($values) && isset($values[$currency->iso_code]) ? (string) $values[$currency->iso_code] : '';
+    };
+    $payu = array(
+        'active' => $installed('payu'),
+        'sandbox' => $sandbox,
+        'pos_id' => $payu_value('PAYU_MC_POS_ID'),
+        'client_id' => $payu_value('PAYU_MC_OAUTH_CLIENT_ID'),
+        'keys' => $payu_value('PAYU_MC_SIGNATURE_KEY') !== '' && $payu_value('PAYU_MC_OAUTH_CLIENT_SECRET') !== '',
+    );
+    return array('przelewy24' => $przelewy24, 'payu' => $payu);
+}
+"""
+
+READ_SETTINGS_PHP = ONLINE_PAYMENTS_PHP + """
 $lang = (int) $context->language->id;
 $meta = Meta::getMetaByPage('index', $lang);
 $installed = function ($name) { return Module::isInstalled($name) && Module::isEnabled($name); };
@@ -215,6 +277,7 @@ echo "\\n%(marker)s" . json_encode(array(
     'wire_address' => Configuration::get('BANK_WIRE_ADDRESS'),
     'cod' => $installed('%(cod)s'),
     'theme' => $context->shop->theme_name,
+    'online' => sklepownia_online_payments($installed),
 ));
 """ % {"wire": WIRE_MODULE, "cod": COD_MODULE, "marker": OUTPUT_MARKER}
 
@@ -227,6 +290,78 @@ if ($found) {
     $meta = new Meta((int) $found['id_meta']);
     $meta->description[$lang] = $d['description'];
     $meta->update();
+}
+"""
+
+
+# Unpacks a module's checked archive (see _install_module) and installs it; PrestaShop turns it on.
+INSTALL_MODULE_PHP = """
+$zip = new ZipArchive();
+if ($zip->open($d['zip']) !== true || !$zip->extractTo(_PS_MODULE_DIR_)) {
+    throw new Exception('Could not unpack ' . $d['zip']);
+}
+$zip->close();
+$module = Module::getInstanceByName($d['name']);
+if (!$module) { throw new Exception('Module ' . $d['name'] . ' not found after unpacking'); }
+if (!Module::isInstalled($d['name']) && !$module->install()) {
+    throw new Exception('Module ' . $d['name'] . ' did not install: ' . implode(' ', $module->getErrors()));
+}
+"""
+
+# The account of the default currency in test or production mode, with the merchant id as the shop id too
+# (Przelewy24 gives a merchant's first shop the merchant's id). Keys only when given.
+PRZELEWY24_ACCOUNT_PHP = """
+$db = Db::getInstance();
+$table = _DB_PREFIX_ . 'przelewy24_account';
+$find = function () use ($db, $table, $context) {
+    return (int) $db->getValue('SELECT id_account FROM ' . $table . ' WHERE id_shop = ' . (int) $context->shop->id
+        . ' AND id_currency = ' . (int) Configuration::get('PS_CURRENCY_DEFAULT'));
+};
+$account = $find();
+if (!$account) {
+    // A currency added after the module was installed: the module makes the missing accounts itself.
+    Module::getInstanceByName('przelewy24payment');
+    Przelewy24\\Model\\Przlewy24AccountModel::fillAccount();
+    $account = $find();
+}
+if (!$account) { throw new Exception('No Przelewy24 account for the default currency'); }
+$test = $d['sandbox'] ? 1 : 0;
+$fields = array('id_merchant' => pSQL($d['merchant_id']), 'shop_id' => pSQL($d['merchant_id']));
+if (isset($d['crc_key'])) { $fields['salt'] = pSQL($d['crc_key']); }
+if (isset($d['api_key'])) { $fields['api_key'] = pSQL($d['api_key']); }
+$where = 'id_account = ' . $account . ' AND test_mode = ' . $test;
+if ($db->getValue('SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'przelewy24_credentials_config WHERE ' . $where)) {
+    $db->update('przelewy24_credentials_config', $fields, $where);
+} else {
+    $db->insert('przelewy24_credentials_config', array_merge(
+        array('id_account' => $account, 'test_mode' => $test, 'salt' => '', 'api_key' => ''), $fields
+    ));
+}
+$db->update('przelewy24_account', array('test_mode' => $test), 'id_account = ' . $account);
+"""
+
+# PayU keeps a value per currency in serialized arrays, with SANDBOX_ in front for test mode; only the default
+# currency's changes. The installments promotion asks PayU on product pages, so a new installation has it off, and
+# installments as a payment method of their own too, as in WooCommerce.
+PAYU_ACCOUNT_PHP = """
+$iso = (new Currency((int) Configuration::get('PS_CURRENCY_DEFAULT')))->iso_code;
+$prefix = $d['sandbox'] ? 'SANDBOX_' : '';
+$set = function ($name, $value) use ($iso, $prefix) {
+    $values = Tools::unSerialize((string) Configuration::get($prefix . $name));
+    if (!is_array($values)) { $values = array(); }
+    $values[$iso] = $value;
+    Configuration::updateValue($prefix . $name, serialize($values));
+};
+Configuration::updateValue('PAYU_SANDBOX', $d['sandbox'] ? 1 : 0);
+$set('PAYU_MC_POS_ID', $d['pos_id']);
+$set('PAYU_MC_OAUTH_CLIENT_ID', $d['client_id']);
+if (isset($d['md5_key'])) { $set('PAYU_MC_SIGNATURE_KEY', $d['md5_key']); }
+if (isset($d['client_secret'])) { $set('PAYU_MC_OAUTH_CLIENT_SECRET', $d['client_secret']); }
+if ($d['fresh']) {
+    foreach (array('CART', 'SUMMARY', 'PRODUCT') as $place) {
+        Configuration::updateValue('PAYU_PROMOTE_CREDIT_' . $place, 0);
+    }
+    Configuration::updateValue('PAYU_SEPARATE_INSTALLMENTS', 0);
 }
 """
 
@@ -443,6 +578,7 @@ class PrestaShopProvisioner(ContainerProvisioner):
 
     def read_settings(self, shop):
         data = json.loads(self._php(shop, READ_SETTINGS_PHP))
+        przelewy24, payu = data["online"]["przelewy24"], data["online"]["payu"]
         theme = ShopTemplate.objects.filter(platform=Platform.PRESTASHOP, theme=data["theme"]).first()
         return {
             "general": {
@@ -457,6 +593,15 @@ class PrestaShopProvisioner(ContainerProvisioner):
                 "bank_account_number": data["wire_details"] or "",
                 "bank_name": data["wire_address"] or "",
                 "cash_on_delivery_enabled": data["cod"],
+                "przelewy24_enabled": przelewy24["active"],
+                "przelewy24_sandbox": przelewy24["sandbox"],
+                "przelewy24_merchant_id": przelewy24["merchant_id"],
+                "przelewy24_keys_saved": przelewy24["keys"],
+                "payu_enabled": payu["active"],
+                "payu_sandbox": payu["sandbox"],
+                "payu_pos_id": payu["pos_id"],
+                "payu_client_id": payu["client_id"],
+                "payu_keys_saved": payu["keys"],
             },
             **({"appearance": {"theme": theme.slug}} if theme else {}),
         }
@@ -479,6 +624,7 @@ class PrestaShopProvisioner(ContainerProvisioner):
                 "details": payments["bank_account_number"],
                 "address": payments["bank_name"],
             })
+            self._apply_online_payments(shop, changes["payments"], payments)
         if "theme" in changes.get("appearance", {}):
             self._php(shop, THEME_PHP, {"theme": shop.config.template.theme})
 
@@ -520,6 +666,45 @@ class PrestaShopProvisioner(ContainerProvisioner):
         self.step_start_container(shop)
         previous = self._php(shop, ADDRESS_PHP, {"domain": _host(shop)})
         return f"{shop.url.split('://', 1)[0]}://{previous}"
+
+    def _apply_online_payments(self, shop, changed, payments):
+        """Install, configure and turn on or off the operators whose fields are in `changed`."""
+        for key, package in ONLINE_PAYMENTS.items():
+            if not any(field.startswith(f"{key}_") for field in changed):
+                continue
+            enabled = payments[f"{key}_enabled"]
+            installed = self._php(
+                shop, f'echo "\\n{OUTPUT_MARKER}" . (Module::isInstalled($d["name"]) ? "yes" : "no");',
+                {"name": package.folder},
+            ) == "yes"
+            if not installed and not enabled:
+                continue
+            if not installed:
+                self._install_module(shop, package)
+            # Keys only when given: blank means the shop keeps its own.
+            keys = {
+                field.removeprefix(f"{key}_"): payments[field] for field in OPERATORS[key].keys if payments.get(field)
+            }
+            account = {"sandbox": payments[f"{key}_sandbox"], **keys}
+            if key == "przelewy24":
+                self._php(shop, PRZELEWY24_ACCOUNT_PHP, {**account, "merchant_id": payments["przelewy24_merchant_id"]})
+            else:
+                self._php(shop, PAYU_ACCOUNT_PHP, {
+                    **account, "pos_id": payments["payu_pos_id"], "client_id": payments["payu_client_id"],
+                    "fresh": not installed,
+                })
+            # Turning a module on or off may update its translations, which needs the back office's kernel.
+            self._php(shop, "sklepownia_module($d['name'], $d['enabled']);",
+                      {"name": package.folder, "enabled": enabled}, kernel=True)
+
+    def _install_module(self, shop, package):
+        path = f"/tmp/{package.filename}"
+        self._upload(shop, path, packages.fetch(package))
+        try:
+            # Installing builds the module's tables and translations, which needs the back office's kernel.
+            self._php(shop, INSTALL_MODULE_PHP, {"zip": path, "name": package.folder}, kernel=True)
+        finally:
+            self._exec(container_name(shop), ["rm", "-f", path])
 
     def _configure_mail(self, shop, relay):
         self._write_file(shop, f"{FILES_PATH}/modules/{MAIL_MODULE}/{MAIL_MODULE}.php", MAIL_MODULE_FILE.read_text())

@@ -41,6 +41,13 @@ describe('describeSettings', () => {
     expect(missingForSales(settings)).toEqual([]);
   });
 
+  test('online payments count as a way to pay', () => {
+    const settings = shopSettings({ payments: { przelewy24_enabled: true, payu_enabled: true } });
+
+    expect(valueOf(settings, 'Płatności')).toMatchObject({ value: 'Przelewy24, PayU', missing: false });
+    expect(missingForSales(settings)).toEqual(['wysyłkę']);
+  });
+
   test('describes a closed shop, free shipping without a threshold and other choices', () => {
     const settings = shopSettings({
       availability: { is_open: false },

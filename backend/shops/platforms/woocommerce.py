@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import secrets
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -12,11 +13,14 @@ from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
 from ..orders import Order, Status as OrderStatus, customer_label, from_timestamp
+from ..shop_settings import OPERATORS
 from . import Platform
+from ..provisioning import packages
 from ..provisioning.base import ProductCount
 from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_env, container_name, db_name, mail_relay,
 )
+from ..provisioning.packages import Package
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +65,49 @@ SHOP_PAGE_TITLES = {
     "de_DE": {"shop": "Shop", "cart": "Warenkorb", "checkout": "Kasse", "myaccount": "Mein Konto"},
 }
 
+
+
+@dataclass(frozen=True)
+class GatewayPlugin:
+    """An online payment operator's plugin, installed the first time the owner turns the operator on."""
+
+    package: Package
+    # The plugin's main file, as WordPress names active plugins.
+    file: str
+    # Every payment gateway of the plugin has an id starting with this.
+    prefix: str
+    # The gateway the app turns on: a redirect to the operator's page with all its methods (BLIK, transfers, cards).
+    main: str
+
+
+ONLINE_PAYMENTS = {
+    "przelewy24": GatewayPlugin(
+        package=Package(
+            title="wtyczki Przelewy24",
+            folder="woo-przelewy24",
+            version="1.2.1",
+            url="https://www.przelewy24.pl/storage/app/media/do-pobrania/gotowe-wtyczki/woocommerce/"
+            "woocommerce-11-przelewy24-1.2.1.zip",
+            sha256="05686972c679ccd55d987f6022432553d4e0ee6f9f1a962a072d8dc140eb39cb",
+        ),
+        file="woo-przelewy24/woocommerce-p24-gateway.php",
+        prefix="p24-",
+        main="p24-online-payments",
+    ),
+    "payu": GatewayPlugin(
+        package=Package(
+            title="wtyczki PayU",
+            folder="woo-payu-payment-gateway",
+            version="2.12.1",
+            url="https://downloads.wordpress.org/plugin/woo-payu-payment-gateway.2.12.1.zip",
+            sha256="d3d01f3a0854f7c16b8143be588137642ea0ced130bd22ae891c0219ed8372ea",
+        ),
+        file="woo-payu-payment-gateway/woocommerce-gateway-payu.php",
+        prefix="payu",
+        main="payustandard",
+    ),
+}
+
 # PHP run by `wp eval`. `$d` holds the data passed in (see _php). Output after OUTPUT_MARKER is the result,
 # so notices WordPress might print before it don't break parsing.
 OUTPUT_MARKER = "@@sklepownia@@"
@@ -86,6 +133,35 @@ if ($rate_id) { $found = WC_Tax::_get_tax_rate($rate_id); if (!empty($found)) { 
 $accounts = get_option('woocommerce_bacs_accounts', array());
 $bacs = get_option('woocommerce_bacs_settings', array());
 $cod = get_option('woocommerce_cod_settings', array());
+// Online payments: an operator is on when any gateway of its active plugin is. Keys are only checked, not read.
+if (!function_exists('is_plugin_active')) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; }
+$gateways = WC()->payment_gateways()->payment_gateways();
+$online = array();
+foreach ($d['online'] as $key => $plugin) {
+    $active = is_plugin_active($plugin['file']);
+    $enabled = false;
+    foreach ($gateways as $id => $gateway) {
+        if ($active && strpos($id, $plugin['prefix']) === 0 && $gateway->enabled === 'yes') { $enabled = true; }
+    }
+    $online[$key] = array('active' => $active, 'enabled' => $enabled);
+}
+$filled = function ($value) { return is_string($value) && $value !== ''; };
+$payu = get_option('payu_settings_option_name', array());
+if (!is_array($payu)) { $payu = array(); }
+$payu_standard = get_option('woocommerce_payustandard_settings', array());
+$payu_sandbox = is_array($payu_standard) && ($payu_standard['sandbox'] ?? 'no') === 'yes';
+$payu_prefix = $payu_sandbox ? 'global_sandbox_' : 'global_';
+$online['przelewy24'] += array(
+    'sandbox' => get_option('p24_mode', 'sandbox') !== 'production',
+    'merchant_id' => (string) get_option('p24_merchant_id', ''),
+    'keys' => $filled(get_option('p24_crc_key', '')) && $filled(get_option('p24_reports_key', '')),
+);
+$online['payu'] += array(
+    'sandbox' => $payu_sandbox,
+    'pos_id' => (string) ($payu[$payu_prefix . 'pos_id'] ?? ''),
+    'client_id' => (string) ($payu[$payu_prefix . 'client_id'] ?? ''),
+    'keys' => $filled($payu[$payu_prefix . 'md5'] ?? '') && $filled($payu[$payu_prefix . 'client_secret'] ?? ''),
+);
 echo "\n%(marker)s" . wp_json_encode(array(
     'options' => $options,
     'bacs_enabled' => is_array($bacs) && ($bacs['enabled'] ?? 'no') === 'yes',
@@ -93,8 +169,60 @@ echo "\n%(marker)s" . wp_json_encode(array(
     'cod_enabled' => is_array($cod) && ($cod['enabled'] ?? 'no') === 'yes',
     'methods' => (object) $methods,
     'tax_rate' => $rate,
+    'online' => $online,
 ));
 """ % {"zone": SHIPPING_ZONE_OPTION, "rate": TAX_RATE_OPTION, "marker": OUTPUT_MARKER}
+
+PLUGIN_STATE_PHP = """
+if (!function_exists('get_plugins')) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; }
+$plugins = get_plugins();
+echo "\n%(marker)s" . wp_json_encode(array(
+    'installed' => isset($plugins[$d['file']]),
+    'active' => is_plugin_active($d['file']),
+));
+""" % {"marker": OUTPUT_MARKER}
+
+# Written before the plugin is activated: activating asks Przelewy24 for the payment methods of the account.
+PRZELEWY24_ACCOUNT_PHP = """
+update_option('p24_mode', $d['sandbox'] ? 'sandbox' : 'production');
+update_option('p24_merchant_id', $d['merchant_id']);
+foreach (array('crc_key' => 'p24_crc_key', 'api_key' => 'p24_reports_key') as $field => $option) {
+    if (isset($d[$field])) { update_option($option, $d[$field]); }
+}
+$methods = 'WC_P24\\Utilities\\Payment_Methods';
+if (class_exists($methods)) { $methods::clear_payment_methods_cache(); }
+"""
+
+# Written after activating, which adds PayU's defaults first. The installments widget asks PayU for every product
+# list shown, so a new installation has it off; the owner can turn it on in the panel.
+PAYU_ACCOUNT_PHP = """
+$settings = get_option('payu_settings_option_name', array());
+if (!is_array($settings)) { $settings = array(); }
+if (function_exists('payu_get_default_settings')) { $settings = array_merge(payu_get_default_settings(), $settings); }
+$prefix = $d['sandbox'] ? 'global_sandbox_' : 'global_';
+$settings[$prefix . 'pos_id'] = $d['pos_id'];
+$settings[$prefix . 'client_id'] = $d['client_id'];
+foreach (array('md5_key' => 'md5', 'client_secret' => 'client_secret') as $field => $name) {
+    if (isset($d[$field])) { $settings[$prefix . $name] = $d[$field]; }
+}
+if ($d['fresh']) {
+    foreach (array('listings', 'product_page', 'cart_page', 'checkout_page') as $page) {
+        $settings['credit_widget_on_' . $page] = 'no';
+    }
+}
+update_option('payu_settings_option_name', $settings);
+"""
+
+# Turns the plugin's main gateway on or off. Its other gateways go off with it and are left as the owner set them
+# otherwise, except right after installing, when the ones the plugin turns on by itself go off.
+ONLINE_GATEWAYS_PHP = """
+foreach (WC()->payment_gateways()->payment_gateways() as $id => $gateway) {
+    if (strpos($id, $d['prefix']) !== 0) { continue; }
+    $on = $id === $d['main'] ? $d['enabled'] : ($d['enabled'] && !$d['fresh'] && $gateway->enabled === 'yes');
+    $gateway->update_option('enabled', $on ? 'yes' : 'no');
+    foreach ($d['options'][$id] ?? array() as $name => $value) { $gateway->update_option($name, $value); }
+}
+"""
 
 SET_OPTIONS_PHP = "foreach ($d as $name => $value) { update_option($name, $value); }"
 
@@ -482,8 +610,12 @@ class WooCommerceProvisioner(ContainerProvisioner):
     # --- running shops ---
 
     def read_settings(self, shop):
-        data = json.loads(self._php(shop, READ_SETTINGS_PHP, {"options": SETTINGS_OPTIONS}))
+        data = json.loads(self._php(shop, READ_SETTINGS_PHP, {
+            "options": SETTINGS_OPTIONS,
+            "online": {key: {"file": plugin.file, "prefix": plugin.prefix} for key, plugin in ONLINE_PAYMENTS.items()},
+        }))
         options, methods = data["options"], data["methods"]
+        przelewy24, payu = data["online"]["przelewy24"], data["online"]["payu"]
 
         def text(name):
             return options.get(name) or ""
@@ -515,6 +647,16 @@ class WooCommerceProvisioner(ContainerProvisioner):
                 "bank_account_number": account.get("account_number") or account.get("iban") or "",
                 "bank_name": account.get("bank_name") or "",
                 "cash_on_delivery_enabled": data["cod_enabled"],
+                "przelewy24_enabled": przelewy24["enabled"],
+                # Without the plugin there's no mode: the plugin's default (sandbox) isn't the owner's choice.
+                "przelewy24_sandbox": przelewy24["active"] and przelewy24["sandbox"],
+                "przelewy24_merchant_id": przelewy24["merchant_id"],
+                "przelewy24_keys_saved": przelewy24["keys"],
+                "payu_enabled": payu["enabled"],
+                "payu_sandbox": payu["active"] and payu["sandbox"],
+                "payu_pos_id": payu["pos_id"],
+                "payu_client_id": payu["client_id"],
+                "payu_keys_saved": payu["keys"],
             },
             "shipping": {
                 "courier_enabled": bool(courier.get("enabled")),
@@ -587,6 +729,7 @@ class WooCommerceProvisioner(ContainerProvisioner):
                     "bank_name": payments["bank_name"],
                 } if has_account else None,
             })
+            self._apply_online_payments(shop, changes["payments"], payments)
         # The VAT rate and the shipping zone belong to the country; shipping titles to the language.
         if "taxes" in changes or "country" in region:
             taxes = values["taxes"]
@@ -644,6 +787,51 @@ class WooCommerceProvisioner(ContainerProvisioner):
         # A must-use plugin: WordPress loads it on its own and the panel can't switch it off.
         self._write_file(shop, MAIL_PLUGIN_PATH, MAIL_PLUGIN.read_text())
         self._set_options(shop, {MAIL_OPTION: relay})
+
+    def _apply_online_payments(self, shop, changed, payments):
+        """Install, configure and turn on or off the operators whose fields are in `changed`."""
+        for key, plugin in ONLINE_PAYMENTS.items():
+            if not any(field.startswith(f"{key}_") for field in changed):
+                continue
+            enabled = payments[f"{key}_enabled"]
+            state = json.loads(self._php(shop, PLUGIN_STATE_PHP, {"file": plugin.file}))
+            if not state["installed"] and not enabled:
+                continue
+            fresh = not state["installed"]
+            if fresh:
+                self._install_plugin(shop, plugin.package)
+            # Keys only when given: blank means the shop keeps its own.
+            keys = {
+                field.removeprefix(f"{key}_"): payments[field] for field in OPERATORS[key].keys if payments.get(field)
+            }
+            account = {"sandbox": payments[f"{key}_sandbox"], **keys}
+            options = {}
+            if key == "przelewy24":
+                self._php(shop, PRZELEWY24_ACCOUNT_PHP, {**account, "merchant_id": payments["przelewy24_merchant_id"]})
+            if enabled and not state["active"]:
+                self._wp(shop, "plugin", "activate", plugin.package.folder)
+            if key == "payu" and (enabled or state["active"]):
+                self._php(shop, PAYU_ACCOUNT_PHP, {
+                    **account, "pos_id": payments["payu_pos_id"], "client_id": payments["payu_client_id"],
+                    "fresh": fresh,
+                })
+                # Also for virtual products (e.g. e-books): PayU leaves them out unless told otherwise.
+                options = {plugin.main: {
+                    "sandbox": _yes_no(payments["payu_sandbox"]), "use_global": "yes",
+                    **({"enable_for_virtual": "yes"} if fresh else {}),
+                }}
+            self._php(shop, ONLINE_GATEWAYS_PHP, {
+                "prefix": plugin.prefix, "main": plugin.main, "enabled": enabled, "fresh": fresh, "options": options,
+            })
+
+    def _install_plugin(self, shop, package):
+        """Install the plugin from its checked archive, without activating it."""
+        path = f"/tmp/{package.filename}"
+        self._upload(shop, path, packages.fetch(package))
+        try:
+            self._wp(shop, "plugin", "install", path)
+        finally:
+            self._exec(container_name(shop), ["rm", "-f", path])
 
     def _switch_language(self, shop):
         language = shop.config.language

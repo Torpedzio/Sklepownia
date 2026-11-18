@@ -129,6 +129,14 @@ def test_steps_tick_off_from_the_settings(auth_client, shop, counts, django_capt
     assert not steps(data)["products"]
 
 
+def test_an_online_payment_operator_ticks_off_the_payments(auth_client, shop, counts,
+                                                           django_capture_on_commit_callbacks):
+    get_checklist(auth_client, shop, django_capture_on_commit_callbacks)
+    set_settings(shop, "payments", payu_enabled=True)
+
+    assert steps(get_checklist(auth_client, shop, django_capture_on_commit_callbacks))["payments"]
+
+
 def test_own_products_and_removed_samples_stop_the_counting(auth_client, shop, counts,
                                                             django_capture_on_commit_callbacks):
     counts.answer = ProductCount(products=3, samples=0)

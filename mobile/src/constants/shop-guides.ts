@@ -54,7 +54,7 @@ export const ShopGuides: ShopGuide[] = [
       },
       {
         title: 'Włącz płatności',
-        text: 'Na start wystarczy przelew bankowy albo płatność przy odbiorze. Szybkie płatności online (BLIK, karty) dodasz wtyczką operatora, np. Przelewy24 albo PayU.',
+        text: 'Przelew, płatność przy odbiorze, Przelewy24 i PayU włączysz w aplikacji. Tu ustawisz kolejność metod przy zamówieniu i innych operatorów płatności.',
         menu: 'WooCommerce → Ustawienia → Płatności',
         adminPath: 'admin.php?page=wc-settings&tab=checkout',
       },

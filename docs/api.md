@@ -63,7 +63,7 @@ jedna naraz. Gdy sklep nie działa albo wykonuje poprzednią operację, odpowied
 
 | Metoda i ścieżka | Opis |
 |---|---|
-| `GET shops/{id}/settings/` | `{values, sections, panel_name, synced_at, operation, busy, options}`: ustawienia w sekcjach, sekcje, które aplikacja może zmieniać na platformie sklepu, nazwa panelu, kiedy odczytano je ze sklepu, ostatnia operacja, czy sklep jest zajęty, wartości do wyboru (języki, waluty, kraje, strefy czasowe, motywy, typowe stawki VAT według kraju) |
+| `GET shops/{id}/settings/` | `{values, sections, panel_name, payment_operators, server_ip, synced_at, operation, busy, options}`: ustawienia w sekcjach, sekcje, które aplikacja może zmieniać na platformie sklepu, nazwa panelu, operatorzy płatności online, których aplikacja ustawia na tej platformie (`przelewy24`, `payu`; pusta lista dla Magento), publiczny adres IP serwera sklepu (`null`, gdy nieznany), kiedy odczytano je ze sklepu, ostatnia operacja, czy sklep jest zajęty, wartości do wyboru (języki, waluty, kraje, strefy czasowe, motywy, typowe stawki VAT według kraju) |
 | `PATCH shops/{id}/settings/` | Dowolne sekcje i pola, np. `{"shipping": {"courier_enabled": true}}`. `202` z tym samym kształtem co `GET`, gdy coś się zmienia; `200`, gdy sklep już ma te wartości. `400` z błędami `{sekcja: {pole: [komunikat]}}`, także dla sekcji, której platforma sklepu nie ma w `sections`, i motywu innej platformy. |
 | `POST shops/{id}/settings/refresh/` | Ponowny odczyt ustawień ze sklepu (np. po zmianach w panelu), `202` |
 | `POST shops/{id}/reset-admin-password/` | Nowe hasło administratora, `202` z operacją. Po zakończeniu hasło przychodzi e-mailem. |
@@ -100,7 +100,7 @@ Kroki (`key`) i kiedy są zrobione:
 
 | Krok | Zrobiony, gdy | Dotyczy |
 |---|---|---|
-| `payments` | jest włączony przelew albo płatność przy odbiorze | platform z sekcją `payments` |
+| `payments` | jest włączony przelew, płatność przy odbiorze, Przelewy24 albo PayU | platform z sekcją `payments` |
 | `shipping` | jest włączony kurier, darmowa dostawa albo odbiór osobisty | platform z sekcją `shipping` (nie PrestaShop) |
 | `products` | w sklepie jest co najmniej jeden własny produkt | każdego sklepu |
 | `sample_products` | w sklepie nie zostały produkty przykładowe | sklepu założonego z produktami przykładowymi |
@@ -114,7 +114,7 @@ Sekcje i pola ustawień (pełny opis w `/api/docs/` i w [shop_settings.py](../ba
 | `general` | `name`, `description`, `contact_email` |
 | `availability` | `is_open` (wyłączony: strona „wkrótce otwarcie”) |
 | `shopping` | `guest_checkout`, `signup_at_checkout`, `reviews`, `manage_stock`, `low_stock_threshold` |
-| `payments` | `bank_transfer_enabled`, `bank_account_name`, `bank_account_number` (sprawdzany jak IBAN), `bank_name`, `cash_on_delivery_enabled` |
+| `payments` | `bank_transfer_enabled`, `bank_account_name`, `bank_account_number` (sprawdzany jak IBAN), `bank_name`, `cash_on_delivery_enabled`; Przelewy24: `przelewy24_enabled`, `przelewy24_sandbox`, `przelewy24_merchant_id`, `przelewy24_crc_key`, `przelewy24_api_key`, `przelewy24_keys_saved`; PayU: `payu_enabled`, `payu_sandbox`, `payu_pos_id`, `payu_client_id`, `payu_md5_key`, `payu_client_secret`, `payu_keys_saved` |
 | `shipping` | `courier_enabled`, `courier_cost`, `free_shipping_enabled`, `free_shipping_min_amount`, `local_pickup_enabled` |
 | `taxes` | `enabled`, `prices_include_tax`, `standard_rate` |
 | `region` | `language`, `currency`, `country`, `timezone` |
@@ -123,6 +123,23 @@ Sekcje i pola ustawień (pełny opis w `/api/docs/` i w [shop_settings.py](../ba
 Kwoty i stawki są tekstem z dwoma miejscami po przecinku (`"15.00"`). Zmiana kraju bez podania strefy czasowej
 i stawki VAT ustawia te typowe dla nowego kraju. Reguły obejmujące kilka pól: przelew wymaga odbiorcy i numeru konta,
 a klient musi móc kupić bez konta albo założyć je przy zamówieniu.
+
+Płatności online (Przelewy24, PayU; tylko operatorzy z `payment_operators`):
+
+- Klucze (`przelewy24_crc_key`, `przelewy24_api_key`, `payu_md5_key`, `payu_client_secret`) są tylko do zapisu.
+  Trafiają do sklepu i nigdzie ich nie trzymamy. W `GET` są tylko `*_keys_saved`: czy sklep ma klucze. Puste pole
+  klucza zostawia ten, który ma sklep. Do czasu, aż worker wpisze klucze do sklepu, czekają zaszyfrowane
+  w operacji, a potem są usuwane, także po nieudanej zmianie. W `changes` operacji klucz jest zastąpiony przez
+  `"••••••••"`.
+- Włączenie operatora wymaga jego identyfikatorów i kluczy. Bez kluczy w sklepie i po zmianie trybu
+  (`*_sandbox`) klucze trzeba podać, bo klucze testowe i produkcyjne są różne. Reguły sprawdzamy tylko dla operatora,
+  którego pola są w zmianie, więc operator włączony w panelu sklepu bez kluczy nie blokuje innych zmian.
+- Format: identyfikatory to same cyfry. Klucz CRC Przelewy24 ma 16 znaków szesnastkowych, pozostałe klucze po 32.
+  Spacje są usuwane, a litery zamieniane na małe.
+- Pierwsze włączenie instaluje w sklepie oficjalną wtyczkę albo moduł operatora (kilkadziesiąt sekund).
+  Wyłączenie wyłącza tylko płatność: wtyczka i jej ustawienia zostają w sklepie.
+- Operator na platformie spoza `payment_operators` (Magento): `400` przy `{operator}_enabled`, „Płatności … włączysz
+  w panelu sklepu.”
 
 Pola formularza `POST shops/`:
 

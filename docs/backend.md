@@ -12,7 +12,8 @@ backend/
 │   ├── platforms/     __init__.py (platformy: kroki, sekcje ustawień, panel), woocommerce.py, prestashop.py, magento.py,
 │   │                  files/ (pliki instalowane w sklepach: wtyczka poczty WordPressa, moduł poczty PrestaShop)
 │   ├── provisioning/  base.py (kroki), container.py (wspólne dla kontenerów), runner.py (zakładanie),
-│   │                  operations.py (operacje na działającym sklepie), fake.py (symulacja)
+│   │                  operations.py (operacje na działającym sklepie), packages.py (wtyczki pobierane od producentów),
+│   │                  fake.py (symulacja)
 │   ├── management/    polecenia update_shop_addresses i configure_shop_mail
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
@@ -61,7 +62,7 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 
 | Model | Opis |
 |---|---|
-| `Server` | Serwer, na którym działają kontenery sklepów, z limitem `max_shops`. Migracja tworzy serwer `local`. |
+| `Server` | Serwer, na którym działają kontenery sklepów, z limitem `max_shops`. `public_ip` to adres, z którego sklepy łączą się z operatorami płatności (aplikacja pokazuje go przy Przelewy24). Migracja tworzy serwer `local`. |
 | `ShopTemplate` | Motyw do wyboru w formularzu, dla jednej platformy (`platform`). `theme` to nazwa motywu w systemie sklepu. Migracje dodają Storefront, Astrę i Kadence (WooCommerce) oraz Hummingbird i Classic (PrestaShop). |
 | `Shop` | Sklep: właściciel, nazwa, `slug` (część adresu), platforma, status z maszyną stanów, serwer. `url` i `admin_url` są liczone z ustawień; folder panelu PrestaShop jest w `admin_path`. |
 | `ShopConfig` | Wybory z formularza: branża, motyw, liczba kategorii, język, waluta, kraj, e-mail, produkty przykładowe. Zmiany z ustawień (opis, e-mail, język, waluta, kraj, motyw) są tu dopisywane. |
@@ -69,7 +70,7 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 | `ProvisioningJob` | Jedna próba założenia sklepu (status, błąd, czasy). Ponowienie tworzy nowe zadanie. |
 | `ProvisioningStep` | Krok zadania: klucz, etykieta dla użytkownika, status, błąd, czasy. |
 | `ShopSettings` | Ostatnio odczytane albo zapisane ustawienia sklepu (`values`, JSON w sekcjach) i czas odczytu ze sklepu. |
-| `ShopOperation` | Praca na działającym sklepie: zmiana ustawień, odczyt ustawień, nowe hasło, usunięcie produktów przykładowych. Zmienione pola, wynik, błąd, kto zlecił. Służy też jako historia zmian. |
+| `ShopOperation` | Praca na działającym sklepie: zmiana ustawień, odczyt ustawień, nowe hasło, usunięcie produktów przykładowych. Zmienione pola, wynik, błąd, kto zlecił. Służy też jako historia zmian. `secrets` (zaszyfrowane) trzyma klucze płatności online tylko do końca operacji. |
 | `ShopOrder` | Kopia zamówienia ze sklepu z ostatnich 90 dni: numer, status sprowadzony do pięciu wspólnych, suma, waluta, liczba sztuk, klient jako „Anna N.”, czas złożenia i ostatniej zmiany. Unikalne po `(shop, external_id)`. |
 | `ShopChecklist` | Lista startowa sklepu: `products` i `sample_products` (policzone w sklepie, `null` przed pierwszym liczeniem), `counted_at` (udane liczenie), `attempted_at` (ostatnia próba), `requested_at` (zlecone przy otwarciu listy), `hidden_at` (właściciel ukrył listę). Kroki: `ShopChecklist.Step`. |
 | `SalesSync` | Stan odczytu zamówień sklepu: `cursor` (ostatnia zmiana, od której czytać), `synced_at` (udany odczyt), `attempted_at` (ostatnia próba), `requested_at` (zlecony z aplikacji), `error`. |
@@ -126,6 +127,29 @@ Przebieg: [architektura.md](architektura.md#ustawienia-działającego-sklepu). S
 - Zmiana języka i motywu korzysta z kodu kroków zakładania; pasek boczny jest przebudowywany raz, po zmianie języka,
   motywu albo opinii (filtr ocen istnieje tylko przy włączonych opiniach).
 - Produkty przykładowe mają metadane `_sklepownia_sample`. Starsze sklepy rozpoznaje się po nazwie „Przykładowy produkt N”.
+
+Płatności online (Przelewy24, PayU) na WooCommerce i PrestaShop:
+
+- Operatorzy platformy są w `payment_operators` w `platforms.py`, a ich pola w `PaymentsSection` i `OPERATORS`
+  w [shop_settings.py](../backend/shops/shop_settings.py).
+- Klucze (`SecretField`) nie trafiają do `ShopSettings` ani do `changes` operacji. `services.update_settings` oddziela
+  je (`split_secrets`) i zapisuje zaszyfrowane w `ShopOperation.secrets`. Worker wstawia je z powrotem tuż przed
+  `apply_settings` (`reveal`), a w zapisanych ustawieniach zostawia tylko `{operator}_keys_saved` (`conceal`).
+  `_finish` czyści `secrets` po każdej operacji. `start_operation` czyści też klucze operacji starszych niż
+  `OPERATION_TIMEOUT`, które nigdy się nie skończyły.
+- Wtyczki operatorów pobiera worker z adresów producentów w wersji przypiętej w kodzie (`ONLINE_PAYMENTS`
+  w `woocommerce.py` i `prestashop.py`). Plik musi mieć zapisaną sumę SHA-256, inaczej go nie instalujemy
+  ([packages.py](../backend/shops/provisioning/packages.py)). Pobrane pliki leżą w `SHOPS_PACKAGE_CACHE`,
+  a do kontenera trafiają przez `ContainerProvisioner._upload` (archiwum tar, bez sieci w sklepie).
+  Nowa wersja wtyczki to nowy adres, wersja i suma, sprawdzone na prawdziwym sklepie.
+- WooCommerce: wtyczkę instaluje `wp plugin install` z pliku. Konto Przelewy24 zapisujemy przed włączeniem wtyczki,
+  a PayU po nim, bo PayU wpisuje swoje domyślne ustawienia przy włączeniu. Przy pierwszej instalacji włączamy tylko
+  główną bramkę operatora (`p24-online-payments`, `payustandard`), a raty i widżety kredytowe PayU są wyłączone.
+- PrestaShop: moduł rozpakowujemy do `modules/` i instalujemy przez `Module::install()` w jądrze panelu
+  (`kernel=True`). Konto Przelewy24 jest w tabelach modułu dla domyślnej waluty sklepu, PayU w konfiguracji
+  (`PAYU_MC_*` dla waluty).
+- Wyłączenie operatora wyłącza tylko płatność, wtyczka z ustawieniami zostaje. Operator, którego pól nie ma w zmianie,
+  jest nietknięty, więc nie nadpisujemy tego, co właściciel ustawił w panelu.
 
 Nowe ustawienie: pole w serializerze sekcji, wartość domyślna w `default_settings`, odczyt w `read_settings`,
 zapis w `apply_settings`, pole w `ShopSettingsValues` w aplikacji i kontrolka na ekranie ustawień.
@@ -297,7 +321,7 @@ http://localhost:8000/admin/ (konto z `createsuperuser`). Zawiera:
 - **Serwery i szablony:** motywy można wyłączać i ustawiać ich kolejność w formularzu.
 - **Sklepy z konfiguracją:** status jest tylko do odczytu. Zmienia się go przez serwisy, nie przez formularz.
 - **Zadania zakładania:** podgląd kroków i błędów.
-- **Operacje na sklepach:** historia zmian ustawień i innych operacji, ze zmienionymi polami i błędami.
+- **Operacje na sklepach:** historia zmian ustawień i innych operacji, ze zmienionymi polami i błędami (bez kluczy płatności).
 - **Wiadomości kontaktowe.**
 
 ## Testy
@@ -308,6 +332,7 @@ docker compose exec backend pytest --cov    # z pokryciem kodu (ustawienia w bac
 ```
 
 Testy (pytest-django) używają symulowanego provisionera i wykonują zadania Celery od razu (`task_always_eager`).
+Pobieranie wtyczek z sieci jest w testach zablokowane: test, który go potrzebuje, podstawia `packages._download`.
 Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od lokalnego `.env`
 (np. domena sklepów to zawsze `localhost`).
 
@@ -316,6 +341,8 @@ Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od
 | `accounts/tests/test_auth.py` | Rejestracja, logowanie, potwierdzanie e-maila, limity prób, `/me` |
 | `shops/tests/test_shops.py` | Zakładanie, limit sklepów, adresy, ponawianie, usuwanie, dostęp do panelu, opcje formularza, polecenia |
 | `shops/tests/test_settings.py` | Ustawienia sklepu: odczyt, walidacja, zapis przez operacje, kolejka jednej operacji, błędy, nowe hasło, produkty przykładowe |
+| `shops/tests/test_online_payments.py` | Płatności online w ustawieniach: klucze tylko w drodze do sklepu (szyfrowane, czyszczone, ukryte w historii), wymagane pola, nowy tryb, format, Magento |
+| `shops/tests/test_packages.py` | Pobieranie wtyczek: jedno pobranie i pamięć podręczna, odrzucenie pliku o innej sumie, uszkodzona kopia, brak sieci |
 | `shops/tests/test_woocommerce.py` | Polecenia, które `WooCommerceProvisioner` wysyła do kontenerów (WP-CLI, MariaDB, curl), na podstawionej powłoce bez Dockera |
 | `shops/tests/test_prestashop.py` | To samo dla `PrestaShopProvisioner`: instalator, skrypty PHP i ich dane, sprawdzenie sklepu i panelu |
 | `shops/tests/test_magento.py` | To samo dla `MagentoProvisioner`: `setup:install`, akcje `sklepownia:run` i ich dane, pamięć, indeksy OpenSearch |
