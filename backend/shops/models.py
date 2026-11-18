@@ -303,3 +303,34 @@ class SalesSync(models.Model):
 
     def __str__(self):
         return f"{self.shop}: {self.synced_at}"
+
+
+class ShopChecklist(models.Model):
+    """
+    The start checklist on the shop screen (shops/checklist.py): the products counted in the shop for it, and
+    whether the owner hid it. The other steps are worked out from what the platform already knows.
+    """
+
+    class Step(models.TextChoices):
+        """In the order the app shows them."""
+
+        PAYMENTS = "payments", "Płatności"
+        SHIPPING = "shipping", "Wysyłka"
+        PRODUCTS = "products", "Własne produkty"
+        SAMPLE_PRODUCTS = "sample_products", "Bez przykładowych produktów"
+        NOTIFICATIONS = "notifications", "Powiadomienia na telefonie"
+        TEST_ORDER = "test_order", "Próbne zamówienie"
+
+    shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="checklist")
+    # Products in the shop: the owner's own and the samples added at setup; None until counted.
+    products = models.PositiveIntegerField(null=True, blank=True)
+    sample_products = models.PositiveIntegerField(null=True, blank=True)
+    # The last count that worked, and the last count at all (also one that failed).
+    counted_at = models.DateTimeField(null=True, blank=True)
+    attempted_at = models.DateTimeField(null=True, blank=True)
+    # When opening the shop screen queued a count.
+    requested_at = models.DateTimeField(null=True, blank=True)
+    hidden_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.shop}: {self.products} + {self.sample_products}"

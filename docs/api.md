@@ -86,6 +86,27 @@ Statusy zamówień (`status`): `new` (złożone, czeka na płatność albo potwi
 wysłania), `completed`, `cancelled` (także zwrócone i nieudane), `unfinished` (płatność online niedokończona).
 Każda platforma ma własne statusy, mapowane w `read_orders` jej provisionera.
 
+### Lista startowa
+
+Wymaga potwierdzonego e-maila. Kroki, które nowy sklep ma zrobić przed sprzedażą. Każdy odhacza się sam, z tego, co
+platforma wie o sklepie; nie ma ręcznych ptaszków.
+
+| Metoda i ścieżka | Opis |
+|---|---|
+| `GET shops/{id}/checklist/` | `{available, hidden, steps, products, sample_products, counted_at, refreshing}`. `steps`: `[{key, done}]` w kolejności do pokazania, tylko kroki, które dotyczą sklepu. `products` i `sample_products`: własne i przykładowe produkty policzone w sklepie (także szkice), `null` przed pierwszym liczeniem. Gdy krok z produktami jest otwarty, a ostatnie liczenie było ponad 2 minuty temu, zleca liczenie; bez zamówień zleca też odczyt zamówień (jak podsumowanie sprzedaży). `refreshing: true`, gdy trwa liczenie, odczyt zamówień albo operacja na sklepie: aplikacja pyta ponownie co kilka sekund. `available: false` dla sklepu, który nie działa, i dla ukrytej listy (wtedy `steps` jest puste). |
+| `PATCH shops/{id}/checklist/` | `{hidden}`: ukrywa listę albo pokazuje ją z powrotem; odpowiedź jak w `GET` |
+
+Kroki (`key`) i kiedy są zrobione:
+
+| Krok | Zrobiony, gdy | Dotyczy |
+|---|---|---|
+| `payments` | jest włączony przelew albo płatność przy odbiorze | platform z sekcją `payments` |
+| `shipping` | jest włączony kurier, darmowa dostawa albo odbiór osobisty | platform z sekcją `shipping` (nie PrestaShop) |
+| `products` | w sklepie jest co najmniej jeden własny produkt | każdego sklepu |
+| `sample_products` | w sklepie nie zostały produkty przykładowe | sklepu założonego z produktami przykładowymi |
+| `notifications` | właściciel ma telefon zarejestrowany do powiadomień | każdego sklepu |
+| `test_order` | w kopii zamówień jest jakiekolwiek zamówienie, także anulowane | każdego sklepu |
+
 Sekcje i pola ustawień (pełny opis w `/api/docs/` i w [shop_settings.py](../backend/shops/shop_settings.py)):
 
 | Sekcja | Pola |

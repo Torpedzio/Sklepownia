@@ -20,6 +20,7 @@ import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
 import { api, ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
+import { panelLocative } from '@/lib/format';
 import { changedFields, type Drafts, type FieldErrors, formatTime, sectionErrors, toApi } from '@/lib/settings-form';
 import type { SettingsSection as Section, ShopOperation, ShopSettings, ShopSettingsValues } from '@/lib/types';
 
@@ -51,11 +52,6 @@ const MENU: (SettingsMenuItem<MenuKey> & { slug: string })[] = [
 ];
 
 const SECTION_KEYS: MenuKey[] = ['general', 'availability', 'shopping', 'payments', 'shipping', 'taxes', 'region', 'appearance'];
-
-/** "panel WordPressa" → "panelu WordPressa", for "w …". */
-function panelLocative(panelName: string | undefined) {
-  return (panelName ?? 'panel sklepu').replace(/^panel\b/, 'panelu');
-}
 
 /** The menu without the sections the shop's platform doesn't let the app change. */
 function menuFor(settings: ShopSettings | undefined) {

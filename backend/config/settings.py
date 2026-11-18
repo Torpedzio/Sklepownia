@@ -213,6 +213,7 @@ SPECTACULAR_SETTINGS = {
         'ProvisioningStepStatusEnum': 'shops.models.ProvisioningStep.Status',
         'PushDevicePlatformEnum': 'push.models.PushDevice.Platform',
         'PlatformEnum': 'shops.platforms.Platform',
+        'ChecklistStepEnum': 'shops.models.ShopChecklist.Step',
     },
 }
 

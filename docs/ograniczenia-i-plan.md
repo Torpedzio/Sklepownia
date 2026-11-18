@@ -27,6 +27,10 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   Od razu dawałby je webhook sklepu (WooCommerce `order.created`) wołający platformę. Aplikacja nie ma jeszcze
   projektu EAS ani kluczy FCM i APNs, więc powiadomienia działają dopiero po ich dodaniu i w buildzie, nie w Expo Go.
   Brakuje powiadomień o niskim stanie magazynu.
+- **Lista startowa** odhacza tylko to, co platforma widzi: ustawień robionych w panelu sklepu (np. wysyłki
+  w PrestaShop, logo, danych firmy) nie sprawdza i ich nie pokazuje. Ustawienia zmienione w panelu odhaczają się po
+  otwarciu ustawień w aplikacji, które czyta je ze sklepu. Krok powiadomień wymaga buildu aplikacji (patrz niżej).
+  Ukrytej listy nie da się jeszcze przywrócić z aplikacji (API to umie: `PATCH … {hidden: false}`).
 - **Testy na urządzeniu:** testy aplikacji działają w Jest; zachowania zależne od urządzenia (przewijanie,
   klawiatura, animacje) sprawdza się ręcznie w Expo Go.
 - **Zdjęcia w przykładowych produktach.** Produkty przykładowe nie mają zdjęć, więc nowy sklep pokazuje szare zaślepki.

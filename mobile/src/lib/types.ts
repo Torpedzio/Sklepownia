@@ -347,6 +347,29 @@ export type ShopSales = {
   recent: ShopOrder[];
 };
 
+export type ChecklistStepKey =
+  | 'payments'
+  | 'shipping'
+  | 'products'
+  | 'sample_products'
+  | 'notifications'
+  | 'test_order';
+
+/** The start checklist of a new shop; every step ticks itself off from what the platform sees in the shop. */
+export type ShopChecklist = {
+  /** The shop runs and the owner hasn't hidden the list. */
+  available: boolean;
+  hidden: boolean;
+  /** The steps that apply to the shop, in order. */
+  steps: { key: ChecklistStepKey; done: boolean }[];
+  /** The owner's own products and the samples left in the shop; null until counted. */
+  products: number | null;
+  sample_products: number | null;
+  counted_at: string | null;
+  /** Products are being counted, orders read or a change saved: ask again in a few seconds. */
+  refreshing: boolean;
+};
+
 /** What push notifications are about, and the phones that get them. */
 export type PushPreferences = {
   new_orders: boolean;

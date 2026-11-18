@@ -91,6 +91,14 @@ def sync_shop_orders(shop_id):
 
 
 @shared_task
+def count_shop_products(shop_id):
+    """For the start checklist. Imported here: the checklist uses services, which import these tasks."""
+    from . import checklist
+
+    checklist.count(shop_id)
+
+
+@shared_task
 def sync_all_shop_orders():
     """Scheduled by Celery beat (SHOP_ORDERS_SYNC_MINUTES)."""
     sales.sync_all()

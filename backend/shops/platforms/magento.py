@@ -18,7 +18,7 @@ from django.conf import settings
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..orders import Order, Status as OrderStatus, customer_label, from_timestamp
-from ..provisioning.base import ProvisioningError
+from ..provisioning.base import ProductCount, ProvisioningError
 from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_memory, container_name, db_name, mail_relay,
     memory_bytes,
@@ -76,6 +76,13 @@ READ_ORDERS_SQL = (
     " 'currency', order_currency_code, 'items', total_qty_ordered, 'first_name', customer_firstname,"
     " 'last_name', customer_lastname, 'created', UNIX_TIMESTAMP(created_at), 'modified', UNIX_TIMESTAMP(updated_at))"
     " FROM sales_order WHERE updated_at >= FROM_UNIXTIME({since}) ORDER BY updated_at, entity_id LIMIT {limit}"
+)
+# Straight from the database too, as Magento's console takes seconds to start. The samples are the products whose
+# ids the module kept at setup (sklepownia/samples/ids, see RunCommand.php) and that still exist.
+COUNT_PRODUCTS_SQL = (
+    "SELECT COUNT(*), COALESCE(SUM(JSON_CONTAINS(c.value, CAST(e.entity_id AS CHAR))), 0)"
+    " FROM catalog_product_entity e LEFT JOIN core_config_data c"
+    " ON c.path = 'sklepownia/samples/ids' AND c.scope = 'default' AND c.scope_id = 0"
 )
 # Magento's order states; "pending_payment" waits for an online payment.
 ORDER_STATES = {
@@ -330,6 +337,10 @@ class MagentoProvisioner(ContainerProvisioner):
 
     def remove_sample_products(self, shop):
         return int(self._run(shop, "remove_samples")["removed"])
+
+    def count_products(self, shop):
+        total, samples = (int(value) for value in self._sql(COUNT_PRODUCTS_SQL, database=db_name(shop)).split())
+        return ProductCount(products=total - samples, samples=samples)
 
     def update_address(self, shop):
         if self._find_container(shop) is None:

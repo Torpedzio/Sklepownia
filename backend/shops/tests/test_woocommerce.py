@@ -830,3 +830,16 @@ def test_orders_are_read_through_woocommerce_and_named_by_initial(provisioner, s
     assert orders[0].placed_at == datetime.fromtimestamp(1794000000, tz=UTC)
     assert orders[0].changed_at == datetime.fromtimestamp(1794000600, tz=UTC)
     assert orders[1].changed_at == orders[1].placed_at
+
+
+def test_products_are_counted_with_the_samples_apart(provisioner, shell, shop):
+    from shops.provisioning.base import ProductCount
+
+    shell.on_php("_sklepownia_sample", output=f"Notice\n{OUTPUT_MARKER}" + json.dumps({"products": 4, "samples": 2}))
+
+    assert provisioner.count_products(shop) == ProductCount(products=4, samples=2)
+
+    [(script, data)] = shell.php("$wpdb->posts")
+    # Older shops' samples have no mark, only the name.
+    assert data == {"name_pattern": "/^Przykładowy produkt \\d+$/u"}
+    assert "LIKE %s" in script and "'trash'" not in script

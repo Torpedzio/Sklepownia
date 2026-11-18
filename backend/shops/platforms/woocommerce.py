@@ -13,6 +13,7 @@ from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
 from ..orders import Order, Status as OrderStatus, customer_label, from_timestamp
 from . import Platform
+from ..provisioning.base import ProductCount
 from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_env, container_name, db_name, mail_relay,
 )
@@ -213,6 +214,28 @@ foreach ($products as $product) {
     }
 }
 echo "\n%(marker)s" . $removed;
+""" % {"meta": SAMPLE_PRODUCT_META, "marker": OUTPUT_MARKER}
+
+# Counted in the database, as loading every product would be slow in a big catalogue. The samples are found like in
+# REMOVE_SAMPLE_PRODUCTS_PHP: marked, or (in older shops) named like a sample.
+COUNT_PRODUCTS_PHP = """
+global $wpdb;
+$statuses = "'publish', 'draft', 'pending', 'private', 'future'";
+$total = (int) $wpdb->get_var(
+    "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'product' AND post_status IN ($statuses)"
+);
+$candidates = $wpdb->get_results($wpdb->prepare(
+    "SELECT p.post_title, MAX(m.meta_value) AS marked FROM {$wpdb->posts} p"
+    . " LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = %%s"
+    . " WHERE p.post_type = 'product' AND p.post_status IN ($statuses)"
+    . " AND (m.meta_id IS NOT NULL OR p.post_title LIKE %%s) GROUP BY p.ID",
+    '%(meta)s', $wpdb->esc_like('Przykładowy produkt ') . '%%'
+));
+$samples = 0;
+foreach ($candidates as $row) {
+    if ($row->marked || preg_match($d['name_pattern'], $row->post_title)) { $samples++; }
+}
+echo "\\n%(marker)s" . json_encode(array('products' => $total - $samples, 'samples' => $samples));
 """ % {"meta": SAMPLE_PRODUCT_META, "marker": OUTPUT_MARKER}
 
 # Currencies written like "1 234,56 zł" rather than "$1,234.56".
@@ -592,6 +615,11 @@ class WooCommerceProvisioner(ContainerProvisioner):
     def remove_sample_products(self, shop):
         pattern = "/" + SAMPLE_PRODUCT_NAME.pattern + "/u"
         return int(self._php(shop, REMOVE_SAMPLE_PRODUCTS_PHP, {"name_pattern": pattern}))
+
+    def count_products(self, shop):
+        pattern = "/" + SAMPLE_PRODUCT_NAME.pattern + "/u"
+        counted = json.loads(self._php(shop, COUNT_PRODUCTS_PHP, {"name_pattern": pattern}))
+        return ProductCount(products=int(counted["products"]), samples=int(counted["samples"]))
 
     def read_orders(self, shop, since, limit):
         rows = json.loads(self._php(shop, READ_ORDERS_PHP, {"since": int(since.timestamp()), "limit": limit}))

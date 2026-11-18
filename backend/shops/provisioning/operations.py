@@ -4,7 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .. import shop_settings
-from ..models import ShopOperation, ShopSettings, ShopTemplate
+from ..models import ShopChecklist, ShopOperation, ShopSettings, ShopTemplate
 from . import get_provisioner
 from .base import ProvisioningError
 
@@ -39,6 +39,8 @@ def run_operation(operation_id):
             provisioner.reset_admin_password(shop)
         elif operation.kind == Kind.REMOVE_SAMPLE_PRODUCTS:
             operation.result = {"removed": provisioner.remove_sample_products(shop)}
+            # The start checklist ticks it off at once, without counting the products again.
+            ShopChecklist.objects.filter(shop=shop).update(sample_products=0)
     except Exception as exc:
         logger.exception("Shop operation %s (%s) on shop %s failed", operation.pk, operation.kind, shop.pk)
         # Raw exception text may contain internals, so the owner only sees it for known errors.

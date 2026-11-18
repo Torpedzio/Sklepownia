@@ -8,10 +8,10 @@ from django.conf import settings
 from django.utils import timezone
 
 from .. import shop_settings
-from ..models import Server, ShopCredentials, ShopSettings
+from ..models import Server, ShopChecklist, ShopCredentials, ShopSettings
 from ..orders import Order, Status
 from ..platforms import platform_info
-from .base import BaseProvisioner, ProvisioningError
+from .base import BaseProvisioner, ProductCount, ProvisioningError
 
 
 FAKE_STATUSES = (Status.NEW, Status.PROCESSING, Status.COMPLETED, Status.CANCELLED, Status.UNFINISHED)
@@ -76,6 +76,15 @@ class FakeProvisioner(BaseProvisioner):
     def remove_sample_products(self, shop):
         self._simulate("remove_sample_products")
         return 6 if shop.config.include_sample_products else 0
+
+    def count_products(self, shop):
+        """What was counted last (the samples are gone once removed); at first, the samples only."""
+        self._simulate("count_products")
+        stored = ShopChecklist.objects.filter(shop=shop).first()
+        samples = 6 if shop.config.include_sample_products else 0
+        if stored and stored.sample_products is not None:
+            samples = stored.sample_products
+        return ProductCount(products=(stored.products if stored else None) or 0, samples=samples)
 
     def read_orders(self, shop, since, limit):
         """Made-up orders, the same on every read: from 45 days before the shop was created until now."""

@@ -16,7 +16,7 @@ from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
 from ..orders import Order, customer_label, from_timestamp
 from . import Platform
-from ..provisioning.base import ProvisioningError
+from ..provisioning.base import ProductCount, ProvisioningError
 from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_name, db_name, mail_relay,
 )
@@ -267,6 +267,17 @@ Configuration::updateValue('%(samples)s', '[]');
 echo "\\n%(marker)s" . $removed;
 """ % {"samples": SAMPLE_PRODUCTS_KEY, "marker": OUTPUT_MARKER}
 
+# The samples are the products whose ids were kept at setup and that still exist.
+COUNT_PRODUCTS_PHP = """
+$samples = array_map('intval', (array) json_decode((string) Configuration::get('%(samples)s'), true));
+$db = Db::getInstance();
+$total = (int) $db->getValue('SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'product');
+$left = $samples ? (int) $db->getValue(
+    'SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'product WHERE id_product IN (' . implode(',', $samples) . ')'
+) : 0;
+echo "\\n%(marker)s" . json_encode(array('products' => $total - $left, 'samples' => $left));
+""" % {"samples": SAMPLE_PRODUCTS_KEY, "marker": OUTPUT_MARKER}
+
 # Orders straight from the database. PrestaShop stores dates in the shop's time zone (PHP's default after
 # config.inc.php), so they are turned into timestamps here. A state's flags say how far the order got; the
 # cancelled, refunded and payment error states are the ones the shop's configuration names.
@@ -481,6 +492,10 @@ class PrestaShopProvisioner(ContainerProvisioner):
 
     def remove_sample_products(self, shop):
         return int(self._php(shop, REMOVE_SAMPLE_PRODUCTS_PHP))
+
+    def count_products(self, shop):
+        counted = json.loads(self._php(shop, COUNT_PRODUCTS_PHP))
+        return ProductCount(products=int(counted["products"]), samples=int(counted["samples"]))
 
     def read_orders(self, shop, since, limit):
         rows = json.loads(self._php(shop, READ_ORDERS_PHP, {"since": int(since.timestamp()), "limit": limit}))

@@ -95,6 +95,20 @@ wejść do kontenera sklepu. Podsumowanie liczy się z kopii, więc otwiera się
 
 Usunięcie sklepu usuwa też kopię jego zamówień.
 
+## Lista startowa
+
+Ekran nowego sklepu pokazuje kroki do zrobienia przed sprzedażą
+([checklist.py](../backend/shops/checklist.py)). Każdy odhacza się sam, z tego, co platforma już ma: ustawień
+(płatności, wysyłka), kopii zamówień (próbne zamówienie) i telefonów właściciela (powiadomienia). Liczby produktów
+platforma nie zna, więc:
+
+1. Otwarcie listy (`GET /api/shops/{id}/checklist/`) zleca liczenie produktów w sklepie, gdy krok z produktami jest
+   otwarty, a ostatnie liczenie było ponad 2 minuty temu. Worker liczy własne i przykładowe produkty jednym zapytaniem
+   w bazie sklepu i zapisuje je w `ShopChecklist`.
+2. Do końca liczenia, odczytu zamówień albo zmiany ustawień odpowiedź ma `refreshing: true`, a aplikacja co 2,5 s
+   pyta ponownie. Powrót do aplikacji z panelu sklepu pobiera listę od nowa.
+3. Gdy oba kroki z produktami są zrobione, sklep nie jest już liczony. Ukryta lista nie zleca niczego.
+
 ## Powiadomienia push
 
 Aplikacja na telefonie (build, nie Expo Go) po zgodzie właściciela pobiera token Expo i zgłasza go

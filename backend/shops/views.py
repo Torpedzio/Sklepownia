@@ -9,7 +9,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from accounts.permissions import IsEmailVerified
 from billing.models import Plan
 
-from . import sales, services
+from . import checklist, sales, services
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import InvalidTransition, Shop, ShopCredentials, ShopOperation, ShopTemplate
 from .platforms import PLATFORMS, Platform, platform_info
@@ -17,9 +17,11 @@ from .shop_settings import SettingsUpdateSerializer
 from .tasks import send_admin_access_email
 from .serializers import (
     DEFAULT_CATEGORY_COUNT,
+    ChecklistUpdateSerializer,
     FormOptionsSerializer,
     ShopCreateSerializer,
     ShopAdminAccessSerializer,
+    ShopChecklistSerializer,
     ShopDetailSerializer,
     ShopOperationSerializer,
     ShopSalesSerializer,
@@ -424,6 +426,21 @@ class ShopViewSet(
         """Reads the shop's orders again now (unless that happened half a minute ago)."""
         shop = self.get_object()
         return Response(_sales_payload(shop, sales.request_refresh(shop, force=True)), status=status.HTTP_202_ACCEPTED)
+
+    @extend_schema(methods=["GET"], responses={200: ShopChecklistSerializer})
+    @extend_schema(methods=["PATCH"], request=ChecklistUpdateSerializer, responses={200: ShopChecklistSerializer})
+    @action(detail=True, methods=["get", "patch"], url_path="checklist")
+    def shop_checklist(self, request, pk=None):
+        """
+        The start checklist: what a new shop still needs before it sells, each step ticked off on its own.
+        Opening it counts the shop's products in the background when needed; then `refreshing` is true.
+        """
+        shop = self.get_object()
+        if request.method == "PATCH":
+            serializer = ChecklistUpdateSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            checklist.hide(shop, serializer.validated_data["hidden"])
+        return Response(ShopChecklistSerializer(checklist.overview(shop)).data)
 
     def _start(self, kind):
         shop = self.get_object()

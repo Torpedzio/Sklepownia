@@ -322,3 +322,14 @@ def test_orders_are_read_from_prestashop(provisioner, shell, shop):
     assert (order.external_id, order.number, order.status, order.total, order.items, order.customer) == (
         "7", "XKBKNABJK", "processing", Decimal("123.46"), 2, "Ewa W.")
     assert order.placed_at == datetime.fromtimestamp(1794000000, tz=UTC)
+
+
+def test_products_are_counted_with_the_samples_apart(provisioner, shell, shop):
+    from shops.provisioning.base import ProductCount
+
+    counted = json.dumps({"products": 0, "samples": 6})
+    shell.on_php("SKLEPOWNIA_SAMPLE_PRODUCTS", output=f"Notice\n{OUTPUT_MARKER}{counted}")
+
+    assert provisioner.count_products(shop) == ProductCount(products=0, samples=6)
+    [(script, _)] = shell.php("SKLEPOWNIA_SAMPLE_PRODUCTS")
+    assert "id_product IN" in script

@@ -2,7 +2,9 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
-from .models import ProvisioningJob, ProvisioningStep, Shop, ShopConfig, ShopOperation, ShopOrder, ShopTemplate
+from .models import (
+    ProvisioningJob, ProvisioningStep, Shop, ShopChecklist, ShopConfig, ShopOperation, ShopOrder, ShopTemplate,
+)
 from .platforms import Platform, platform_info
 from .shop_settings import SECTIONS, describe
 from .slugs import normalize_slug, slug_error
@@ -253,3 +255,28 @@ class ShopSalesSerializer(serializers.Serializer):
     daily = SalesDaySerializer(many=True, help_text="Ostatnie 30 dni, od najstarszego.")
     to_handle = SalesToHandleSerializer()
     recent = ShopOrderSerializer(many=True, help_text="Ostatnie zamówienia, od najnowszego.")
+
+
+class ChecklistStepSerializer(serializers.Serializer):
+    key = serializers.ChoiceField(choices=ShopChecklist.Step.choices)
+    done = serializers.BooleanField()
+
+
+class ShopChecklistSerializer(serializers.Serializer):
+    available = serializers.BooleanField(help_text="Lista jest do pokazania: sklep działa i właściciel jej nie ukrył.")
+    hidden = serializers.BooleanField(help_text="Właściciel ukrył listę.")
+    steps = ChecklistStepSerializer(many=True, help_text="Kroki, które dotyczą sklepu, w kolejności do pokazania.")
+    products = serializers.IntegerField(
+        allow_null=True, help_text="Własne produkty w sklepie, także szkice; null, dopóki ich nie policzono.",
+    )
+    sample_products = serializers.IntegerField(
+        allow_null=True, help_text="Przykładowe produkty, które zostały w sklepie; null, dopóki ich nie policzono.",
+    )
+    counted_at = serializers.DateTimeField(allow_null=True, help_text="Ostatnie liczenie produktów w sklepie.")
+    refreshing = serializers.BooleanField(
+        help_text="Trwa liczenie produktów, odczyt zamówień albo zmiana w sklepie: zapytaj ponownie za kilka sekund.",
+    )
+
+
+class ChecklistUpdateSerializer(serializers.Serializer):
+    hidden = serializers.BooleanField(help_text="Ukrywa listę albo pokazuje ją z powrotem.")

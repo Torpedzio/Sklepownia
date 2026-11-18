@@ -6,6 +6,7 @@ import { backArrowOptions } from '@/components/back-link';
 import { Page } from '@/components/page';
 import { Receipt, type ReceiptRow } from '@/components/receipt';
 import { SalesSummary } from '@/components/sales-summary';
+import { ShopChecklist } from '@/components/shop-checklist';
 import { ShopGuidesPanel } from '@/components/shop-guides';
 import { missingForSales, ShopOverview } from '@/components/shop-overview';
 import { TestBadge } from '@/components/shop-sign';
@@ -18,6 +19,7 @@ import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
+import { panelLocative, panelTitle } from '@/lib/format';
 import type { ShopDetail, ShopSettings, ShopStatus } from '@/lib/types';
 
 const IN_PROGRESS = ['pending', 'provisioning'];
@@ -148,13 +150,13 @@ export default function ShopScreen() {
               ? 'Klienci widzą stronę „Wkrótce otwarcie”. Otworzysz sklep w ustawieniach, gdy będzie gotowy.'
               : missing.length
                 ? `Zanim ogłosisz sklep, ustaw ${missing.join(' i ')}. Bez tego klienci nie złożą zamówienia.`
-                : `Klienci mogą już kupować. Produkty dodasz w ${shop.panel_name.replace(/^panel\b/, 'panelu')}, a resztę zmienisz w ustawieniach.`}
+                : `Klienci mogą już kupować. Produkty dodasz w ${panelLocative(shop.panel_name)}, a resztę zmienisz w ustawieniach.`}
           </ThemedText>
           <View style={styles.actions}>
             <Button title="Otwórz sklep" icon="external" onPress={() => Linking.openURL(shop.url)} />
             <Button title="Ustawienia sklepu" icon="filter" variant="secondary" onPress={() => openSettings()} />
             <Button
-              title={shop.panel_name.charAt(0).toUpperCase() + shop.panel_name.slice(1)}
+              title={panelTitle(shop.panel_name)}
               icon="admin"
               variant="secondary"
               onPress={() => openSettings('reczne')}
@@ -162,6 +164,8 @@ export default function ShopScreen() {
           </View>
         </View>
       ) : null}
+
+      {active ? <ShopChecklist shop={shop} onOpenSettings={openSettings} /> : null}
 
       {active ? <SalesSummary shopId={shop.id} /> : null}
 

@@ -8,7 +8,7 @@ import { ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
 import type { ShopDetail } from '@/lib/types';
 import { mockApi, type Routes } from '@/testing/api';
-import { shopDetail, shopSales, shopSettings } from '@/testing/fixtures';
+import { shopChecklist, shopDetail, shopSales, shopSettings } from '@/testing/fixtures';
 
 jest.mock('expo-router', () => require('@/testing/router'));
 jest.mock('@/lib/api', () => ({ ...jest.requireActual('@/lib/api'), api: jest.fn() }));
@@ -66,6 +66,18 @@ test('the buttons open the shop, its settings and the WordPress panel', async ()
   expect(router.push).toHaveBeenCalledWith({
     pathname: '/shops/[id]/settings',
     params: { id: '7', section: 'reczne' },
+  });
+});
+
+test('a running shop shows its start checklist, which opens the settings it needs', async () => {
+  await open(shopDetail(), { 'GET /shops/7/settings/': shopSettings(), 'GET /shops/7/checklist/': shopChecklist() });
+
+  expect(await screen.findByText('Lista startowa')).toBeTruthy();
+  await fireEvent.press(screen.getAllByRole('button', { name: 'Ustaw płatności' }).at(-1)!);
+
+  expect(router.push).toHaveBeenCalledWith({
+    pathname: '/shops/[id]/settings',
+    params: { id: '7', section: 'platnosci' },
   });
 });
 

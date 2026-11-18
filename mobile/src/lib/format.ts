@@ -31,3 +31,13 @@ export function formatShortDay(day: string) {
 export function formatDay(day: string) {
   return parseDay(day).toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'long' });
 }
+
+/** "panel WordPressa" → "panelu WordPressa", for "w …". */
+export function panelLocative(panelName: string | undefined) {
+  return (panelName ?? 'panel sklepu').replace(/^panel\b/, 'panelu');
+}
+
+/** "panel WordPressa" → "Panel WordPressa", for a button. */
+export function panelTitle(panelName: string) {
+  return panelName.charAt(0).toUpperCase() + panelName.slice(1);
+}

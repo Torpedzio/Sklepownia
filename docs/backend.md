@@ -18,6 +18,7 @@ backend/
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
 │   ├── orders.py      zamówienie odczytane ze sklepu (Order), wspólne dla platform
 │   ├── sales.py       kopia zamówień ze sklepów i podsumowanie sprzedaży dla aplikacji
+│   ├── checklist.py   lista startowa nowego sklepu: kroki odhaczane same i liczenie produktów
 │   ├── choices.py     branże, języki, waluty, kraje, zakres liczby kategorii
 │   ├── fields.py      EncryptedTextField (szyfrowanie Fernet)
 │   ├── services.py    create_shop, retry_shop, delete_shop, get_settings, update_settings, start_operation
@@ -70,6 +71,7 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 | `ShopSettings` | Ostatnio odczytane albo zapisane ustawienia sklepu (`values`, JSON w sekcjach) i czas odczytu ze sklepu. |
 | `ShopOperation` | Praca na działającym sklepie: zmiana ustawień, odczyt ustawień, nowe hasło, usunięcie produktów przykładowych. Zmienione pola, wynik, błąd, kto zlecił. Służy też jako historia zmian. |
 | `ShopOrder` | Kopia zamówienia ze sklepu z ostatnich 90 dni: numer, status sprowadzony do pięciu wspólnych, suma, waluta, liczba sztuk, klient jako „Anna N.”, czas złożenia i ostatniej zmiany. Unikalne po `(shop, external_id)`. |
+| `ShopChecklist` | Lista startowa sklepu: `products` i `sample_products` (policzone w sklepie, `null` przed pierwszym liczeniem), `counted_at` (udane liczenie), `attempted_at` (ostatnia próba), `requested_at` (zlecone przy otwarciu listy), `hidden_at` (właściciel ukrył listę). Kroki: `ShopChecklist.Step`. |
 | `SalesSync` | Stan odczytu zamówień sklepu: `cursor` (ostatnia zmiana, od której czytać), `synced_at` (udany odczyt), `attempted_at` (ostatnia próba), `requested_at` (zlecony z aplikacji), `error`. |
 
 `slug` musi być unikalny tylko wśród sklepów, które nie są usunięte (ograniczenie `unique_slug_for_live_shops`).
@@ -157,6 +159,24 @@ Przebieg: [architektura.md](architektura.md#sprzedaż-w-aplikacji). Pola odpowie
   Statusy platform są mapowane na `new`, `processing`, `completed`, `cancelled`, `unfinished`; nieznane trafiają do
   `new`. Symulacja (`FakeProvisioner`) daje powtarzalne zamówienia, wyliczone z `pk` sklepu.
 
+### Lista startowa
+
+Pola odpowiedzi i kroki: [api.md](api.md#lista-startowa).
+
+- Kroki wynikają z tego, co platforma już ma: ustawień zapisanych w `ShopSettings` (płatności, wysyłka), kopii
+  zamówień (`ShopOrder`) i telefonów właściciela (`PushDevice`). Brakuje tylko liczby produktów, więc worker liczy je
+  w sklepie (`checklist.count`) i zapisuje w `ShopChecklist` razem z tym, czy właściciel ukrył listę.
+- Liczenie zleca otwarcie listy, gdy krok z produktami jest otwarty, a ostatnia próba była ponad 2 minuty temu (jak
+  w sprzedaży: nieudana próba też się liczy, nic nie jest zlecane dwa razy). Gdy oba kroki z produktami są zrobione,
+  sklep nie jest już liczony. Usunięcie produktów przykładowych (operacja) od razu zeruje ich liczbę.
+- `count_products(shop)` w provisionerze platformy zwraca `ProductCount(products, samples)`, produkty w każdym stanie
+  poza usuniętymi. WooCommerce: SQL przez `$wpdb` w `wp eval`; przykładowe to oznaczone `_sklepownia_sample` albo
+  (starsze sklepy) nazwane „Przykładowy produkt N”. PrestaShop: SQL przez `Db`, przykładowe to identyfikatory
+  z `SKLEPOWNIA_SAMPLE_PRODUCTS`. Magento: SQL na `catalog_product_entity`, przykładowe z `sklepownia/samples/ids`,
+  bez uruchamiania konsoli Magento.
+- Kroki zależą od platformy (sekcje ustawień w `platforms/__init__.py`) i od tego, czy sklep dostał produkty
+  przykładowe.
+
 ### Kategorie
 
 [categories.py](../backend/shops/categories.py) zwraca nazwy kategorii dla branży i liczby kategorii (1–20).
@@ -243,7 +263,8 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 | `shops.tasks.run_shop_operation` | Zmiana i odczyt ustawień, nowe hasło, usunięcie produktów przykładowych | Wykonuje operację (`run_operation`) |
 | `support.tasks.notify_about_contact_message` | Wysłanie formularza kontaktowego | Przekazuje wiadomość e-mailem |
 | `shops.tasks.sync_all_shop_orders` | Co `SHOP_ORDERS_SYNC_MINUTES` minut, domyślnie 15 (Celery beat) | Zleca odczyt zamówień działających sklepów, które nie były czytane od pół interwału |
-| `shops.tasks.sync_shop_orders` | Harmonogram, otwarcie podsumowania sprzedaży, przycisk „Odśwież” | Kopiuje zmienione zamówienia sklepu (`sales.sync`) i powiadamia o nowych |
+| `shops.tasks.sync_shop_orders` | Harmonogram, otwarcie podsumowania sprzedaży albo listy startowej, przycisk „Odśwież” | Kopiuje zmienione zamówienia sklepu (`sales.sync`) i powiadamia o nowych |
+| `shops.tasks.count_shop_products` | Otwarcie listy startowej z otwartym krokiem produktów | Liczy własne i przykładowe produkty w sklepie (`checklist.count`) |
 | `push.tasks.send_push` | Nowe zamówienie, koniec zakładania sklepu, nieudana opłata, koniec planu | Wysyła powiadomienie na telefony użytkownika; ponawia, gdy Expo nie odpowiada |
 | `push.tasks.check_push_receipts` | Co 15 minut (Celery beat) | Sprawdza potwierdzenia wysłanych powiadomień, usuwa telefony bez aplikacji |
 

@@ -1,5 +1,16 @@
+from dataclasses import dataclass
+
+
 class ProvisioningError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class ProductCount:
+    """Products in the shop, in any state but deleted: the owner's own, and the samples added at setup."""
+
+    products: int
+    samples: int
 
 
 class BaseProvisioner:
@@ -63,6 +74,10 @@ class BaseProvisioner:
 
     def remove_sample_products(self, shop):
         """Delete the sample products added at provisioning. Returns how many were removed."""
+        raise NotImplementedError
+
+    def count_products(self, shop):
+        """ProductCount of the shop. Read-only: the shop is not changed."""
         raise NotImplementedError
 
     def read_orders(self, shop, since, limit):

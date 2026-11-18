@@ -404,3 +404,17 @@ def test_orders_are_read_from_magento_s_database(provisioner, shell, shop):
         ("4", "000000004", "unfinished", Decimal("10.00"), shop.config.currency, 0, ""),
     ]
     assert orders[1].changed_at == orders[1].placed_at
+
+
+def test_products_are_counted_in_magento_s_database(provisioner, shell, shop):
+    from shops.provisioning.base import ProductCount
+
+    shell.on_command("mariadb", output="9\t6\n")
+
+    assert provisioner.count_products(shop) == ProductCount(products=3, samples=6)
+
+    # Without starting Magento's console.
+    assert not shell.magento()
+    [call] = [call for call in shell.calls if call["command"][0] == "mariadb"]
+    assert call["command"][call["command"].index("-e") - 1] == f"shop_{shop.pk}"
+    assert "sklepownia/samples/ids" in call["command"][-1]

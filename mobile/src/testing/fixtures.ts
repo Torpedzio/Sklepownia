@@ -1,4 +1,12 @@
-import type { SalesDay, ShopDetail, ShopSales, ShopSettings, ShopSettingsValues } from '@/lib/types';
+import type {
+  ChecklistStepKey,
+  SalesDay,
+  ShopChecklist,
+  ShopDetail,
+  ShopSales,
+  ShopSettings,
+  ShopSettingsValues,
+} from '@/lib/types';
 
 type Overrides = { [S in keyof ShopSettingsValues]?: Partial<ShopSettingsValues[S]> };
 
@@ -151,6 +159,21 @@ export function shopSales(overrides: Partial<ShopSales> = {}): ShopSales {
       { number: '1040', status: 'completed', status_display: 'Zrealizowane', total: '200.00', currency: 'PLN',
         items: 4, customer: 'Ola W.', placed_at: '2026-11-03T17:00:00Z' },
     ],
+    ...overrides,
+  };
+}
+
+/** The start checklist of a WooCommerce shop with samples: the steps in `done` are ticked off. */
+export function shopChecklist(done: ChecklistStepKey[] = [], overrides: Partial<ShopChecklist> = {}): ShopChecklist {
+  const keys: ChecklistStepKey[] = ['payments', 'shipping', 'products', 'sample_products', 'notifications', 'test_order'];
+  return {
+    available: true,
+    hidden: false,
+    steps: keys.map((key) => ({ key, done: done.includes(key) })),
+    products: done.includes('products') ? 3 : 0,
+    sample_products: done.includes('sample_products') ? 0 : 6,
+    counted_at: '2026-11-18T13:05:00Z',
+    refreshing: false,
     ...overrides,
   };
 }
