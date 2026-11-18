@@ -39,6 +39,13 @@ MAIL_PLUGIN = Path(__file__).parent / "files" / "woocommerce" / "sklepownia-mail
 MAIL_PLUGIN_PATH = f"{WP_PATH}/wp-content/mu-plugins/sklepownia-mail.php"
 MAIL_OPTION = "sklepownia_mail"
 
+# Links to the published terms and privacy policy under every theme's footer; the pages are in DOCUMENTS_OPTION.
+DOCUMENTS_PLUGIN = Path(__file__).parent / "files" / "woocommerce" / "sklepownia-documents.php"
+DOCUMENTS_PLUGIN_PATH = f"{WP_PATH}/wp-content/mu-plugins/sklepownia-documents.php"
+DOCUMENTS_OPTION = "sklepownia_documents"
+# WordPress options naming the shop's terms (WooCommerce links them at checkout) and privacy policy pages.
+DOCUMENT_PAGE_OPTIONS = {"terms": "woocommerce_terms_page_id", "privacy": "wp_page_for_privacy_policy"}
+
 # Where the settings keep track of the shipping zone and VAT rate they manage.
 SHIPPING_ZONE_OPTION = "sklepownia_shipping_zone_id"
 TAX_RATE_OPTION = "sklepownia_tax_rate_id"
@@ -225,6 +232,39 @@ foreach (WC()->payment_gateways()->payment_gateways() as $id => $gateway) {
 """
 
 SET_OPTIONS_PHP = "foreach ($d as $name => $value) { update_option($name, $value); }"
+
+# The pages the shop names as its terms and privacy policy get the new text (WordPress's own privacy policy draft
+# included); missing ones are created. Without a user, WordPress filters the HTML as for an author, which keeps ours.
+DOCUMENTS_PHP = """
+$admins = get_users(array('role' => 'administrator', 'number' => 1, 'fields' => 'ID'));
+$ids = array();
+$urls = array();
+foreach ($d['documents'] as $document) {
+    $id = (int) get_option($document['option']);
+    $post = $id ? get_post($id) : null;
+    $page = array(
+        'post_type' => 'page',
+        'post_status' => 'publish',
+        'post_title' => $document['title'],
+        'post_name' => $document['slug'],
+        'post_content' => $document['html'],
+        'comment_status' => 'closed',
+        'ping_status' => 'closed',
+    );
+    if ($post && $post->post_type === 'page' && $post->post_status !== 'trash') {
+        $page['ID'] = $id;
+    } elseif ($admins) {
+        $page['post_author'] = (int) $admins[0];
+    }
+    $id = wp_insert_post(wp_slash($page), true);
+    if (is_wp_error($id)) { throw new Exception($id->get_error_message()); }
+    update_option($document['option'], $id);
+    $ids[$document['key']] = $id;
+    $urls[$document['key']] = get_permalink($id);
+}
+update_option('%(option)s', $ids);
+echo "\n%(marker)s" . wp_json_encode($urls);
+""" % {"option": DOCUMENTS_OPTION, "marker": OUTPUT_MARKER}
 
 RENAME_PAGES_PHP = """
 foreach ($d as $page => $title) {
@@ -823,6 +863,14 @@ class WooCommerceProvisioner(ContainerProvisioner):
             self._php(shop, ONLINE_GATEWAYS_PHP, {
                 "prefix": plugin.prefix, "main": plugin.main, "enabled": enabled, "fresh": fresh, "options": options,
             })
+
+    def publish_documents(self, shop, documents):
+        self._write_file(shop, DOCUMENTS_PLUGIN_PATH, DOCUMENTS_PLUGIN.read_text())
+        return json.loads(self._php(shop, DOCUMENTS_PHP, {"documents": [
+            {"key": document.key, "option": DOCUMENT_PAGE_OPTIONS[document.key], "title": document.title,
+             "slug": document.slug, "html": document.html}
+            for document in documents
+        ]}))
 
     def _install_plugin(self, shop, package):
         """Install the plugin from its checked archive, without activating it."""

@@ -25,11 +25,11 @@ async function open(routes: Routes, shop = shopDetail()) {
 beforeEach(() => jest.clearAllMocks());
 
 test('the next step to do is open, the done ones are ticked off', async () => {
-  const { openSettings } = await open({ [CHECKLIST]: shopChecklist(['payments', 'shipping']) });
+  const { openSettings } = await open({ [CHECKLIST]: shopChecklist(['payments', 'shipping', 'documents']) });
 
   expect(await screen.findByText('Lista startowa')).toBeTruthy();
-  expect(screen.getByText('2 z 6')).toBeTruthy();
-  expect(screen.getByRole('progressbar').props.accessibilityValue).toMatchObject({ now: 2, max: 6 });
+  expect(screen.getByText('3 z 7')).toBeTruthy();
+  expect(screen.getByRole('progressbar').props.accessibilityValue).toMatchObject({ now: 3, max: 7 });
   expect(screen.getByLabelText('Ustaw płatności: zrobione')).toBeTruthy();
   // The first step left is open, with its way to the panel.
   expect(screen.getByText(/Zdjęcia, opis i cenę dodasz w panelu WordPressa/)).toBeTruthy();
@@ -37,6 +37,15 @@ test('the next step to do is open, the done ones are ticked off', async () => {
   expect(openSettings).toHaveBeenCalledWith('reczne');
   // The others show only their title.
   expect(screen.queryByText(/Kup coś we własnym sklepie/)).toBeNull();
+});
+
+test('the terms step opens their section of the settings', async () => {
+  const { openSettings } = await open({ [CHECKLIST]: shopChecklist(['payments', 'shipping']) });
+
+  expect(await screen.findByText(/Każdy sklep w Polsce musi je mieć/)).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Przygotuj regulamin' }));
+
+  expect(openSettings).toHaveBeenCalledWith('regulamin');
 });
 
 test('tapping another step opens it instead', async () => {
@@ -55,7 +64,7 @@ test('tapping another step opens it instead', async () => {
 });
 
 test('the samples left are counted and removed from the list', async () => {
-  const done = ['payments', 'shipping', 'products'] as const;
+  const done = ['payments', 'shipping', 'documents', 'products'] as const;
   const { api } = await open({
     [CHECKLIST]: [shopChecklist([...done]), shopChecklist([...done], { refreshing: true })],
     'POST /shops/7/remove-sample-products/': { id: 3, kind: 'remove_sample_products', status: 'queued' },
@@ -72,7 +81,7 @@ test('the samples left are counted and removed from the list', async () => {
 
 test('a busy shop says why the samples cannot go now', async () => {
   await open({
-    [CHECKLIST]: shopChecklist(['payments', 'shipping', 'products']),
+    [CHECKLIST]: shopChecklist(['payments', 'shipping', 'documents', 'products']),
     'POST /shops/7/remove-sample-products/': new ApiError(409, { detail: 'Sklep zapisuje poprzednią zmianę.' }),
   });
 
@@ -95,7 +104,15 @@ test('the list can be hidden after a question', async () => {
 });
 
 test('a finished list says the shop is ready and hides without asking', async () => {
-  const all = ['payments', 'shipping', 'products', 'sample_products', 'notifications', 'test_order'] as const;
+  const all = [
+    'payments',
+    'shipping',
+    'documents',
+    'products',
+    'sample_products',
+    'notifications',
+    'test_order',
+  ] as const;
   const { api } = await open({
     [CHECKLIST]: shopChecklist([...all]),
     'PATCH /shops/7/checklist/': shopChecklist([...all], { available: false, hidden: true }),

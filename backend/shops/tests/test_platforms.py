@@ -65,7 +65,7 @@ def test_panel_waits_for_the_installation(verified_user):
 def test_settings_list_what_the_platform_supports(auth_client, presta):
     data = auth_client.get(f"/api/shops/{presta.pk}/settings/").data
 
-    assert data["sections"] == ["general", "availability", "payments", "appearance"]
+    assert data["sections"] == ["general", "availability", "payments", "appearance", "documents"]
     assert [theme["value"] for theme in data["options"]["themes"]] == ["hummingbird", "classic"]
     assert data["values"]["appearance"]["theme"] == "hummingbird"
 

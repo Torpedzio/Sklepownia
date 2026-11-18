@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
-<!-- What the platform needs inside a shop: one console command for provisioning and settings, and local pickup. -->
+<!-- What the platform needs inside a shop: one console command for provisioning and settings, local pickup and
+     a footer link to the terms. -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Module/etc/module.xsd">
     <module name="Sklepownia_Provisioning">
         <sequence>
@@ -11,6 +12,9 @@
             <module name="Magento_OfflinePayments"/>
             <module name="Magento_Tax"/>
             <module name="Magento_User"/>
+            <module name="Magento_Theme"/>
+            <module name="Magento_Cms"/>
+            <module name="Magento_CheckoutAgreements"/>
         </sequence>
     </module>
 </config>

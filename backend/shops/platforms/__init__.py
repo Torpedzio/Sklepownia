@@ -32,7 +32,9 @@ class PlatformInfo:
     setup_time: str = "około dwóch minut"
 
 
-ALL_SECTIONS = ("general", "availability", "shopping", "payments", "shipping", "taxes", "region", "appearance")
+ALL_SECTIONS = (
+    "general", "availability", "shopping", "payments", "shipping", "taxes", "region", "appearance", "documents",
+)
 
 PLATFORMS = {
     Platform.WOOCOMMERCE: PlatformInfo(
@@ -69,7 +71,7 @@ PLATFORMS = {
             ("health_check", "Końcowe sprawdzenie"),
         ],
         # Shipping, taxes, region and the shopping rules are set in the PrestaShop panel for now.
-        settings_sections=("general", "availability", "payments", "appearance"),
+        settings_sections=("general", "availability", "payments", "appearance", "documents"),
         payment_operators=("przelewy24", "payu"),
     ),
     Platform.MAGENTO: PlatformInfo(
@@ -88,7 +90,7 @@ PLATFORMS = {
         ],
         # Opening and closing the shop, the shopping rules and the theme are set in the Magento panel,
         # and so are online payments for now.
-        settings_sections=("general", "payments", "shipping", "taxes", "region"),
+        settings_sections=("general", "payments", "shipping", "taxes", "region", "documents"),
         setup_time="około minuty",
     ),
 }

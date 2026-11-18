@@ -165,6 +165,11 @@ export const Faq = [
       'Przelew i płatność przy odbiorze włączysz w aplikacji, w ustawieniach sklepu. Tam też podłączysz płatności online Przelewy24 i PayU (BLIK, szybkie przelewy, karty) w sklepie WooCommerce i PrestaShop, jeśli masz konto sprzedawcy u operatora. W sklepie Magento płatności online dodasz w panelu sklepu modułem operatora.',
   },
   {
+    question: 'Skąd wziąć regulamin i politykę prywatności?',
+    answer:
+      'Przygotujemy je w aplikacji: w ustawieniach sklepu, w sekcji Regulamin, podajesz dane sprzedawcy i zasady zwrotów, a my publikujemy oba dokumenty jako strony sklepu. Płatności i dostawy bierzemy z ustawień, więc po każdej zmianie dokumenty aktualizują się same. Wzory są zgodne z polskim prawem, ale przy nietypowej sprzedaży, np. żywności czy usług, warto pokazać je prawnikowi.',
+  },
+  {
     question: 'Czy mogę zmienić wygląd sklepu później?',
     answer:
       'Tak. Motyw sklepu WooCommerce i PrestaShop zmienisz w aplikacji, w ustawieniach sklepu. Kolory, logo i menu ustawisz w panelu sklepu, tak samo jak wygląd sklepu Magento.',

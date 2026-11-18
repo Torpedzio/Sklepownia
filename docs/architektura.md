@@ -89,6 +89,16 @@ Płatności online (Przelewy24, PayU w WooCommerce i PrestaShop) idą tą samą 
   SHA-256 zapisanymi w kodzie, i instaluje w sklepie. Z operatorem łączy się potem sam sklep, przy płatnościach
   klientów; platforma nie rozmawia z API operatorów.
 
+Regulamin i polityka prywatności też są częścią ustawień (sekcja `documents`), ale sklep ich nie podaje, tylko
+dostaje:
+
+- Platforma trzyma dane sprzedawcy i zasady zwrotów, a dokumenty pisze ze swoich wzorów i pozostałych ustawień
+  ([documents.py](../backend/shops/documents.py)).
+- Po włączeniu, a potem przy każdej zmianie, którą dokumenty opisują (np. nowa metoda płatności), worker w tej samej
+  operacji publikuje je jako strony sklepu i podpina tam, gdzie platforma sklepu ich szuka (akceptacja regulaminu przy
+  zamówieniu, stopka).
+- Nowa wersja wzorów trafia do sklepów operacją `publish_documents`, zlecaną poleceniem `publish_shop_documents`.
+
 ## Sprzedaż w aplikacji
 
 Zamówienia zostają w sklepie, a platforma trzyma ich kopię z ostatnich 90 dni (`ShopOrder`), bo tylko worker może
@@ -107,7 +117,7 @@ Usunięcie sklepu usuwa też kopię jego zamówień.
 
 Ekran nowego sklepu pokazuje kroki do zrobienia przed sprzedażą
 ([checklist.py](../backend/shops/checklist.py)). Każdy odhacza się sam, z tego, co platforma już ma: ustawień
-(płatności, wysyłka), kopii zamówień (próbne zamówienie) i telefonów właściciela (powiadomienia). Liczby produktów
+(płatności, wysyłka, regulamin), kopii zamówień (próbne zamówienie) i telefonów właściciela (powiadomienia). Liczby produktów
 platforma nie zna, więc:
 
 1. Otwarcie listy (`GET /api/shops/{id}/checklist/`) zleca liczenie produktów w sklepie, gdy krok z produktami jest

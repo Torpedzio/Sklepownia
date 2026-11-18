@@ -65,8 +65,8 @@ export const ShopGuides: ShopGuide[] = [
         adminPath: 'admin.php?page=wc-settings&tab=shipping',
       },
       {
-        title: 'Dodaj regulamin i politykę prywatności',
-        text: 'Sklep w Polsce potrzebuje regulaminu z informacją o 14-dniowym prawie odstąpienia od umowy i polityki prywatności (RODO). Utwórz je jako strony, a regulamin wskaż w ustawieniach zaawansowanych. Najlepiej skonsultuj treść z prawnikiem.',
+        title: 'Sprawdź regulamin i politykę prywatności',
+        text: 'Oba dokumenty przygotujesz w aplikacji, w ustawieniach sklepu w sekcji Regulamin. Jeśli masz własne strony od prawnika, wskaż tu stronę regulaminu, a politykę prywatności w Ustawieniach → Prywatność.',
         menu: 'WooCommerce → Ustawienia → Zaawansowane',
         adminPath: 'admin.php?page=wc-settings&tab=advanced',
       },

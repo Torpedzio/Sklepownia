@@ -12,7 +12,7 @@ from shops.provisioning.base import ProductCount, ProvisioningError
 pytestmark = pytest.mark.django_db
 
 COUNT_PRODUCTS = "shops.provisioning.fake.FakeProvisioner.count_products"
-ALL_STEPS = ["payments", "shipping", "products", "sample_products", "notifications", "test_order"]
+ALL_STEPS = ["payments", "shipping", "documents", "products", "sample_products", "notifications", "test_order"]
 
 
 @pytest.fixture(autouse=True)
@@ -243,7 +243,7 @@ def test_only_the_steps_the_platform_and_the_shop_have(new_shop, auth_client, co
     data = get_checklist(auth_client, prestashop, django_capture_on_commit_callbacks)
 
     # PrestaShop's shipping is set in its panel, and this shop got no samples.
-    assert [step["key"] for step in data["steps"]] == ["payments", "products", "notifications", "test_order"]
+    assert [step["key"] for step in data["steps"]] == ["payments", "documents", "products", "notifications", "test_order"]
 
 
 def test_hiding_the_list_stops_the_counting_until_it_is_shown_again(auth_client, shop, counts,

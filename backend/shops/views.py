@@ -9,15 +9,17 @@ from rest_framework.throttling import ScopedRateThrottle
 from accounts.permissions import IsEmailVerified
 from billing.models import Plan
 
-from . import checklist, sales, services
+from . import checklist, documents, sales, services, shop_settings
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import InvalidTransition, Shop, ShopCredentials, ShopOperation, ShopTemplate
 from .platforms import PLATFORMS, Platform, platform_info
-from .shop_settings import SettingsUpdateSerializer
+from .shop_settings import DocumentsSection, SellerRegister, SettingsUpdateSerializer
 from .tasks import send_admin_access_email
 from .serializers import (
     DEFAULT_CATEGORY_COUNT,
     ChecklistUpdateSerializer,
+    DocumentsPreviewRequestSerializer,
+    DocumentsPreviewSerializer,
     FormOptionsSerializer,
     ShopCreateSerializer,
     ShopAdminAccessSerializer,
@@ -139,6 +141,7 @@ def _settings_payload(shop):
                 for template in ShopTemplate.objects.filter(is_active=True, platform=shop.platform)
             ],
             "vat_rates": VAT_RATES,
+            "registers": [{"value": value, "label": label} for value, label in SellerRegister.CHOICES],
         },
     }
 
@@ -359,6 +362,31 @@ class ShopViewSet(
             return _operation_conflict(exc)
         code = status.HTTP_200_OK if operation is None else status.HTTP_202_ACCEPTED
         return Response(_settings_payload(shop), status=code)
+
+    @extend_schema(
+        request=DocumentsPreviewRequestSerializer,
+        responses={
+            200: DocumentsPreviewSerializer,
+            400: OpenApiResponse(description="Brakuje danych sprzedawcy albo są błędne: {documents: {pole: [...]}}."),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="documents/preview")
+    def preview_documents(self, request, pk=None):
+        """The terms and privacy policy as the shop would get them with the given seller's details. Changes nothing."""
+        shop = self.get_object()
+        section = DocumentsSection(data=request.data.get("documents") or {}, partial=True)
+        if not section.is_valid():
+            return Response({"documents": section.errors}, status=status.HTTP_400_BAD_REQUEST)
+        values = shop_settings.merge(
+            services.get_settings(shop).values, shop_settings.normalize({"documents": section.validated_data}),
+        )
+        errors = shop_settings.documents_errors(values)
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+        rendered = documents.render(values, shop.url)
+        return Response({"documents": [
+            {"key": document.key, "title": document.title, "blocks": document.blocks} for document in rendered
+        ]})
 
     @extend_schema(
         request=None,

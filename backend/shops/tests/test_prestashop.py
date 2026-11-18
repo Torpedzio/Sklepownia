@@ -432,3 +432,28 @@ def test_an_operator_the_shop_never_had_stays_away_when_off(provisioner, shell, 
     assert archives == []
     assert shell.php("przelewy24_credentials_config WHERE") == []
     assert shell.php("sklepownia_module($d['name']") == []
+
+
+# --- terms and privacy policy ---
+
+
+def test_documents_take_the_terms_page_and_a_privacy_page_ticked_at_checkout(provisioner, shell, shop):
+    from shops.documents import Document
+    from shops.platforms.prestashop import NUMBERED_LIST
+
+    urls = {"terms": "http://sklep.localhost:8080/content/3-regulamin",
+            "privacy": "http://sklep.localhost:8080/content/6"}
+    shell.on_php("PS_CONDITIONS_CMS_ID", output=f"\n{OUTPUT_MARKER}{json.dumps(urls)}")
+
+    assert provisioner.publish_documents(shop, [
+        Document(key="terms", title="Regulamin sklepu", slug="regulamin", html="<ol>\n<li>Regulamin</li>\n</ol>"),
+        Document(key="privacy", title="Polityka prywatności", slug="polityka-prywatnosci", html="<p>Dane</p>"),
+    ]) == urls
+
+    [(script, data)] = shell.php("PS_CONDITIONS_CMS_ID")
+    # Numbered, as the default theme hides the numbers of lists.
+    assert data["documents"][0] == {"key": "terms", "title": "Regulamin sklepu", "slug": "regulamin",
+                                    "html": f"{NUMBERED_LIST}\n<li>Regulamin</li>\n</ol>"}
+    assert "Configuration::updateValue('PS_CONDITIONS', 1);" in script
+    assert "SKLEPOWNIA_PRIVACY_CMS_ID" in script
+    assert "Tools::clearSmartyCache();" in script

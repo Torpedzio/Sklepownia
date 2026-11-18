@@ -14,7 +14,10 @@ from docker.errors import NotFound
 from accounts.models import User
 from shops.models import Server, Shop, ShopConfig, ShopCredentials, ShopTemplate
 from shops.provisioning.base import ProvisioningError
+from shops.documents import Document
 from shops.platforms.woocommerce import (
+    DOCUMENTS_PLUGIN,
+    DOCUMENTS_PLUGIN_PATH,
     MAIL_PLUGIN,
     MAIL_PLUGIN_PATH,
     OUTPUT_MARKER,
@@ -991,3 +994,42 @@ def test_operators_untouched_by_the_change_are_left_alone(provisioner, shell, sh
 
     assert shell.php("get_plugins()") == []
     assert archives == []
+
+
+# --- terms and privacy policy ---
+
+DOCUMENTS = [
+    Document(key="terms", title="Regulamin sklepu", slug="regulamin", html="<h2>§ 1</h2>\n<p>Treść</p>"),
+    Document(key="privacy", title="Polityka prywatności", slug="polityka-prywatnosci", html="<p>Dane</p>"),
+]
+
+
+def test_documents_become_the_pages_woocommerce_and_wordpress_name_as_terms_and_privacy_policy(
+    provisioner, shell, shop,
+):
+    urls = {"terms": "http://palarnia.localhost:8080/regulamin/",
+            "privacy": "http://palarnia.localhost:8080/polityka-prywatnosci/"}
+    shell.on_php("wp_insert_post", output=f"\n{OUTPUT_MARKER}{json.dumps(urls)}")
+
+    assert provisioner.publish_documents(shop, DOCUMENTS) == urls
+
+    [(script, data)] = shell.php("wp_insert_post")
+    assert data == {"documents": [
+        {"key": "terms", "option": "woocommerce_terms_page_id", "title": "Regulamin sklepu", "slug": "regulamin",
+         "html": "<h2>§ 1</h2>\n<p>Treść</p>"},
+        {"key": "privacy", "option": "wp_page_for_privacy_policy", "title": "Polityka prywatności",
+         "slug": "polityka-prywatnosci", "html": "<p>Dane</p>"},
+    ]}
+    # The page the shop already names is updated, not duplicated; the footer links follow the option.
+    assert "$page['ID'] = $id;" in script
+    assert "update_option('sklepownia_documents', $ids);" in script
+
+
+def test_documents_bring_the_footer_links_with_them(provisioner, shell, shop):
+    shell.on_php("wp_insert_post", output=f"\n{OUTPUT_MARKER}{{}}")
+
+    provisioner.publish_documents(shop, DOCUMENTS)
+
+    [write] = [call for call in shell.calls if call["args"][:2] == ["sh", "-c"]]
+    assert write["environment"] == {"FILE": DOCUMENTS_PLUGIN_PATH, "CONTENT": DOCUMENTS_PLUGIN.read_text()}
+    assert shell.calls.index(write) < shell.position("eval")

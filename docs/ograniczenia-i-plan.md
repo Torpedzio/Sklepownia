@@ -10,8 +10,25 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   Pomysł: wtyczka „must-use” w WordPressie i jednorazowe linki logowania wydawane przez backend.
 - **Atrybuty produktów według branży** (rozmiar, kolor, materiał), żeby filtry w sklepie miały z czego filtrować.
 - **Ustawienia sklepu w aplikacji** obejmują podstawy, zakupy, płatności (przelew, przy odbiorze, Przelewy24 i PayU),
-  wysyłkę w kraju sklepu, jedną stawkę VAT, region i motyw. Brakuje logo i kolorów motywu, wysyłki za granicę oraz
-  regulaminu i polityki prywatności.
+  wysyłkę w kraju sklepu, jedną stawkę VAT, region, motyw oraz regulamin i politykę prywatności. Brakuje logo
+  i kolorów motywu oraz wysyłki za granicę.
+- **Regulamin i polityka prywatności sklepu** ([backend.md](backend.md#regulamin-i-polityka-prywatności)):
+  - wzory napisaliśmy sami według ustawy o prawach konsumenta, ustawy o świadczeniu usług drogą elektroniczną i RODO;
+    **przed udostępnieniem właścicielom musi je przejrzeć prawnik** (po poprawkach: nowe `VERSION`
+    i `publish_shop_documents`);
+  - tylko po polsku i tylko dla sklepów sprzedających z Polski, dla sprzedaży towarów; nie opisują żywności, leków,
+    usług, treści cyfrowych, subskrypcji ani sprzedaży firmom na innych zasadach;
+  - przycisk odstąpienia od umowy w sklepie, którego wymaga dyrektywa (UE) 2023/2673 (art. 11a dyrektywy
+    2011/83/UE, od 19 czerwca 2026), nie jest zrobiony; do sprawdzenia z prawnikiem, czy i jak go dodać;
+  - polityka prywatności wskazuje platformę (`INVOICE_SELLER_*`) jako podmiot przetwarzający dane klientów sklepu,
+    więc platforma potrzebuje umowy powierzenia z właścicielami (np. w regulaminie usługi). Zdanie o braku
+    przekazywania danych poza EOG zakłada hosting i poczta w EOG;
+  - opisujemy tylko płatności i dostawy ustawione w aplikacji; metody dodane w panelu sklepu (np. Tpay, paczkomaty)
+    nie trafiają do regulaminu;
+  - dokumentów nie czytamy ze sklepu: zmiany zrobione w panelu nadpisze następna publikacja, a wyłączenie dokumentów
+    z aplikacji tylko zatrzymuje aktualizacje (strony zostają);
+  - starszy regulamin nie jest archiwizowany: klient widzi tylko aktualną wersję, a e-mail z zamówieniem nie ma
+    dokumentów w załączniku (trwały nośnik).
 - **Płatności online w sklepach** (Przelewy24, PayU):
   - tylko WooCommerce i PrestaShop; w Magento właściciel instaluje moduł operatora w panelu;
   - wtyczki i moduły instalujemy w wersji przypiętej w kodzie i nie aktualizujemy ich z aplikacji (aktualizacja to

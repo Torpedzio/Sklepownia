@@ -9,7 +9,10 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
+
+from billing.validators import normalize_nip, validate_nip, validate_polish_postal_code
 
 from .choices import COUNTRY_TIMEZONES, VAT_RATES, Country, Currency, Language, Timezone
 from .models import ShopTemplate
@@ -153,6 +156,82 @@ class AppearanceSection(serializers.Serializer):
     )
 
 
+class SellerRegister(serializers.ChoiceField):
+    CHOICES = (
+        ("ceidg", "Działalność gospodarcza (CEIDG)"),
+        ("krs", "Spółka w KRS"),
+        ("unregistered", "Działalność nierejestrowana"),
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(choices=self.CHOICES, **kwargs)
+
+
+class DocumentsSection(serializers.Serializer):
+    """
+    The shop's terms of sale and privacy policy, written from our templates (shops/documents.py) and published as
+    pages in the shop. The platform keeps the seller's details; the shop gets the finished documents.
+    """
+
+    managed = serializers.BooleanField(label="Regulamin i polityka prywatności z aplikacji")
+    seller_name = serializers.CharField(label="Nazwa sprzedawcy", max_length=200, allow_blank=True)
+    register = SellerRegister(label="Forma działalności")
+    street = serializers.CharField(label="Ulica sprzedawcy", max_length=200, allow_blank=True)
+    postal_code = serializers.CharField(label="Kod pocztowy sprzedawcy", max_length=6, allow_blank=True)
+    city = serializers.CharField(label="Miejscowość sprzedawcy", max_length=100, allow_blank=True)
+    tax_id = serializers.CharField(label="NIP sprzedawcy", max_length=20, allow_blank=True)
+    regon = serializers.CharField(label="REGON sprzedawcy", max_length=20, allow_blank=True)
+    krs = serializers.CharField(label="Numer KRS sprzedawcy", max_length=20, allow_blank=True)
+    phone = serializers.CharField(label="Telefon w dokumentach", max_length=30, allow_blank=True)
+    return_days = serializers.IntegerField(label="Dni na odstąpienie od umowy", min_value=14, max_value=365)
+    free_returns = serializers.BooleanField(label="Darmowy zwrot")
+    dispatch_days = serializers.IntegerField(label="Czas wysyłki", min_value=1, max_value=30)
+    # Where the documents are in the shop and which version of our templates they follow, after publishing.
+    terms_url = serializers.CharField(read_only=True)
+    privacy_url = serializers.CharField(read_only=True)
+    version = serializers.CharField(read_only=True)
+
+    def validate_seller_name(self, value):
+        return " ".join(value.split())
+
+    def validate_postal_code(self, value):
+        value = value.strip()
+        if value:
+            _django_check(validate_polish_postal_code, value)
+        return value
+
+    def validate_tax_id(self, value):
+        if not value.strip():
+            return ""
+        _django_check(validate_nip, value)
+        return normalize_nip(value)
+
+    def validate_regon(self, value):
+        value = _digits(value, "REGON")
+        if value and len(value) not in (9, 14):
+            raise serializers.ValidationError("REGON ma 9 albo 14 cyfr.")
+        return value
+
+    def validate_krs(self, value):
+        value = _digits(value, "Numer KRS")
+        if value and len(value) != 10:
+            raise serializers.ValidationError("Numer KRS ma 10 cyfr, np. 0000123456.")
+        return value
+
+    def validate_phone(self, value):
+        value = " ".join(value.split())
+        if value and not re.fullmatch(r"\+?[\d ()-]{7,}", value):
+            raise serializers.ValidationError("Wpisz numer telefonu, np. 600 100 200.")
+        return value
+
+
+def _django_check(validator, value):
+    try:
+        validator(value)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError(exc.messages) from exc
+
+
 # Order of the sections in the app and when applying changes.
 SECTIONS = {
     "general": GeneralSection,
@@ -163,6 +242,7 @@ SECTIONS = {
     "taxes": TaxesSection,
     "region": RegionSection,
     "appearance": AppearanceSection,
+    "documents": DocumentsSection,
 }
 
 FIELD_LABELS = {
@@ -239,6 +319,35 @@ def default_settings(shop):
             "timezone": COUNTRY_TIMEZONES.get(config.country, Timezone.UTC.value),
         },
         "appearance": {"theme": config.template.slug},
+        "documents": {
+            "managed": False,
+            "register": "ceidg",
+            **_seller_defaults(shop.owner),
+            "regon": "",
+            "krs": "",
+            "phone": "",
+            "return_days": 14,
+            "free_returns": False,
+            "dispatch_days": 2,
+            "terms_url": "",
+            "privacy_url": "",
+            "version": "",
+        },
+    }
+
+
+def _seller_defaults(owner):
+    """The seller's details as the owner gave them for our invoices, a start for the documents."""
+    profile = getattr(owner, "billing_profile", None) if owner else None
+    if profile is None:
+        return {"seller_name": "", "street": "", "postal_code": "", "city": "", "tax_id": ""}
+    company = profile.kind == profile.Kind.COMPANY
+    return {
+        "seller_name": profile.company_name if company else profile.full_name,
+        "street": profile.street,
+        "postal_code": profile.postal_code,
+        "city": profile.city,
+        "tax_id": normalize_nip(profile.tax_id) if company and profile.country == Country.PL else "",
     }
 
 
@@ -304,6 +413,8 @@ class SettingsUpdateSerializer(serializers.Serializer):
         missing = _operator_errors(self.context["current"]["payments"], payments, attrs.get("payments", {}))
         if missing:
             errors["payments"] = {**errors.get("payments", {}), **missing}
+        for section, fields in _documents_errors(merged, attrs).items():
+            errors[section] = {**errors.get(section, {}), **fields}
         shopping = merged["shopping"]
         if not shopping["guest_checkout"] and not shopping["signup_at_checkout"]:
             errors["shopping"] = {
@@ -312,6 +423,33 @@ class SettingsUpdateSerializer(serializers.Serializer):
         if errors:
             raise serializers.ValidationError(errors)
         return attrs
+
+
+def _documents_errors(values, given):
+    """What the documents miss, when they are on and their details or the shop's country are being changed."""
+    if not values["documents"]["managed"]:
+        return {}
+    if "documents" in given:
+        return documents_errors(values)
+    if "country" in given.get("region", {}) and values["region"]["country"] != Country.PL:
+        return {"region": {"country": [
+            "Regulamin z aplikacji jest dla sklepów sprzedających z Polski. Najpierw wyłącz go w sekcji Regulamin.",
+        ]}}
+    return {}
+
+
+def documents_errors(values):
+    """{section: {field: [message]}} of what the documents need and don't have; also for a preview."""
+    documents = values["documents"]
+    required = ["seller_name", "street", "postal_code", "city"]
+    if documents["register"] in ("ceidg", "krs"):
+        required.append("tax_id")
+    if documents["register"] == "krs":
+        required.append("krs")
+    errors = {field: ["Potrzebne do regulaminu."] for field in required if not documents[field]}
+    if values["region"]["country"] != Country.PL:
+        errors["managed"] = ["Wzory regulaminu i polityki prywatności są na razie dla sklepów sprzedających z Polski."]
+    return {"documents": errors} if errors else {}
 
 
 def _operator_errors(current, payments, given):

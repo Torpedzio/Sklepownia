@@ -8,6 +8,7 @@ export type FieldErrors = Partial<Record<SettingsSection, Record<string, string>
 
 // Money and rates are typed by people, who may use a comma.
 const DECIMAL_FIELDS = new Set(['courier_cost', 'free_shipping_min_amount', 'standard_rate']);
+const WHOLE_NUMBER_FIELDS = new Set(['low_stock_threshold', 'return_days', 'dispatch_days']);
 
 /**
  * The edits that differ from the saved values; text fields compare as text, so "5" equals 5. Fields the settings
@@ -30,7 +31,7 @@ export function fieldList(labels: string[]) {
 export function toApi(key: string, value: string | boolean) {
   if (typeof value === 'boolean') return value;
   if (DECIMAL_FIELDS.has(key)) return value.replace(',', '.').replace(/\s/g, '');
-  if (key === 'low_stock_threshold' && /^\d+$/.test(value.trim())) return Number(value.trim());
+  if (WHOLE_NUMBER_FIELDS.has(key) && /^\d+$/.test(value.trim())) return Number(value.trim());
   return value;
 }
 

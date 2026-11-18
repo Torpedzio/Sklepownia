@@ -10,16 +10,18 @@ backend/
 ├── accounts/          użytkownicy, rejestracja, logowanie JWT, potwierdzanie e-maila
 ├── shops/             sklepy: modele, API, zakładanie (provisioning), polecenia
 │   ├── platforms/     __init__.py (platformy: kroki, sekcje ustawień, panel), woocommerce.py, prestashop.py, magento.py,
-│   │                  files/ (pliki instalowane w sklepach: wtyczka poczty WordPressa, moduł poczty PrestaShop)
+│   │                  files/ (pliki instalowane w sklepach: wtyczki poczty i stopki z regulaminem WordPressa,
+│   │                  moduł poczty PrestaShop)
 │   ├── provisioning/  base.py (kroki), container.py (wspólne dla kontenerów), runner.py (zakładanie),
 │   │                  operations.py (operacje na działającym sklepie), packages.py (wtyczki pobierane od producentów),
 │   │                  fake.py (symulacja)
-│   ├── management/    polecenia update_shop_addresses i configure_shop_mail
+│   ├── management/    polecenia update_shop_addresses, configure_shop_mail i publish_shop_documents
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
 │   ├── orders.py      zamówienie odczytane ze sklepu (Order), wspólne dla platform
 │   ├── sales.py       kopia zamówień ze sklepów i podsumowanie sprzedaży dla aplikacji
 │   ├── checklist.py   lista startowa nowego sklepu: kroki odhaczane same i liczenie produktów
+│   ├── documents.py   regulamin i polityka prywatności sklepu ze wzorów (templates/shops/documents/), wersja wzorów
 │   ├── choices.py     branże, języki, waluty, kraje, zakres liczby kategorii
 │   ├── fields.py      EncryptedTextField (szyfrowanie Fernet)
 │   ├── services.py    create_shop, retry_shop, delete_shop, get_settings, update_settings, start_operation
@@ -165,6 +167,37 @@ w `DOCKER_PROVISIONERS`, motywy migracją danych, metoda `step_<klucz>` symulacj
 Istniejące sklepy mają kroki zapisane w bazie. Nowy krok pojawi się u nich dopiero przy ponowieniu.
 Zmianę etykiet istniejących kroków trzeba przenieść migracją danych (przykład: `0005_plain_step_labels`).
 
+### Regulamin i polityka prywatności
+
+Pola i zasady: [api.md](api.md#ustawienia-i-operacje-na-działającym-sklepie).
+
+- Wzory to szablony Django w [templates/shops/documents/](../backend/shops/templates/shops/documents/):
+  `terms.html` (regulamin z wzorem formularza odstąpienia) i `privacy.html` (informacje z art. 13 RODO). Używają
+  tylko `h2`, `p`, `ol`, `ul`, `li`, `strong`, żeby wyglądały dobrze w każdym motywie każdej platformy.
+  [documents.py](../backend/shops/documents.py) wypełnia je ustawieniami (`render`) i zamienia na bloki tekstu dla
+  podglądu w aplikacji (`blocks`). Numery paragrafów regulaminu liczy `_context`, bo paragraf o opiniach jest tylko
+  przy włączonych opiniach.
+- Wzory są wersją do sprawdzenia przez prawnika. Po każdej zmianie treści podnieś `VERSION` w `documents.py`
+  i uruchom `publish_shop_documents`, żeby sklepy z dokumentami z aplikacji dostały nowy tekst.
+- Publikuje worker: `_update_settings` w [operations.py](../backend/shops/provisioning/operations.py) po zapisaniu
+  zmian w sklepie woła `publish_documents`, gdy dokumenty są włączone, a zmiana dotyczy sekcji opisanych
+  w dokumentach (`documents.INPUT_SECTIONS`). Adresy stron i wersja wzorów trafiają do sekcji `documents`
+  zapisanych ustawień. Sekcja nie jest czytana ze sklepu, więc odczyt ustawień jej nie nadpisuje.
+- `publish_documents(shop, documents)` w provisionerze platformy zwraca `{key: adres strony}`:
+  - WooCommerce: strony WordPressa wskazane w `woocommerce_terms_page_id` (regulamin, pole akceptacji przy
+    zamówieniu) i `wp_page_for_privacy_policy` (polityka prywatności WordPressa i WooCommerce). Istniejąca strona
+    jest nadpisywana, brakująca tworzona. Linki w stopce każdego motywu dodaje wtyczka mu-plugin
+    `sklepownia-documents.php` (`files/woocommerce/`), wgrywana przy każdej publikacji.
+  - PrestaShop: strony CMS. Regulamin to strona z `PS_CONDITIONS_CMS_ID` (pole akceptacji przy zamówieniu,
+    `PS_CONDITIONS`), polityka prywatności to strona z `SKLEPOWNIA_PRIVACY_CMS_ID`, dopisana do bloku linków
+    `ps_linklist` z regulaminem (stopka).
+  - Magento: akcja `documents` modułu `Sklepownia_Provisioning`. Strony CMS `regulamin` i
+    `privacy-policy-cookie-restriction-mode` (link w stopce Luma), zgoda „Akceptuję regulamin sklepu” przy
+    zamówieniu (`checkout/options/enable_agreements`) i link „Regulamin” w stopce z layoutu modułu
+    (`sklepownia/documents/terms_link`). Kontener ze starszego obrazu jest najpierw odtwarzany
+    (`step_start_container`).
+- Podgląd (`POST shops/{id}/documents/preview/`) liczy dokumenty w procesie WWW, bez workera i bez sklepu.
+
 ### Sprzedaż
 
 Przebieg: [architektura.md](architektura.md#sprzedaż-w-aplikacji). Pola odpowiedzi: [api.md](api.md#sprzedaż).
@@ -303,6 +336,7 @@ docker compose exec backend python manage.py migrate
 docker compose exec backend python manage.py createsuperuser
 docker compose exec worker  python manage.py update_shop_addresses   # po zmianie SHOPS_BASE_DOMAIN
 docker compose exec worker  python manage.py configure_shop_mail     # poczta w sklepach sprzed niej albo po zmianie SHOPS_SMTP_*
+docker compose exec backend python manage.py publish_shop_documents  # nowa wersja wzorów regulaminu w sklepach
 docker compose exec backend python manage.py spectacular --file schema.yml   # schemat OpenAPI do pliku
 ```
 
@@ -312,6 +346,11 @@ Dla każdego działającego sklepu odtwarza kontener z nową regułą Traefika i
 `configure_shop_mail [slug…]` ustawia w działających sklepach wysyłkę przez przekaźnik poczty
 ([poczta sklepów](../infra/shops/README.md#poczta-sklepów)). Nowe sklepy dostają ją przy zakładaniu.
 Kontener ze starszego obrazu jest najpierw odtwarzany. Zawieszone sklepy są pomijane, bo ich kontenery stoją.
+
+`publish_shop_documents [slug…] [--all]` zleca operację `publish_documents` w działających sklepach, które mają
+regulamin z aplikacji w starszej wersji wzorów niż `documents.VERSION` (z `--all`: wszystkich takich sklepach).
+Publikuje worker, więc polecenie działa w każdym kontenerze backendu. Sklep zajęty inną operacją jest pomijany
+z komunikatem; wystarczy uruchomić polecenie jeszcze raz.
 
 ## Panel admina
 
@@ -341,6 +380,7 @@ Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od
 | `accounts/tests/test_auth.py` | Rejestracja, logowanie, potwierdzanie e-maila, limity prób, `/me` |
 | `shops/tests/test_shops.py` | Zakładanie, limit sklepów, adresy, ponawianie, usuwanie, dostęp do panelu, opcje formularza, polecenia |
 | `shops/tests/test_settings.py` | Ustawienia sklepu: odczyt, walidacja, zapis przez operacje, kolejka jednej operacji, błędy, nowe hasło, produkty przykładowe |
+| `shops/tests/test_documents.py` | Regulamin i polityka prywatności: dane z faktur, publikacja przy włączeniu i po zmianach, wymagane pola i formaty, tylko Polska, podgląd, treść wzorów, polecenie `publish_shop_documents`, krok listy startowej |
 | `shops/tests/test_online_payments.py` | Płatności online w ustawieniach: klucze tylko w drodze do sklepu (szyfrowane, czyszczone, ukryte w historii), wymagane pola, nowy tryb, format, Magento |
 | `shops/tests/test_packages.py` | Pobieranie wtyczek: jedno pobranie i pamięć podręczna, odrzucenie pliku o innej sumie, uszkodzona kopia, brak sieci |
 | `shops/tests/test_woocommerce.py` | Polecenia, które `WooCommerceProvisioner` wysyła do kontenerów (WP-CLI, MariaDB, curl), na podstawionej powłoce bez Dockera |

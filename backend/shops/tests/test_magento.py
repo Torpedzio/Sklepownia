@@ -418,3 +418,31 @@ def test_products_are_counted_in_magento_s_database(provisioner, shell, shop):
     [call] = [call for call in shell.calls if call["command"][0] == "mariadb"]
     assert call["command"][call["command"].index("-e") - 1] == f"shop_{shop.pk}"
     assert "sklepownia/samples/ids" in call["command"][-1]
+
+
+# --- terms and privacy policy ---
+
+
+def test_documents_become_cms_pages_and_the_checkout_agreement(provisioner, shell, shop, monkeypatch):
+    from shops.documents import Document
+
+    started = []
+    monkeypatch.setattr(MagentoProvisioner, "step_start_container", lambda self, shop: started.append(shop.pk))
+    shell.on_run("documents", {"pages": {"terms": "regulamin", "privacy": "privacy-policy-cookie-restriction-mode"}})
+
+    urls = provisioner.publish_documents(shop, [
+        Document(key="terms", title="Regulamin sklepu", slug="regulamin", html="<p>Regulamin</p>"),
+        Document(key="privacy", title="Polityka prywatności", slug="polityka-prywatnosci", html="<p>Dane</p>"),
+    ])
+
+    # A container of an older image doesn't have the action yet.
+    assert started == [shop.pk]
+    assert urls == {"terms": f"{shop.url}/regulamin", "privacy": f"{shop.url}/privacy-policy-cookie-restriction-mode"}
+    [data] = shell.runs("documents")
+    assert data == {
+        "documents": [
+            {"key": "terms", "title": "Regulamin sklepu", "slug": "regulamin", "html": "<p>Regulamin</p>"},
+            {"key": "privacy", "title": "Polityka prywatności", "slug": "polityka-prywatnosci", "html": "<p>Dane</p>"},
+        ],
+        "checkbox": "Akceptuję regulamin sklepu",
+    }

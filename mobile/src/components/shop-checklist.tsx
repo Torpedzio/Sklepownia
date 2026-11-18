@@ -123,6 +123,12 @@ export function ShopChecklist({ shop, onOpenSettings }: Props) {
       description: 'Kurier, darmowa dostawa od wybranej kwoty albo odbiór osobisty. Klient wybierze jedną z nich.',
       action: { title: 'Ustaw wysyłkę', icon: 'truck', onPress: () => onOpenSettings('wysylka') },
     },
+    documents: {
+      title: 'Dodaj regulamin i politykę prywatności',
+      description:
+        'Każdy sklep w Polsce musi je mieć. Napiszemy je z danych sklepu i opublikujemy, a po zmianach zaktualizujemy.',
+      action: { title: 'Przygotuj regulamin', icon: 'document', onPress: () => onOpenSettings('regulamin') },
+    },
     products: {
       title: 'Dodaj pierwszy produkt',
       description:

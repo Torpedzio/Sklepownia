@@ -112,6 +112,8 @@ def _steps(shop, checklist):
         steps[Step.SHIPPING] = (
             shipping["courier_enabled"] or shipping["free_shipping_enabled"] or shipping["local_pickup_enabled"]
         )
+    if "documents" in sections:
+        steps[Step.DOCUMENTS] = bool(values["documents"]["managed"] and values["documents"]["terms_url"])
     steps[Step.PRODUCTS] = bool(checklist.products)
     if _has_samples(shop, checklist):
         steps[Step.SAMPLE_PRODUCTS] = checklist.sample_products == 0

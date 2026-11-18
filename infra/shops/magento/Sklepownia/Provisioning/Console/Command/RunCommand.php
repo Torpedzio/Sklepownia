@@ -11,6 +11,7 @@ use Magento\Catalog\Model\Product\Visibility;
 use Magento\Catalog\Model\ProductFactory;
 use Magento\Catalog\Model\ResourceModel\Category\CollectionFactory as CategoryCollectionFactory;
 use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory as ProductCollectionFactory;
+use Magento\CheckoutAgreements\Model\AgreementFactory;
 use Magento\Framework\App\Area;
 use Magento\Cms\Model\PageFactory;
 use Magento\Framework\App\Cache\Manager as CacheManager;
@@ -43,6 +44,10 @@ class RunCommand extends Command
     // Where the platform keeps what it needs to find again.
     private const SAMPLES_PATH = 'sklepownia/samples/ids';
     private const BANK_PATH = 'sklepownia/bank/';
+    // The page Luma's footer links to as the privacy policy; the terms get a link of ours (layout/default.xml).
+    private const PRIVACY_PAGE = 'privacy-policy-cookie-restriction-mode';
+    private const TERMS_LINK_PATH = 'sklepownia/documents/terms_link';
+    private const AGREEMENT_NAME = 'Regulamin sklepu';
     private const TAX_CODE = 'VAT';
     // Classes Magento installs: "Taxable Goods" and "Retail Customer".
     private const PRODUCT_TAX_CLASS = 2;
@@ -95,6 +100,7 @@ class RunCommand extends Command
             'taxes' => $this->taxes($data),
             'admin' => $this->admin($data),
             'remove_samples' => $this->removeSamples(),
+            'documents' => $this->documents($data),
             default => throw new \InvalidArgumentException('Unknown action'),
         };
         if ($action !== 'read') {
@@ -173,6 +179,46 @@ class RunCommand extends Command
             ->setContent($data['content'])
             ->save();
         return ['page' => (int) $page->getId()];
+    }
+
+    /**
+     * The terms of sale and privacy policy as the shop's pages, replacing what they said. Customers accept the terms
+     * with a checkbox at checkout (a checkout agreement with the same text).
+     */
+    private function documents(array $data): array
+    {
+        $pages = [];
+        $terms = null;
+        foreach ($data['documents'] as $document) {
+            $identifier = $document['key'] === 'privacy' ? self::PRIVACY_PAGE : $document['slug'];
+            $page = $this->get(PageFactory::class)->create()->load($identifier, 'identifier');
+            $page->setIdentifier($identifier)
+                ->setTitle($document['title'])
+                ->setContentHeading($document['title'])
+                ->setContent($document['html'])
+                ->setPageLayout('1column')
+                ->setIsActive(true)
+                ->setStores([Store::DEFAULT_STORE_ID])
+                ->save();
+            $pages[$document['key']] = $identifier;
+            if ($document['key'] === 'terms') {
+                $terms = $document;
+            }
+        }
+        if ($terms !== null) {
+            $agreement = $this->get(AgreementFactory::class)->create()->load(self::AGREEMENT_NAME, 'name');
+            $agreement->setName(self::AGREEMENT_NAME)
+                ->setContent($terms['html'])
+                ->setCheckboxText($data['checkbox'])
+                ->setIsActive(1)
+                ->setIsHtml(1)
+                // Manual: the customer ticks the box.
+                ->setMode(1)
+                ->setStores([Store::DEFAULT_STORE_ID])
+                ->save();
+            $this->write(['checkout/options/enable_agreements' => 1, self::TERMS_LINK_PATH => 1]);
+        }
+        return ['pages' => $pages];
     }
 
     private function read(): array

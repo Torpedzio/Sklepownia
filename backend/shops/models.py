@@ -228,6 +228,7 @@ class ShopOperation(models.Model):
         SYNC_SETTINGS = "sync_settings", "Odczyt ustawień ze sklepu"
         RESET_ADMIN_PASSWORD = "reset_admin_password", "Nowe hasło administratora"
         REMOVE_SAMPLE_PRODUCTS = "remove_sample_products", "Usunięcie przykładowych produktów"
+        PUBLISH_DOCUMENTS = "publish_documents", "Nowa wersja regulaminu i polityki prywatności"
 
     class Status(models.TextChoices):
         QUEUED = "queued", "W kolejce"
@@ -326,6 +327,7 @@ class ShopChecklist(models.Model):
 
         PAYMENTS = "payments", "Płatności"
         SHIPPING = "shipping", "Wysyłka"
+        DOCUMENTS = "documents", "Regulamin i polityka prywatności"
         PRODUCTS = "products", "Własne produkty"
         SAMPLE_PRODUCTS = "sample_products", "Bez przykładowych produktów"
         NOTIFICATIONS = "notifications", "Powiadomienia na telefonie"

@@ -13,9 +13,10 @@ a platforma w około dwie minuty uruchamia działający sklep w osobnym kontener
 - Podgląd postępu zakładania krok po kroku i ponowienie kroku, który się nie udał.
 - Dane logowania do panelu WordPressa wysyłane e-mailem, nigdy pokazywane w aplikacji.
 - Ustawienia sklepu (płatności, także Przelewy24 i PayU, wysyłka, podatki, region, wygląd) zmieniane z aplikacji.
+- Regulamin i polityka prywatności sklepu ze wzorów, z danymi sklepu, publikowane w sklepie i aktualizowane same po zmianach ustawień.
 - Powiadomienia push o nowych zamówieniach, gotowym sklepie i płatnościach za plan, z wyborem tematów.
 - Sprzedaż sklepu w aplikacji: przychód dziś, z 7 i 30 dni, wykres dzienny, zamówienia do obsłużenia i ostatnie zamówienia.
-- Lista startowa nowego sklepu: płatności, wysyłka, pierwszy produkt, usunięcie przykładowych, powiadomienia i próbne zamówienie, odhaczane same.
+- Lista startowa nowego sklepu: płatności, wysyłka, regulamin, pierwszy produkt, usunięcie przykładowych, powiadomienia i próbne zamówienie, odhaczane same.
 - Każdy sklep we własnym kontenerze, z własną bazą danych i adresem.
 - Jedna aplikacja na iOS, Androida i przeglądarkę.
 - Panel administratora z użytkownikami, sklepami i wiadomościami z formularza kontaktowego.

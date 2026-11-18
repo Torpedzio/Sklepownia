@@ -201,6 +201,7 @@ class ShopSettingsOptionsSerializer(serializers.Serializer):
         child=serializers.ListField(child=serializers.CharField()),
         help_text="Typowe stawki VAT według kraju, stawka podstawowa pierwsza.",
     )
+    registers = ChoiceSerializer(many=True, help_text="Formy działalności sprzedawcy do regulaminu.")
 
 
 class ShopSettingsSerializer(serializers.Serializer):
@@ -222,6 +223,25 @@ class ShopSettingsSerializer(serializers.Serializer):
     operation = ShopOperationSerializer(allow_null=True, help_text="Ostatnia operacja na sklepie.")
     busy = serializers.BooleanField(help_text="Sklep wykonuje operację; kolejną można zlecić po jej zakończeniu.")
     options = ShopSettingsOptionsSerializer()
+
+
+class DocumentsPreviewRequestSerializer(serializers.Serializer):
+    documents = serializers.DictField(
+        required=False, help_text="Pola sekcji `documents` do podglądu; pozostałe jak w zapisanych ustawieniach.",
+    )
+
+
+class DocumentPreviewSerializer(serializers.Serializer):
+    key = serializers.ChoiceField(choices=["terms", "privacy"])
+    title = serializers.CharField()
+    blocks = serializers.JSONField(
+        help_text="Treść jako bloki: {type: heading, level, text}, {type: paragraph, text} albo "
+                  "{type: list, ordered, items: [{text, items?}]}.",
+    )
+
+
+class DocumentsPreviewSerializer(serializers.Serializer):
+    documents = DocumentPreviewSerializer(many=True)
 
 
 class SalesPeriodSerializer(serializers.Serializer):

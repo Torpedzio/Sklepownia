@@ -364,3 +364,113 @@ test('the menu has only the sections the shop platform lets the app change', asy
   // An address pointing at a missing section opens the first one.
   expect(screen.getByDisplayValue('Palarnia')).toBeTruthy();
 });
+
+// --- terms and privacy policy ---
+
+const PREVIEW = 'POST /shops/7/documents/preview/';
+
+test('the terms are published after a warning that they replace the shop’s own', async () => {
+  const saved = shopSettings(
+    { documents: { managed: true, terms_url: 'http://palarnia.localhost:8080/regulamin/' } },
+    {
+      ...fresh,
+      operation: operation({
+        status: 'succeeded',
+        changes: { documents: { managed: true, return_days: 30 } },
+        changed_fields: ['Regulamin i polityka prywatności z aplikacji', 'Dni na odstąpienie od umowy'],
+      }),
+    },
+  );
+  const { api } = await open('regulamin', {
+    [SETTINGS]: [shopSettings({}, fresh), saved],
+    [SAVE]: shopSettings({}, { ...fresh, busy: true, operation: operation() }),
+  });
+
+  // The seller's details come filled in from the billing profile.
+  expect(await screen.findByDisplayValue('Palarnia Jan Kowalski')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('switch', { name: 'Regulamin i polityka prywatności z aplikacji' }));
+  expect(screen.getByText(/Obecny regulamin i politykę prywatności sklepu zastąpimy nowymi/)).toBeTruthy();
+  await fireEvent.changeText(screen.getByDisplayValue('14'), '30');
+  await fireEvent.press(screen.getByRole('button', { name: 'Zapisz' }));
+
+  expect(api.sent(SAVE)).toEqual([{ documents: { managed: true, return_days: 30 } }]);
+  expect(await screen.findByText('Regulamin i polityka prywatności są już w sklepie.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Regulamin w sklepie' })).toBeTruthy();
+});
+
+test('the preview shows the documents as they would be with the edits', async () => {
+  const { api } = await open('regulamin', {
+    [SETTINGS]: shopSettings({}, fresh),
+    [PREVIEW]: {
+      documents: [
+        {
+          key: 'terms',
+          title: 'Regulamin sklepu',
+          blocks: [
+            { type: 'heading', level: 2, text: '§ 1. Postanowienia ogólne' },
+            { type: 'paragraph', text: 'Sklep prowadzi Palarnia Kawy Sp. z o.o.' },
+            { type: 'list', ordered: true, items: [{ text: 'Przelew', items: [{ text: 'na konto' }] }] },
+          ],
+        },
+        {
+          key: 'privacy',
+          title: 'Polityka prywatności',
+          blocks: [{ type: 'heading', level: 2, text: '1. Administrator danych' }],
+        },
+      ],
+    },
+  });
+
+  await fireEvent.changeText(await screen.findByDisplayValue('Palarnia Jan Kowalski'), 'Palarnia Kawy Sp. z o.o.');
+  await fireEvent.press(screen.getByRole('button', { name: 'Podgląd dokumentów' }));
+
+  expect(api.sent(PREVIEW)).toEqual([{ documents: { seller_name: 'Palarnia Kawy Sp. z o.o.' } }]);
+  expect(await screen.findByText('§ 1. Postanowienia ogólne')).toBeTruthy();
+  expect(screen.getByText('Sklep prowadzi Palarnia Kawy Sp. z o.o.')).toBeTruthy();
+  expect(screen.getByText('na konto')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('radio', { name: 'Polityka prywatności' }));
+  expect(screen.getByText('1. Administrator danych')).toBeTruthy();
+  expect(screen.queryByText('§ 1. Postanowienia ogólne')).toBeNull();
+});
+
+test('a preview of documents missing the seller’s details points at the fields', async () => {
+  await open('regulamin', {
+    [SETTINGS]: shopSettings({}, fresh),
+    [PREVIEW]: new ApiError(400, { documents: { city: ['Potrzebne do regulaminu.'] } }),
+  });
+
+  await fireEvent.press(await screen.findByRole('button', { name: 'Podgląd dokumentów' }));
+
+  expect(await screen.findByText('Potrzebne do regulaminu.')).toBeTruthy();
+  expect(screen.getByText('Uzupełnij zaznaczone pola, żeby zobaczyć podgląd.')).toBeTruthy();
+});
+
+test('the published documents open in the shop', async () => {
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue();
+  await open('regulamin', {
+    [SETTINGS]: shopSettings(
+      {
+        documents: {
+          managed: true,
+          terms_url: 'http://palarnia.localhost:8080/regulamin/',
+          privacy_url: 'http://palarnia.localhost:8080/polityka-prywatnosci/',
+        },
+      },
+      fresh,
+    ),
+  });
+
+  await fireEvent.press(await screen.findByRole('button', { name: 'Polityka prywatności w sklepie' }));
+
+  expect(openURL).toHaveBeenCalledWith('http://palarnia.localhost:8080/polityka-prywatnosci/');
+  expect(screen.queryByText(/zastąpimy nowymi/)).toBeNull();
+});
+
+test('the templates are only for shops selling from Poland', async () => {
+  await open('regulamin', { [SETTINGS]: shopSettings({ region: { country: 'DE' } }, fresh) });
+
+  expect(await screen.findByText(/Wzory są na razie dla sklepów sprzedających z Polski/)).toBeTruthy();
+  expect(
+    screen.getByRole('switch', { name: 'Regulamin i polityka prywatności z aplikacji' }).props.accessibilityState,
+  ).toMatchObject({ disabled: true });
+});

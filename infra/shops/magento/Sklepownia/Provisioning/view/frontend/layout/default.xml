@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- A footer link to the shop's terms, once the platform has published them (sklepownia:run documents). -->
+<page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/page_configuration.xsd">
+    <body>
+        <referenceBlock name="footer_links">
+            <block class="Magento\Framework\View\Element\Html\Link\Current" name="sklepownia-terms-link"
+                   ifconfig="sklepownia/documents/terms_link" before="-">
+                <arguments>
+                    <argument name="label" xsi:type="string" translate="false">Regulamin</argument>
+                    <argument name="path" xsi:type="string">regulamin</argument>
+                </arguments>
+            </block>
+        </referenceBlock>
+    </body>
+</page>

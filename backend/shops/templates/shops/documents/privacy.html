@@ -1,0 +1,68 @@
+{% comment %}
+Privacy policy of a shop (shops/documents.py), the information required by art. 13 GDPR. Checked by a lawyer before
+use. Allowed tags as in terms.html. After changing the text, raise documents.VERSION.
+{% endcomment %}
+<p>Polityka prywatności wyjaśnia, jak sklep internetowy „{{ shop.name }}”, dostępny pod adresem {{ url }} (dalej: Sklep), przetwarza dane osobowe Klientów i osób odwiedzających Sklep, zgodnie z rozporządzeniem Parlamentu Europejskiego i Rady (UE) 2016/679 (RODO).</p>
+
+<h2>1. Administrator danych</h2>
+<p>Administratorem danych osobowych jest {{ seller.seller_name }}, {{ address }}{% if seller.tax_id %}, NIP {{ seller.tax_id }}{% endif %} (dalej: Sprzedawca). W sprawach danych osobowych można kontaktować się ze Sprzedawcą e-mailem na adres {{ shop.contact_email }}{% if seller.phone %}, telefonicznie pod numerem {{ seller.phone }}{% endif %} albo pisemnie na adres Sprzedawcy.</p>
+
+<h2>2. Jakie dane są przetwarzane</h2>
+<p>Sprzedawca przetwarza dane podane przy składaniu zamówienia albo zakładaniu konta w Sklepie: imię i nazwisko, adres e-mail, numer telefonu, adres dostawy, a gdy Klient chce otrzymać fakturę – także nazwę firmy, jej adres i NIP. Przetwarza też historię zamówień{% if reviews %}, opinie dodane w Sklepie{% endif %} oraz dane techniczne, takie jak adres IP i informacje zapisane w plikach cookies.</p>
+
+<h2>3. Cele i podstawy prawne przetwarzania</h2>
+<ul>
+<li>zawarcie i wykonanie umowy sprzedaży, w tym dostawa zamówienia i kontakt w jego sprawie – art. 6 ust. 1 lit. b RODO;</li>
+<li>prowadzenie konta Klienta – art. 6 ust. 1 lit. b RODO;</li>
+<li>obsługa odstąpień od umowy i reklamacji oraz wystawianie i przechowywanie dokumentów księgowych – art. 6 ust. 1 lit. c RODO, czyli obowiązki wynikające z przepisów prawa;</li>
+<li>odpowiadanie na wiadomości oraz ustalenie, dochodzenie i obrona roszczeń – art. 6 ust. 1 lit. f RODO, czyli prawnie uzasadniony interes Sprzedawcy;</li>
+{% if reviews %}<li>publikacja opinii o produktach – art. 6 ust. 1 lit. f RODO;</li>{% endif %}
+<li>zapewnienie działania i bezpieczeństwa Sklepu – art. 6 ust. 1 lit. f RODO.</li>
+</ul>
+
+<h2>4. Komu dane są przekazywane</h2>
+<p>Sprzedawca przekazuje dane tylko w zakresie potrzebnym do prowadzenia Sklepu i realizacji zamówień:</p>
+<ul>
+<li>{% if hosting %}{{ hosting.name }}{% if hosting.address %}, {{ hosting.address }}{% endif %} – dostawcy{% else %}dostawcy{% endif %} hostingu i oprogramowania Sklepu, w tym wysyłki wiadomości e-mail, który przetwarza dane na zlecenie Sprzedawcy;</li>
+<li>firmom kurierskim i pocztowym, które dostarczają zamówienia;</li>
+{% for operator in operators %}<li>{{ operator.company }} – operatorowi płatności {{ operator.name }}, który obsługuje płatności online;</li>{% endfor %}
+<li>podmiotom świadczącym na rzecz Sprzedawcy usługi księgowe, prawne lub informatyczne, jeżeli Sprzedawca z nich korzysta;</li>
+<li>organom publicznym, gdy wymagają tego przepisy prawa.</li>
+</ul>
+<p>Sprzedawca nie przekazuje danych osobowych do państw spoza Europejskiego Obszaru Gospodarczego.</p>
+
+<h2>5. Jak długo dane są przechowywane</h2>
+<ul>
+<li>dane związane z zamówieniem – przez czas jego realizacji, a następnie do upływu terminów przedawnienia roszczeń z umowy;</li>
+<li>dokumenty księgowe – przez 5 lat, licząc od końca roku kalendarzowego, w którym upłynął termin płatności podatku;</li>
+<li>dane konta – do jego usunięcia;</li>
+<li>korespondencję – przez czas potrzebny do załatwienia sprawy, a następnie do upływu terminów przedawnienia roszczeń.</li>
+</ul>
+
+<h2>6. Prawa osób, których dane dotyczą</h2>
+<p>Każda osoba, której dane przetwarza Sprzedawca, ma prawo do:</p>
+<ul>
+<li>dostępu do swoich danych i otrzymania ich kopii;</li>
+<li>sprostowania danych;</li>
+<li>usunięcia danych;</li>
+<li>ograniczenia przetwarzania;</li>
+<li>przenoszenia danych;</li>
+<li>wniesienia sprzeciwu wobec przetwarzania opartego na prawnie uzasadnionym interesie Sprzedawcy.</li>
+</ul>
+<p>Aby skorzystać z tych praw, wystarczy napisać na adres {{ shop.contact_email }}. Każdy ma też prawo wnieść skargę do Prezesa Urzędu Ochrony Danych Osobowych (ul. Stawki 2, 00-193 Warszawa).</p>
+
+<h2>7. Czy trzeba podać dane</h2>
+<p>Podanie danych jest dobrowolne, ale niezbędne do złożenia zamówienia albo założenia konta. Bez nich Sprzedawca nie może zawrzeć ani wykonać umowy.</p>
+
+<h2>8. Zautomatyzowane decyzje</h2>
+<p>Sprzedawca nie podejmuje wobec Klientów decyzji opartych wyłącznie na zautomatyzowanym przetwarzaniu danych, w tym profilowaniu, które wywoływałyby wobec nich skutki prawne lub w podobny sposób istotnie na nich wpływały.</p>
+
+<h2>9. Pliki cookies</h2>
+<ul>
+<li>Sklep używa plików cookies niezbędnych do jego działania: do utrzymania sesji i zawartości koszyka, logowania do konta i zabezpieczenia formularzy.</li>
+<li>Pliki cookies analityczne lub marketingowe, jeżeli Sklep z nich korzysta, są zapisywane tylko po wyrażeniu zgody, którą można w każdej chwili wycofać.</li>
+<li>Pliki cookies można usunąć lub zablokować w ustawieniach przeglądarki. Zablokowanie niezbędnych plików cookies może uniemożliwić złożenie zamówienia.</li>
+</ul>
+
+<h2>10. Zmiany polityki prywatności</h2>
+<p>Sprzedawca może zmienić Politykę prywatności, na przykład po zmianie przepisów albo sposobu działania Sklepu. Aktualna wersja jest zawsze dostępna w Sklepie. Polityka prywatności obowiązuje od {{ date }}.</p>

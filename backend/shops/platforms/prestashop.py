@@ -373,6 +373,53 @@ sklepownia_module('%(wire)s', $d['wire']);
 sklepownia_module('%(cod)s', $d['cod']);
 """ % {"wire": WIRE_MODULE, "cod": COD_MODULE}
 
+# The terms take the CMS page the shop accepts at checkout (PrestaShop's own "Terms and conditions of use" at first),
+# the privacy policy a page of ours, also linked in the footer next to the terms. Customers tick the terms at checkout.
+# Hummingbird resets the numbers of ordered lists, which the terms' paragraphs are made of.
+NUMBERED_LIST = '<ol style="list-style-type: decimal; padding-left: 2em;">'
+
+DOCUMENTS_PHP = """
+$ids = array(
+    'terms' => (int) Configuration::get('PS_CONDITIONS_CMS_ID'),
+    'privacy' => (int) Configuration::get('%(privacy)s'),
+);
+$link = new Link();
+$urls = array();
+foreach ($d['documents'] as $document) {
+    $cms = new CMS($ids[$document['key']] ?: null);
+    if (!Validate::isLoadedObject($cms)) {
+        $cms = new CMS();
+        $cms->id_cms_category = 1;
+    }
+    $cms->meta_title = $names($document['title']);
+    $cms->head_seo_title = $names($document['title']);
+    $cms->content = $names($document['html']);
+    $cms->link_rewrite = $names($document['slug']);
+    $cms->active = 1;
+    $cms->indexation = 1;
+    $cms->save();
+    $ids[$document['key']] = (int) $cms->id;
+    $urls[$document['key']] = $link->getCMSLink($cms, null, null, (int) $context->language->id);
+}
+Configuration::updateValue('PS_CONDITIONS', 1);
+Configuration::updateValue('PS_CONDITIONS_CMS_ID', $ids['terms']);
+Configuration::updateValue('%(privacy)s', $ids['privacy']);
+// The footer's link block with the terms (ps_linklist) gets the privacy policy too.
+$table = _DB_PREFIX_ . 'link_block';
+if (Db::getInstance()->executeS("SHOW TABLES LIKE '" . pSQL($table) . "'")) {
+    foreach (Db::getInstance()->executeS('SELECT id_link_block, content FROM ' . $table) as $block) {
+        $content = json_decode($block['content'], true);
+        $pages = array_map('intval', array_filter((array) ($content['cms'] ?? array())));
+        if (!in_array($ids['terms'], $pages, true) || in_array($ids['privacy'], $pages, true)) { continue; }
+        $content['cms'] = array_map('strval', array_merge($pages, array($ids['privacy'])));
+        Db::getInstance()->update('link_block', array('content' => pSQL(json_encode($content))),
+            'id_link_block = ' . (int) $block['id_link_block']);
+    }
+}
+Tools::clearSmartyCache();
+echo "\n%(marker)s" . json_encode($urls);
+""" % {"privacy": "SKLEPOWNIA_PRIVACY_CMS_ID", "marker": OUTPUT_MARKER}
+
 # PrestaShop sends through the relay, without logging in; the module sets the sender. 2 is Mail::METHOD_SMTP.
 MAIL_PHP = """
 Configuration::updateValue('PS_MAIL_METHOD', 2);
@@ -627,6 +674,13 @@ class PrestaShopProvisioner(ContainerProvisioner):
             self._apply_online_payments(shop, changes["payments"], payments)
         if "theme" in changes.get("appearance", {}):
             self._php(shop, THEME_PHP, {"theme": shop.config.template.theme})
+
+    def publish_documents(self, shop, documents):
+        return json.loads(self._php(shop, DOCUMENTS_PHP, {"documents": [
+            {"key": document.key, "title": document.title, "slug": document.slug,
+             "html": document.html.replace("<ol>", NUMBERED_LIST)}
+            for document in documents
+        ]}))
 
     def reset_admin_password(self, shop):
         credentials = self._credentials(shop)

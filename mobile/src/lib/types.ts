@@ -154,11 +154,52 @@ export type ShopSettingsValues = {
   taxes: { enabled: boolean; prices_include_tax: boolean; standard_rate: string };
   region: { language: string; currency: string; country: string; timezone: string };
   appearance: { theme: string };
+  /** The shop's terms and privacy policy, written from the platform's templates and published as pages in the shop. */
+  documents: {
+    /** The app keeps the documents in the shop and publishes them again after every change they describe. */
+    managed: boolean;
+    seller_name: string;
+    register: SellerRegister;
+    street: string;
+    postal_code: string;
+    city: string;
+    tax_id: string;
+    regon: string;
+    krs: string;
+    phone: string;
+    return_days: number;
+    free_returns: boolean;
+    /** Working days from payment to sending the parcel. */
+    dispatch_days: number;
+    /** The published pages; empty until the first publication. */
+    terms_url: string;
+    privacy_url: string;
+    /** The version of the templates the shop's documents follow, e.g. "2026-11-18". */
+    version: string;
+  };
 };
+
+export type SellerRegister = 'ceidg' | 'krs' | 'unregistered';
 
 export type SettingsSection = keyof ShopSettingsValues;
 
-export type ShopOperationKind = 'update_settings' | 'sync_settings' | 'reset_admin_password' | 'remove_sample_products';
+export type ShopOperationKind =
+  | 'update_settings'
+  | 'sync_settings'
+  | 'reset_admin_password'
+  | 'remove_sample_products'
+  | 'publish_documents';
+
+/** A list item of a document; one level of items can sit inside. */
+export type DocumentListItem = { text: string; items?: DocumentListItem[] };
+
+/** Text of a document as plain blocks, for the preview in the app. */
+export type DocumentBlock =
+  | { type: 'heading'; level: number; text: string }
+  | { type: 'paragraph'; text: string }
+  | { type: 'list'; ordered: boolean; items: DocumentListItem[] };
+
+export type ShopDocument = { key: 'terms' | 'privacy'; title: string; blocks: DocumentBlock[] };
 
 export type ShopOperation = {
   id: number;
@@ -198,6 +239,7 @@ export type ShopSettings = {
     timezones: Choice[];
     themes: Choice[];
     vat_rates: Record<string, string[]>;
+    registers: Choice[];
   };
 };
 
@@ -367,6 +409,7 @@ export type ShopSales = {
 export type ChecklistStepKey =
   | 'payments'
   | 'shipping'
+  | 'documents'
   | 'products'
   | 'sample_products'
   | 'notifications'

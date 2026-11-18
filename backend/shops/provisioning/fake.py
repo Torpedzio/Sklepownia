@@ -69,6 +69,10 @@ class FakeProvisioner(BaseProvisioner):
     def apply_settings(self, shop, changes, values):
         self._simulate("apply_settings")
 
+    def publish_documents(self, shop, documents):
+        self._simulate("publish_documents")
+        return {document.key: f"{shop.url}/{document.slug}/" for document in documents}
+
     def reset_admin_password(self, shop):
         self._simulate("reset_admin_password")
         ShopCredentials.objects.filter(shop=shop).update(admin_password=secrets.token_urlsafe(18))

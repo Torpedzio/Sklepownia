@@ -63,9 +63,10 @@ jedna naraz. Gdy sklep nie działa albo wykonuje poprzednią operację, odpowied
 
 | Metoda i ścieżka | Opis |
 |---|---|
-| `GET shops/{id}/settings/` | `{values, sections, panel_name, payment_operators, server_ip, synced_at, operation, busy, options}`: ustawienia w sekcjach, sekcje, które aplikacja może zmieniać na platformie sklepu, nazwa panelu, operatorzy płatności online, których aplikacja ustawia na tej platformie (`przelewy24`, `payu`; pusta lista dla Magento), publiczny adres IP serwera sklepu (`null`, gdy nieznany), kiedy odczytano je ze sklepu, ostatnia operacja, czy sklep jest zajęty, wartości do wyboru (języki, waluty, kraje, strefy czasowe, motywy, typowe stawki VAT według kraju) |
+| `GET shops/{id}/settings/` | `{values, sections, panel_name, payment_operators, server_ip, synced_at, operation, busy, options}`: ustawienia w sekcjach, sekcje, które aplikacja może zmieniać na platformie sklepu, nazwa panelu, operatorzy płatności online, których aplikacja ustawia na tej platformie (`przelewy24`, `payu`; pusta lista dla Magento), publiczny adres IP serwera sklepu (`null`, gdy nieznany), kiedy odczytano je ze sklepu, ostatnia operacja, czy sklep jest zajęty, wartości do wyboru (języki, waluty, kraje, strefy czasowe, motywy, typowe stawki VAT według kraju, formy działalności sprzedawcy do regulaminu) |
 | `PATCH shops/{id}/settings/` | Dowolne sekcje i pola, np. `{"shipping": {"courier_enabled": true}}`. `202` z tym samym kształtem co `GET`, gdy coś się zmienia; `200`, gdy sklep już ma te wartości. `400` z błędami `{sekcja: {pole: [komunikat]}}`, także dla sekcji, której platforma sklepu nie ma w `sections`, i motywu innej platformy. |
 | `POST shops/{id}/settings/refresh/` | Ponowny odczyt ustawień ze sklepu (np. po zmianach w panelu), `202` |
+| `POST shops/{id}/documents/preview/` | Podgląd regulaminu i polityki prywatności z niezapisanymi zmianami: `{"documents": {pole: wartość}}` (pola sekcji `documents`, reszta z zapisanych ustawień). `200` z `{documents: [{key, title, blocks}]}`, `key` to `terms` albo `privacy`, `blocks` to `{type: "heading", level, text}`, `{type: "paragraph", text}` albo `{type: "list", ordered, items: [{text, items?}]}`. `400` z `{documents: {pole: [komunikat]}}`, gdy brakuje danych sprzedawcy albo sklep nie sprzedaje z Polski. Nic nie zapisuje i nie zajmuje sklepu. |
 | `POST shops/{id}/reset-admin-password/` | Nowe hasło administratora, `202` z operacją. Po zakończeniu hasło przychodzi e-mailem. |
 | `POST shops/{id}/remove-sample-products/` | Usunięcie produktów przykładowych, `202` z operacją; `result.removed` to ich liczba |
 | `GET shops/{id}/operations/` | 20 ostatnich operacji, od najnowszej |
@@ -102,6 +103,7 @@ Kroki (`key`) i kiedy są zrobione:
 |---|---|---|
 | `payments` | jest włączony przelew, płatność przy odbiorze, Przelewy24 albo PayU | platform z sekcją `payments` |
 | `shipping` | jest włączony kurier, darmowa dostawa albo odbiór osobisty | platform z sekcją `shipping` (nie PrestaShop) |
+| `documents` | aplikacja prowadzi regulamin i politykę prywatności, a dokumenty są już w sklepie | platform z sekcją `documents` (wszystkich) |
 | `products` | w sklepie jest co najmniej jeden własny produkt | każdego sklepu |
 | `sample_products` | w sklepie nie zostały produkty przykładowe | sklepu założonego z produktami przykładowymi |
 | `notifications` | właściciel ma telefon zarejestrowany do powiadomień | każdego sklepu |
@@ -119,10 +121,29 @@ Sekcje i pola ustawień (pełny opis w `/api/docs/` i w [shop_settings.py](../ba
 | `taxes` | `enabled`, `prices_include_tax`, `standard_rate` |
 | `region` | `language`, `currency`, `country`, `timezone` |
 | `appearance` | `theme` (slug motywu) |
+| `documents` | `managed`, dane sprzedawcy: `seller_name`, `register` (`ceidg`, `krs`, `unregistered`), `street`, `postal_code`, `city`, `tax_id`, `regon`, `krs`, `phone`; `return_days` (14–365), `free_returns`, `dispatch_days` (1–30); tylko do odczytu: `terms_url`, `privacy_url`, `version` |
 
 Kwoty i stawki są tekstem z dwoma miejscami po przecinku (`"15.00"`). Zmiana kraju bez podania strefy czasowej
 i stawki VAT ustawia te typowe dla nowego kraju. Reguły obejmujące kilka pól: przelew wymaga odbiorcy i numeru konta,
 a klient musi móc kupić bez konta albo założyć je przy zamówieniu.
+
+Regulamin i polityka prywatności (sekcja `documents`):
+
+- Dokumenty powstają z naszych wzorów ([templates/shops/documents/](../backend/shops/templates/shops/documents/))
+  i ustawień sklepu: dane sprzedawcy i zwroty z tej sekcji, a nazwa, e-mail, opinie, płatności, dostawy i waluta
+  z pozostałych. Worker publikuje je jako strony sklepu i zapisuje ich adresy w `terms_url` i `privacy_url`.
+- `managed: true` publikuje dokumenty od razu. Potem każda zmiana sekcji `general`, `shopping`, `payments`,
+  `shipping`, `region` albo `documents` publikuje je jeszcze raz, w tej samej operacji. Nieudana publikacja to
+  nieudana operacja, więc zmiana nie jest zapisana. `managed: false` tylko zatrzymuje aktualizacje: strony zostają
+  w sklepie.
+- Przy `managed: true` wymagane są `seller_name`, `street`, `postal_code`, `city`, a dla `ceidg` i `krs` także
+  `tax_id`; dla `krs` też `krs`. Brak daje `400` „Potrzebne do regulaminu.” Sprawdzamy format NIP (suma kontrolna),
+  REGON (9 albo 14 cyfr), KRS (10 cyfr), kodu pocztowego i telefonu.
+- Wzory są dla sklepów sprzedających z Polski: `managed: true` w sklepie z innym krajem i zmiana kraju sklepu, który
+  ma dokumenty z aplikacji, dają `400`.
+- Dane sprzedawcy na start bierzemy z danych do faktur właściciela (NIP tylko polskiej firmy).
+- Nowa wersja wzorów: operacja `publish_documents` (bez `changes`), zlecana poleceniem `publish_shop_documents`
+  ([obsługa](obsluga.md)).
 
 Płatności online (Przelewy24, PayU; tylko operatorzy z `payment_operators`):
 

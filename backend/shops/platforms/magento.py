@@ -335,6 +335,18 @@ class MagentoProvisioner(ContainerProvisioner):
         credentials.admin_password = password
         credentials.save(update_fields=["admin_password", "updated_at"])
 
+    def publish_documents(self, shop, documents):
+        # The action is newer than some shops' containers: one from an older image is replaced first.
+        self.step_start_container(shop)
+        pages = self._run(shop, "documents", {
+            "documents": [
+                {"key": document.key, "title": document.title, "slug": document.slug, "html": document.html}
+                for document in documents
+            ],
+            "checkbox": "Akceptuję regulamin sklepu",
+        })["pages"]
+        return {key: f"{shop.url}/{identifier}" for key, identifier in pages.items()}
+
     def remove_sample_products(self, shop):
         return int(self._run(shop, "remove_samples")["removed"])
 

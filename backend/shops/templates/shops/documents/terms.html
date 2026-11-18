@@ -1,0 +1,144 @@
+{% comment %}
+Terms of sale of a shop (shops/documents.py). Polish law; checked by a lawyer before use. Allowed tags: h2, h3, p,
+ol, ul (one level inside li), li, strong, a, br. After changing the text, raise documents.VERSION.
+{% endcomment %}
+<h2>§ {{ number.general }}. Postanowienia ogólne</h2>
+<ol>
+<li>Regulamin określa zasady korzystania ze sklepu internetowego „{{ shop.name }}”, dostępnego pod adresem {{ url }} (dalej: Sklep), oraz zasady zawierania i wykonywania umów sprzedaży w Sklepie.</li>
+<li>Sklep prowadzi {{ seller.seller_name }}, {{ address }}{% if seller.tax_id %}, NIP {{ seller.tax_id }}{% endif %}{% if seller.regon %}, REGON {{ seller.regon }}{% endif %} (dalej: Sprzedawca). {% if seller.register == "krs" %}Sprzedawca jest wpisany do rejestru przedsiębiorców Krajowego Rejestru Sądowego pod numerem KRS {{ seller.krs }}.{% elif seller.register == "ceidg" %}Sprzedawca jest wpisany do Centralnej Ewidencji i Informacji o Działalności Gospodarczej (CEIDG).{% else %}Sprzedawca prowadzi działalność nierejestrowaną, o której mowa w art. 5 ustawy z dnia 6 marca 2018 r. – Prawo przedsiębiorców.{% endif %}</li>
+<li>Kontakt ze Sprzedawcą: e-mail {{ shop.contact_email }}{% if seller.phone %}, telefon {{ seller.phone }}{% endif %}, adres do korespondencji: {{ address }}.</li>
+<li>Regulamin jest udostępniany nieodpłatnie w Sklepie przed zawarciem umowy, w sposób umożliwiający jego pobranie, utrwalenie i wydrukowanie.</li>
+<li>Regulamin nie wyłącza ani nie ogranicza praw Konsumentów i Przedsiębiorców na prawach konsumenta, które przysługują im na podstawie bezwzględnie obowiązujących przepisów prawa.</li>
+</ol>
+
+<h2>§ {{ number.definitions }}. Definicje</h2>
+<ul>
+<li><strong>Klient</strong> – osoba fizyczna, osoba prawna albo jednostka organizacyjna niebędąca osobą prawną, której ustawa przyznaje zdolność prawną, korzystająca ze Sklepu.</li>
+<li><strong>Konsument</strong> – Klient będący osobą fizyczną, który zawiera ze Sprzedawcą umowę niezwiązaną bezpośrednio z jego działalnością gospodarczą lub zawodową.</li>
+<li><strong>Przedsiębiorca na prawach konsumenta</strong> – Klient będący osobą fizyczną, który zawiera ze Sprzedawcą umowę bezpośrednio związaną z jego działalnością gospodarczą, gdy z treści umowy wynika, że nie ma ona dla niego charakteru zawodowego, wynikającego w szczególności z przedmiotu wykonywanej działalności, udostępnionego w CEIDG.</li>
+<li><strong>Produkt</strong> – rzecz ruchoma dostępna w Sklepie.</li>
+<li><strong>Zamówienie</strong> – oświadczenie woli Klienta zmierzające do zawarcia umowy sprzedaży Produktów, złożone za pomocą formularza zamówienia w Sklepie.</li>
+<li><strong>Konto</strong> – chroniony hasłem zbiór danych Klienta w Sklepie, w którym zapisywane są jego dane i historia Zamówień.</li>
+<li><strong>Dzień roboczy</strong> – dzień od poniedziałku do piątku, z wyjątkiem dni ustawowo wolnych od pracy.</li>
+</ul>
+
+<h2>§ {{ number.services }}. Usługi świadczone drogą elektroniczną</h2>
+<ol>
+<li>Sprzedawca świadczy w Sklepie nieodpłatnie drogą elektroniczną usługi: przeglądania Produktów, formularza zamówienia i Konta{% if reviews %} oraz dodawania opinii o Produktach{% endif %}.</li>
+<li>Umowa o korzystanie z formularza zamówienia jest zawierana na czas składania Zamówienia i kończy się z chwilą jego złożenia albo wcześniejszego zaprzestania składania Zamówienia.</li>
+<li>Umowa o prowadzenie Konta jest zawierana na czas nieokreślony z chwilą jego założenia. Klient może w każdej chwili, bez podania przyczyny, usunąć Konto, wysyłając prośbę na adres {{ shop.contact_email }}.</li>
+<li>Do korzystania ze Sklepu potrzebne są: urządzenie z dostępem do internetu, aktualna przeglądarka internetowa z włączoną obsługą JavaScript i plików cookies oraz aktywny adres e-mail.</li>
+<li>Klient nie może dostarczać do Sklepu treści o charakterze bezprawnym.</li>
+<li>Reklamacje dotyczące usług świadczonych drogą elektroniczną można składać na adres {{ shop.contact_email }}. Sprzedawca rozpatruje je w terminie 14 dni od ich otrzymania.</li>
+</ol>
+
+<h2>§ {{ number.orders }}. Zamówienia i zawarcie umowy</h2>
+<ol>
+<li>Informacje o Produktach w Sklepie, w tym ceny, stanowią zaproszenie do zawarcia umowy.</li>
+<li>Aby złożyć Zamówienie, Klient dodaje Produkty do koszyka, podaje dane potrzebne do realizacji Zamówienia, wybiera sposób dostawy i płatności, zapoznaje się z Regulaminem i potwierdza Zamówienie przyciskiem oznaczającym obowiązek zapłaty.</li>
+<li>Przed złożeniem Zamówienia Klient widzi łączną cenę Produktów wraz z podatkami oraz koszty dostawy.</li>
+<li>Po złożeniu Zamówienia Klient otrzymuje e-mail z potwierdzeniem jego przyjęcia. Z chwilą otrzymania tego e-maila zostaje zawarta umowa sprzedaży.</li>
+<li>Treść umowy jest utrwalana w e-mailu z potwierdzeniem Zamówienia, a Regulamin jest stale dostępny w Sklepie.</li>
+</ol>
+
+<h2>§ {{ number.payments }}. Ceny i płatności</h2>
+<ol>
+<li>Ceny Produktów są podane w {{ currency_name }}. Łączna cena Zamówienia wraz z podatkami i kosztami dostawy jest podawana przed jego złożeniem.</li>
+<li>Klient płaci za Zamówienie w sposób wybrany przy jego składaniu{% if bank_transfer or cash_on_delivery or operators %}. W Sklepie dostępne są w szczególności:
+<ul>
+{% if bank_transfer %}<li>przelew tradycyjny na rachunek bankowy Sprzedawcy podany przy składaniu Zamówienia;</li>{% endif %}
+{% if cash_on_delivery %}<li>płatność przy odbiorze;</li>{% endif %}
+{% for operator in operators %}<li>płatności online {{ operator.name }} (m.in. BLIK, szybkie przelewy i karty płatnicze), obsługiwane przez {{ operator.company }};</li>{% endfor %}
+</ul>
+{% else %}.{% endif %}</li>
+{% if bank_transfer %}<li>Przy przelewie tradycyjnym Klient powinien zapłacić w terminie 7 dni od złożenia Zamówienia. Jeżeli płatność nie wpłynie w tym terminie, Sprzedawca może anulować Zamówienie, informując o tym Klienta.</li>{% endif %}
+{% if operators %}<li>Płatności online obsługują wskazani wyżej operatorzy płatności, na zasadach określonych w ich regulaminach.</li>{% endif %}
+<li>Sprzedawca przekazuje Klientowi dowód zakupu zgodnie z obowiązującymi przepisami.</li>
+</ol>
+
+<h2>§ {{ number.delivery }}. Dostawa</h2>
+<ol>
+<li>Sprzedawca dostarcza Produkty na terenie Polski.</li>
+<li>Sposoby dostawy i ich koszty są podawane przy składaniu Zamówienia{% if courier or free_shipping or local_pickup %}. W Sklepie dostępne są w szczególności:
+<ul>
+{% if courier %}<li>przesyłka kurierska;</li>{% endif %}
+{% if free_shipping %}<li>darmowa dostawa{% if free_shipping_from %} przy Zamówieniach o wartości co najmniej {{ free_shipping_from }}{% endif %};</li>{% endif %}
+{% if local_pickup %}<li>odbiór osobisty w miejscu wskazanym przy składaniu Zamówienia;</li>{% endif %}
+</ul>
+{% else %}.{% endif %}</li>
+<li>Sprzedawca wysyła Zamówienie w ciągu {{ dispatch }} od zaksięgowania płatności{% if cash_on_delivery %}, a przy płatności przy odbiorze – od zawarcia umowy{% endif %}. Czas doręczenia przesyłki zależy od wybranego sposobu dostawy.</li>
+<li>Warto sprawdzić przesyłkę przy odbiorze, a w razie jej uszkodzenia spisać protokół szkody z dostawcą. Nie jest to warunkiem skorzystania z praw opisanych w Regulaminie.</li>
+</ol>
+
+<h2>§ {{ number.withdrawal }}. Odstąpienie od umowy</h2>
+<ol>
+<li>Konsument może odstąpić od umowy sprzedaży bez podania przyczyny w terminie {{ seller.return_days }} dni{% if seller.return_days > 14 %} (Sprzedawca wydłuża w ten sposób ustawowy termin 14 dni){% endif %}. Termin biegnie od objęcia Produktu w posiadanie przez Konsumenta lub wskazaną przez niego osobę inną niż przewoźnik, a gdy Zamówienie obejmuje wiele Produktów dostarczanych osobno – od objęcia w posiadanie ostatniego z nich.</li>
+<li>Aby odstąpić od umowy, Konsument składa Sprzedawcy oświadczenie o odstąpieniu, np. e-mailem na adres {{ shop.contact_email }} albo pisemnie na adres {{ address }}. Może skorzystać ze wzoru formularza zamieszczonego na końcu Regulaminu, ale nie jest to obowiązkowe. Do zachowania terminu wystarczy wysłanie oświadczenia przed jego upływem.</li>
+<li>Sprzedawca niezwłocznie potwierdza Konsumentowi e-mailem otrzymanie oświadczenia o odstąpieniu.</li>
+<li>Konsument zwraca Produkt niezwłocznie, nie później niż w terminie 14 dni od dnia odstąpienia od umowy, na adres {{ address }}, chyba że Sprzedawca zaproponuje, że sam odbierze Produkt. Do zachowania terminu wystarczy odesłanie Produktu przed jego upływem.</li>
+<li>{% if seller.free_returns %}Koszt zwrotu Produktu pokrywa Sprzedawca.{% else %}Konsument ponosi bezpośredni koszt zwrotu Produktu.{% endif %}</li>
+<li>Sprzedawca zwraca Konsumentowi wszystkie otrzymane od niego płatności, w tym koszt dostarczenia Produktu, niezwłocznie, nie później niż w terminie 14 dni od otrzymania oświadczenia o odstąpieniu. Jeżeli Konsument wybrał sposób dostawy inny niż najtańszy oferowany w Sklepie, Sprzedawca nie zwraca dodatkowych kosztów z tym związanych.</li>
+<li>Zwrot płatności następuje tym samym sposobem płatności, jakiego użył Konsument, chyba że Konsument zgodzi się na inny sposób, który nie wiąże się dla niego z żadnymi kosztami. Sprzedawca może wstrzymać się ze zwrotem płatności do chwili otrzymania Produktu z powrotem albo dowodu jego odesłania, zależnie od tego, co nastąpi wcześniej.</li>
+<li>Konsument odpowiada za zmniejszenie wartości Produktu wynikające z korzystania z niego w sposób wykraczający poza konieczny do stwierdzenia jego charakteru, cech i funkcjonowania.</li>
+<li>Zgodnie z art. 38 ustawy z dnia 30 maja 2014 r. o prawach konsumenta prawo odstąpienia od umowy nie przysługuje między innymi w odniesieniu do umów, w których przedmiotem świadczenia jest:
+<ul>
+<li>rzecz nieprefabrykowana, wyprodukowana według specyfikacji Konsumenta lub służąca zaspokojeniu jego zindywidualizowanych potrzeb;</li>
+<li>rzecz ulegająca szybkiemu zepsuciu lub mająca krótki termin przydatności do użycia;</li>
+<li>rzecz dostarczana w zapieczętowanym opakowaniu, której po otwarciu opakowania nie można zwrócić ze względu na ochronę zdrowia lub ze względów higienicznych, jeżeli opakowanie zostało otwarte po dostarczeniu;</li>
+<li>rzecz, która po dostarczeniu, ze względu na swój charakter, zostaje nierozłącznie połączona z innymi rzeczami;</li>
+<li>nagranie dźwiękowe lub wizualne albo program komputerowy dostarczane w zapieczętowanym opakowaniu, jeżeli opakowanie zostało otwarte po dostarczeniu;</li>
+<li>dziennik, periodyk lub czasopismo, z wyjątkiem umowy o prenumeratę.</li>
+</ul>
+</li>
+<li>Postanowienia tego paragrafu stosuje się także do Przedsiębiorców na prawach konsumenta.</li>
+</ol>
+
+<h2>§ {{ number.complaints }}. Reklamacje</h2>
+<ol>
+<li>Sprzedawca odpowiada wobec Konsumenta za brak zgodności Produktu z umową istniejący w chwili jego dostarczenia i ujawniony w ciągu dwóch lat od tej chwili, na zasadach określonych w ustawie z dnia 30 maja 2014 r. o prawach konsumenta.</li>
+<li>Jeżeli Produkt jest niezgodny z umową, Konsument może żądać jego naprawy albo wymiany. Gdy naprawa i wymiana są niemożliwe albo wymagałyby nadmiernych kosztów, gdy Sprzedawca odmówił doprowadzenia Produktu do zgodności z umową albo nie zrobił tego w rozsądnym czasie, gdy brak zgodności jest istotny, a także w innych przypadkach wskazanych w ustawie, Konsument może złożyć oświadczenie o obniżeniu ceny albo o odstąpieniu od umowy. Od umowy nie można odstąpić, jeżeli brak zgodności jest nieistotny.</li>
+<li>Reklamację można złożyć e-mailem na adres {{ shop.contact_email }} albo pisemnie na adres {{ address }}. Warto opisać w niej, na czym polega niezgodność i kiedy ją zauważono, czego Klient żąda, oraz podać dane do kontaktu. Ułatwi to rozpatrzenie reklamacji.</li>
+<li>Sprzedawca odpowiada na reklamację Konsumenta w terminie 14 dni od jej otrzymania. Jeżeli nie odpowie w tym terminie, uważa się, że uznał reklamację.</li>
+<li>Koszty naprawy, wymiany oraz dostarczenia Produktu w związku z reklamacją ponosi Sprzedawca.</li>
+<li>Postanowienia tego paragrafu stosuje się także do Przedsiębiorców na prawach konsumenta. Odpowiedzialność Sprzedawcy wobec pozostałych Klientów określają przepisy Kodeksu cywilnego o rękojmi.</li>
+</ol>
+
+{% if reviews %}
+<h2>§ {{ number.reviews }}. Opinie o Produktach</h2>
+<ol>
+<li>Klienci mogą dodawać w Sklepie opinie o Produktach. Sprzedawca nie zapewnia, że opinie pochodzą wyłącznie od osób, które kupiły lub używały danego Produktu.</li>
+<li>Opinia nie może zawierać treści bezprawnych, obraźliwych, wprowadzających w błąd ani reklamowych. Sprzedawca może nie opublikować albo usunąć opinię naruszającą te zasady i informuje o tym jej autora wraz z uzasadnieniem, jeżeli zna jego adres e-mail.</li>
+<li>Treści bezprawne w Sklepie można zgłosić na adres {{ shop.contact_email }}, podając uzasadnienie zgłoszenia i adres strony, na której się znajdują. Sprzedawca rozpatruje zgłoszenie niezwłocznie i informuje zgłaszającego o swojej decyzji.</li>
+</ol>
+{% endif %}
+
+<h2>§ {{ number.disputes }}. Pozasądowe sposoby rozpatrywania reklamacji</h2>
+<ol>
+<li>Konsument może skorzystać z pozasądowych sposobów rozpatrywania reklamacji i dochodzenia roszczeń. Może w szczególności zwrócić się o pomoc do miejskiego lub powiatowego rzecznika konsumentów albo organizacji społecznej zajmującej się ochroną konsumentów, wystąpić do wojewódzkiego inspektora Inspekcji Handlowej o przeprowadzenie mediacji albo zwrócić się do stałego polubownego sądu konsumenckiego.</li>
+<li>Informacje o tych sposobach są dostępne na stronie Urzędu Ochrony Konkurencji i Konsumentów: prawakonsumenta.uokik.gov.pl. Skorzystanie z nich jest dobrowolne.</li>
+</ol>
+
+<h2>§ {{ number.data }}. Dane osobowe</h2>
+<p>Zasady przetwarzania danych osobowych Klientów opisuje Polityka prywatności dostępna w Sklepie.</p>
+
+<h2>§ {{ number.final }}. Postanowienia końcowe</h2>
+<ol>
+<li>W sprawach nieuregulowanych w Regulaminie stosuje się przepisy prawa polskiego, w szczególności Kodeksu cywilnego, ustawy o prawach konsumenta i ustawy o świadczeniu usług drogą elektroniczną.</li>
+<li>Wybór prawa polskiego nie pozbawia Konsumenta ochrony, którą zapewniają mu przepisy nie dające się wyłączyć w drodze umowy, obowiązujące w państwie jego zwykłego pobytu.</li>
+<li>Spory z Klientami niebędącymi Konsumentami ani Przedsiębiorcami na prawach konsumenta rozstrzyga sąd właściwy dla siedziby Sprzedawcy.</li>
+<li>Sprzedawca może zmienić Regulamin z ważnych przyczyn, w szczególności zmiany przepisów prawa albo sposobów płatności lub dostawy. Do Zamówień złożonych przed zmianą stosuje się Regulamin w brzmieniu z dnia złożenia Zamówienia. Klient mający Konto może je usunąć, jeżeli nie akceptuje zmian.</li>
+<li>Regulamin obowiązuje od {{ date }}.</li>
+</ol>
+
+<h2>Wzór formularza odstąpienia od umowy</h2>
+<p>(formularz ten należy wypełnić i odesłać tylko w przypadku chęci odstąpienia od umowy)</p>
+<ul>
+<li>Adresat: {{ seller.seller_name }}, {{ address }}, e-mail: {{ shop.contact_email }}</li>
+<li>Ja/My(*) niniejszym informuję/informujemy(*) o moim/naszym odstąpieniu od umowy sprzedaży następujących rzeczy(*) umowy dostawy następujących rzeczy(*) umowy o dzieło polegającej na wykonaniu następujących rzeczy(*)/o świadczenie następującej usługi(*)</li>
+<li>Data zawarcia umowy(*)/odbioru(*)</li>
+<li>Imię i nazwisko konsumenta(-ów)</li>
+<li>Adres konsumenta(-ów)</li>
+<li>Podpis konsumenta(-ów) (tylko jeżeli formularz jest przesyłany w wersji papierowej)</li>
+<li>Data</li>
+</ul>
+<p>(*) Niepotrzebne skreślić.</p>

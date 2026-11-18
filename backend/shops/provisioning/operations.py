@@ -3,7 +3,7 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
-from .. import shop_settings
+from .. import documents, shop_settings
 from ..models import ShopChecklist, ShopOperation, ShopSettings, ShopTemplate
 from . import get_provisioner
 from .base import ProvisioningError
@@ -11,6 +11,7 @@ from .base import ProvisioningError
 logger = logging.getLogger(__name__)
 
 GENERIC_ERROR = "Nie udało się wprowadzić zmian w sklepie. Spróbuj ponownie za chwilę."
+PUBLISH_ERROR = "Nie udało się opublikować regulaminu i polityki prywatności w sklepie. Spróbuj ponownie za chwilę."
 
 Kind = ShopOperation.Kind
 
@@ -41,6 +42,8 @@ def run_operation(operation_id):
             operation.result = {"removed": provisioner.remove_sample_products(shop)}
             # The start checklist ticks it off at once, without counting the products again.
             ShopChecklist.objects.filter(shop=shop).update(sample_products=0)
+        elif operation.kind == Kind.PUBLISH_DOCUMENTS:
+            _publish_again(provisioner, shop)
     except Exception as exc:
         logger.exception("Shop operation %s (%s) on shop %s failed", operation.pk, operation.kind, shop.pk)
         # Raw exception text may contain internals, so the owner only sees it for known errors.
@@ -62,12 +65,37 @@ def _update_settings(provisioner, shop, changes, keys):
     # The provisioning steps reused for language and theme read the shop's config, so it gets the new values first.
     _apply_to_shop(shop, changes)
     provisioner.apply_settings(shop, changes, values)
+    if documents.should_publish(changes, values):
+        _publish_documents(provisioner, shop, values)
     with transaction.atomic():
         shop.save(update_fields=["name", "updated_at"])
         shop.config.save()
         stored.values = shop_settings.conceal(values, keys)
         stored.save(update_fields=["values", "updated_at"])
     _sync_quietly(provisioner, shop)
+
+
+def _publish_documents(provisioner, shop, values):
+    """Write the terms and privacy policy for `values` into the shop; `values` get where they are."""
+    try:
+        published = provisioner.publish_documents(shop, documents.render(values, shop.url))
+    except Exception as exc:
+        # The other changes are in the shop by now; the owner learns which part failed.
+        raise ProvisioningError(PUBLISH_ERROR) from exc
+    values["documents"].update(
+        terms_url=published["terms"], privacy_url=published["privacy"], version=documents.VERSION,
+    )
+
+
+def _publish_again(provisioner, shop):
+    """The documents from the current templates, e.g. after a change in the law (publish_shop_documents)."""
+    stored = _stored(shop)
+    values = shop_settings.complete(stored.values, shop_settings.default_settings(shop))
+    if not values["documents"]["managed"]:
+        return
+    _publish_documents(provisioner, shop, values)
+    stored.values = values
+    stored.save(update_fields=["values", "updated_at"])
 
 
 def _apply_to_shop(shop, changes):

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { backArrowOptions } from '@/components/back-link';
+import { DocumentsSettings } from '@/components/documents-settings';
 import { Icon } from '@/components/icon';
 import { OnlinePayment } from '@/components/online-payment';
 import { Page } from '@/components/page';
@@ -32,7 +33,13 @@ import {
   sectionErrors,
   toApi,
 } from '@/lib/settings-form';
-import type { SettingsSection as Section, ShopOperation, ShopSettings, ShopSettingsValues } from '@/lib/types';
+import type {
+  SettingsSection as Section,
+  ShopDocument,
+  ShopOperation,
+  ShopSettings,
+  ShopSettingsValues,
+} from '@/lib/types';
 
 // Read the shop again on opening when the last read is older than this.
 const FRESH_FOR_MS = 60_000;
@@ -53,6 +60,7 @@ const MENU: (SettingsMenuItem<MenuKey> & { slug: string })[] = [
   { key: 'shopping', slug: 'zakupy', title: 'Zakupy', icon: 'cart' },
   { key: 'payments', slug: 'platnosci', title: 'Płatności', icon: 'card' },
   { key: 'shipping', slug: 'wysylka', title: 'Wysyłka', icon: 'truck' },
+  { key: 'documents', slug: 'regulamin', title: 'Regulamin', icon: 'document' },
   { key: 'taxes', slug: 'podatki', title: 'Podatki', icon: 'percent' },
   { key: 'region', slug: 'region', title: 'Region', icon: 'globe' },
   { key: 'appearance', slug: 'wyglad', title: 'Wygląd', icon: 'palette' },
@@ -61,7 +69,17 @@ const MENU: (SettingsMenuItem<MenuKey> & { slug: string })[] = [
   { key: 'history', slug: 'historia', title: 'Ostatnie zmiany', icon: 'history' },
 ];
 
-const SECTION_KEYS: MenuKey[] = ['general', 'availability', 'shopping', 'payments', 'shipping', 'taxes', 'region', 'appearance'];
+const SECTION_KEYS: MenuKey[] = [
+  'general',
+  'availability',
+  'shopping',
+  'payments',
+  'shipping',
+  'documents',
+  'taxes',
+  'region',
+  'appearance',
+];
 
 /** The menu without the sections the shop's platform doesn't let the app change. */
 function menuFor(settings: ShopSettings | undefined) {
@@ -133,8 +151,12 @@ export default function ShopSettingsScreen() {
       notify.error(operation.error || 'Nie udało się wprowadzić zmian w sklepie.');
       return;
     }
-    if (operation.kind === 'update_settings') {
+    if (operation.kind === 'update_settings' && operation.changes.documents?.managed === true) {
+      notify.success('Regulamin i polityka prywatności są już w sklepie.');
+    } else if (operation.kind === 'update_settings') {
       notify.success(`Zapisano w sklepie: ${fieldList(operation.changed_fields)}.`);
+    } else if (operation.kind === 'publish_documents') {
+      notify.success('Regulamin i polityka prywatności w sklepie mają nową wersję.');
     } else if (operation.kind === 'reset_admin_password') {
       notify.success('Nowe hasło administratora wysłaliśmy na Twój adres e-mail.');
     } else if (operation.kind === 'remove_sample_products') {
@@ -188,7 +210,7 @@ export default function ShopSettingsScreen() {
     ) {
       return;
     }
-    const body = Object.fromEntries(Object.entries(changes(section)).map(([key, value]) => [key, toApi(key, value)]));
+    const body = apiChanges(section);
     setSaving(section);
     try {
       const next = await api<ShopSettings>(`/shops/${id}/settings/`, { method: 'PATCH', body: { [section]: body } });
@@ -209,6 +231,29 @@ export default function ShopSettingsScreen() {
       }
     } finally {
       setSaving(null);
+    }
+  }
+
+  function apiChanges(section: Section) {
+    return Object.fromEntries(Object.entries(changes(section)).map(([key, value]) => [key, toApi(key, value)]));
+  }
+
+  async function previewDocuments() {
+    try {
+      const result = await api<{ documents: ShopDocument[] }>(`/shops/${id}/documents/preview/`, {
+        method: 'POST',
+        body: { documents: apiChanges('documents') },
+      });
+      setErrors((current) => ({ ...current, documents: {} }));
+      return result.documents;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 400) {
+        setErrors((current) => ({ ...current, ...sectionErrors(e.data) }));
+        notify.error('Uzupełnij zaznaczone pola, żeby zobaczyć podgląd.');
+      } else {
+        notify.error((e as Error).message);
+      }
+      return null;
     }
   }
 
@@ -488,6 +533,22 @@ export default function ShopSettingsScreen() {
                   description="Klient odbiera zamówienie u Ciebie, bez opłaty za wysyłkę."
                   value={get('shipping', 'local_pickup_enabled')}
                   onChange={(value) => set('shipping', 'local_pickup_enabled', value)}
+                />
+              </SettingsSection>
+            ) : null}
+            {active === 'documents' ? (
+              <SettingsSection
+                title="Regulamin i polityka prywatności"
+                description="Dokumenty, które musi mieć każdy sklep w Polsce, napisane z danych Twojego sklepu."
+                {...section('documents')}>
+                <DocumentsSettings
+                  saved={values.documents}
+                  value={(field) => get('documents', field)}
+                  onChange={(field, value) => set('documents', field, value)}
+                  error={(field) => fieldError('documents', field)}
+                  registers={options.registers}
+                  country={country}
+                  onPreview={previewDocuments}
                 />
               </SettingsSection>
             ) : null}

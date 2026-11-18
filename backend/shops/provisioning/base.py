@@ -68,6 +68,13 @@ class BaseProvisioner:
         """
         raise NotImplementedError
 
+    def publish_documents(self, shop, documents):
+        """
+        Publish the terms of sale and privacy policy (shops.documents.Document, keys "terms" and "privacy") as pages
+        of the shop, replacing the ones it has, and show them where customers accept them. Returns {key: page URL}.
+        """
+        raise NotImplementedError
+
     def reset_admin_password(self, shop):
         """Give the shop administrator a new password and store it in the shop's credentials."""
         raise NotImplementedError

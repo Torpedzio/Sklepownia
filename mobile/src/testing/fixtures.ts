@@ -48,13 +48,41 @@ export function shopSettings(overrides: Overrides = {}, extra: Partial<ShopSetti
     taxes: { enabled: false, prices_include_tax: true, standard_rate: '23.00' },
     region: { language: 'pl_PL', currency: 'PLN', country: 'PL', timezone: 'Europe/Warsaw' },
     appearance: { theme: 'storefront' },
+    documents: {
+      managed: false,
+      seller_name: 'Palarnia Jan Kowalski',
+      register: 'ceidg',
+      street: 'ul. Kawowa 1',
+      postal_code: '00-001',
+      city: 'Warszawa',
+      tax_id: '5260001246',
+      regon: '',
+      krs: '',
+      phone: '',
+      return_days: 14,
+      free_returns: false,
+      dispatch_days: 2,
+      terms_url: '',
+      privacy_url: '',
+      version: '',
+    },
   };
   for (const [section, fields] of Object.entries(overrides)) {
     Object.assign(values[section as keyof ShopSettingsValues], fields);
   }
   return {
     values,
-    sections: ['general', 'availability', 'shopping', 'payments', 'shipping', 'taxes', 'region', 'appearance'],
+    sections: [
+      'general',
+      'availability',
+      'shopping',
+      'payments',
+      'shipping',
+      'taxes',
+      'region',
+      'appearance',
+      'documents',
+    ],
     payment_operators: ['przelewy24', 'payu'],
     server_ip: '203.0.113.7',
     panel_name: 'panel WordPressa',
@@ -80,6 +108,11 @@ export function shopSettings(overrides: Overrides = {}, extra: Partial<ShopSetti
         { value: 'astra', label: 'Astra' },
       ],
       vat_rates: { PL: ['23.00', '8.00', '5.00', '0.00'], DE: ['19.00', '7.00', '0.00'] },
+      registers: [
+        { value: 'ceidg', label: 'Działalność gospodarcza (CEIDG)' },
+        { value: 'krs', label: 'Spółka w KRS' },
+        { value: 'unregistered', label: 'Działalność nierejestrowana' },
+      ],
     },
     ...extra,
   };
@@ -176,7 +209,15 @@ export function shopSales(overrides: Partial<ShopSales> = {}): ShopSales {
 
 /** The start checklist of a WooCommerce shop with samples: the steps in `done` are ticked off. */
 export function shopChecklist(done: ChecklistStepKey[] = [], overrides: Partial<ShopChecklist> = {}): ShopChecklist {
-  const keys: ChecklistStepKey[] = ['payments', 'shipping', 'products', 'sample_products', 'notifications', 'test_order'];
+  const keys: ChecklistStepKey[] = [
+    'payments',
+    'shipping',
+    'documents',
+    'products',
+    'sample_products',
+    'notifications',
+    'test_order',
+  ];
   return {
     available: true,
     hidden: false,
