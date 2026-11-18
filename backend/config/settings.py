@@ -313,8 +313,12 @@ FAKTUROWNIA_API_TOKEN = os.environ.get("FAKTUROWNIA_API_TOKEN", "")
 # 1 = invoices for companies go to KSeF (the account needs KSeF connected: Ustawienia → KSeF).
 FAKTUROWNIA_KSEF = os.environ.get("FAKTUROWNIA_KSEF", "1") == "1"
 
+# How often the worker copies running shops' orders for the sales overview (shops/sales.py).
+SHOP_ORDERS_SYNC_MINUTES = int(os.environ.get("SHOP_ORDERS_SYNC_MINUTES", "15"))
+
 CELERY_BEAT_SCHEDULE = {
     "renew-subscriptions": {"task": "billing.tasks.renew_subscriptions", "schedule": 15 * 60},
     "reconcile-payments": {"task": "billing.tasks.reconcile_payments", "schedule": 5 * 60},
     "process-invoices": {"task": "billing.tasks.process_invoices", "schedule": 5 * 60},
+    "sync-shop-orders": {"task": "shops.tasks.sync_all_shop_orders", "schedule": SHOP_ORDERS_SYNC_MINUTES * 60},
 }

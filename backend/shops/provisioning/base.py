@@ -64,3 +64,10 @@ class BaseProvisioner:
     def remove_sample_products(self, shop):
         """Delete the sample products added at provisioning. Returns how many were removed."""
         raise NotImplementedError
+
+    def read_orders(self, shop, since, limit):
+        """
+        Orders changed at or after `since` (an aware datetime), the oldest change first, at most `limit` of them,
+        as shops.orders.Order. Read-only: the shop is not changed.
+        """
+        raise NotImplementedError

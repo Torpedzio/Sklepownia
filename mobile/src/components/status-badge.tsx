@@ -15,9 +15,13 @@ const STATUS_COLOR: Record<ShopStatus, [ThemeColor, ThemeColor]> = {
 };
 
 export function StatusBadge({ status, label }: { status: ShopStatus; label: string }) {
-  const theme = useTheme();
   const [color, background] = STATUS_COLOR[status];
+  return <Badge label={label} color={color} background={background} />;
+}
 
+/** A pill with a dot: the label says the state, the color only backs it up. */
+export function Badge({ label, color, background }: { label: string; color: ThemeColor; background: ThemeColor }) {
+  const theme = useTheme();
   return (
     <View style={[styles.badge, { backgroundColor: theme[background] }]}>
       <View style={[styles.dot, { backgroundColor: theme[color] }]} />

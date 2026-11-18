@@ -1,4 +1,4 @@
-import type { ShopDetail, ShopSettings, ShopSettingsValues } from '@/lib/types';
+import type { SalesDay, ShopDetail, ShopSales, ShopSettings, ShopSettingsValues } from '@/lib/types';
 
 type Overrides = { [S in keyof ShopSettingsValues]?: Partial<ShopSettingsValues[S]> };
 
@@ -117,6 +117,40 @@ export function shopDetail(overrides: Partial<ShopDetail> = {}): ShopDetail {
         error: status === 'failed' && index === 1 ? 'WordPress nie wystartował.' : '',
       })),
     },
+    ...overrides,
+  };
+}
+
+/**
+ * The sales overview of a shop with three orders: two today (one new, one paid) and one on 3 November.
+ * The 30 days run from 20 October to 18 November 2026.
+ */
+export function shopSales(overrides: Partial<ShopSales> = {}): ShopSales {
+  const daily: SalesDay[] = Array.from({ length: 30 }, (_, offset) => {
+    const date = new Date(Date.UTC(2026, 9, 20 + offset)).toISOString().slice(0, 10);
+    const sales = { '2026-11-03': ['1', '200.00'], '2026-11-18': ['2', '120.00'] }[date] ?? ['0', '0.00'];
+    return { date, orders: Number(sales[0]), revenue: sales[1] };
+  });
+  return {
+    available: true,
+    synced_at: '2026-11-18T13:05:00Z',
+    refreshing: false,
+    error: '',
+    currency: 'PLN',
+    today: { orders: 2, revenue: '120.00', average: '60.00' },
+    last_7_days: { orders: 2, revenue: '120.00', average: '60.00' },
+    last_30_days: { orders: 3, revenue: '320.00', average: '106.67' },
+    previous_30_days: { orders: 2, revenue: '250.00', average: '125.00' },
+    daily,
+    to_handle: { new: 1, processing: 1 },
+    recent: [
+      { number: '1042', status: 'processing', status_display: 'W realizacji', total: '70.00', currency: 'PLN',
+        items: 2, customer: 'Anna N.', placed_at: '2026-11-18T12:40:00Z' },
+      { number: '1041', status: 'new', status_display: 'Nowe', total: '50.00', currency: 'PLN', items: 1,
+        customer: 'Jan K.', placed_at: '2026-11-18T09:15:00Z' },
+      { number: '1040', status: 'completed', status_display: 'Zrealizowane', total: '200.00', currency: 'PLN',
+        items: 4, customer: 'Ola W.', placed_at: '2026-11-03T17:00:00Z' },
+    ],
     ...overrides,
   };
 }

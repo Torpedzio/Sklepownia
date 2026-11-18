@@ -2,8 +2,9 @@ from smtplib import SMTPException
 
 from celery import shared_task
 
+from . import sales
 from .emails import admin_access_message
-from .models import Shop, ShopOperation
+from .models import SalesSync, Shop, ShopOperation, ShopOrder
 from .provisioning import get_provisioner
 from .provisioning.operations import run_operation
 from .provisioning.runner import run_job
@@ -22,6 +23,9 @@ def teardown_shop(shop_id):
     if shop is None:
         return
     get_provisioner(shop.platform).teardown(shop)
+    # The copy of its orders goes with the shop: it holds customers' names.
+    ShopOrder.objects.filter(shop=shop).delete()
+    SalesSync.objects.filter(shop=shop).delete()
     if shop.owner.deleted_at is not None:
         # The owner deleted the account: nothing of the shop is kept, its settings and history included.
         shop.delete()
@@ -71,3 +75,14 @@ def send_admin_access_email(shop_id, reason):
     if shop is None:
         return
     admin_access_message(shop, reason).send()
+
+
+@shared_task
+def sync_shop_orders(shop_id):
+    sales.sync(shop_id)
+
+
+@shared_task
+def sync_all_shop_orders():
+    """Scheduled by Celery beat (SHOP_ORDERS_SYNC_MINUTES)."""
+    sales.sync_all()

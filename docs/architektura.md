@@ -30,7 +30,7 @@
 | PostgreSQL | Konta, sklepy, konfiguracja, zaszyfrowane hasła sklepów, postęp zakładania | `db` w [docker-compose.yml](../docker-compose.yml) |
 | Redis | Kolejka zadań Celery | `redis` |
 | Worker Celery | Wykonuje długie zadania: zakładanie i usuwanie sklepów, wysyłkę e-maili, odnowienia planów | `worker` |
-| Celery beat | Zleca zadania według harmonogramu (`CELERY_BEAT_SCHEDULE`): co 15 minut odnowienia planów, co 5 minut płatności i faktury czekające na wynik | `beat` |
+| Celery beat | Zleca zadania według harmonogramu (`CELERY_BEAT_SCHEDULE`): co 15 minut odnowienia planów i odczyt zamówień ze sklepów, co 5 minut płatności i faktury czekające na wynik | `beat` |
 | Tpay | Operator płatności: strona płatności kartą, zapisywanie i obciążanie karty, powiadomienia ([platnosci.md](platnosci.md)) | zewnętrzny |
 | Mailpit | Lokalny serwer SMTP: przyjmuje całą pocztę i pokazuje ją w przeglądarce. Na produkcji zastępuje go dostawca poczty. | `mail` |
 | Poczta sklepów | Przekaźnik, przez który sklepy wysyłają e-maile do klientów ([poczta sklepów](../infra/shops/README.md#poczta-sklepów)). Lokalnie drugi Mailpit, na produkcji przekaźnik do dostawcy poczty. | `shops-mail` |
@@ -80,6 +80,20 @@ Backend trzyma ostatnio odczytany stan (`ShopSettings`), a pracę na sklepie wyk
 
 Na jednym sklepie trwa najwyżej jedna operacja. Operacja starsza niż 15 minut przestaje blokować kolejne
 (np. gdy worker padł w jej trakcie). Po błędzie worker i tak czyta sklep, bo część zmian mogła już wejść.
+
+## Sprzedaż w aplikacji
+
+Zamówienia zostają w sklepie, a platforma trzyma ich kopię z ostatnich 90 dni (`ShopOrder`), bo tylko worker może
+wejść do kontenera sklepu. Podsumowanie liczy się z kopii, więc otwiera się od razu.
+
+1. Co 15 minut (`SHOP_ORDERS_SYNC_MINUTES`) beat zleca odczyt każdego działającego sklepu. Worker czyta tylko
+   zamówienia zmienione od poprzedniego odczytu ([sales.sync](../backend/shops/sales.py)).
+2. Ekran sprzedaży pobiera `GET /api/shops/{id}/sales/`. Gdy kopia ma ponad 2 minuty, backend zleca odczyt i zwraca
+   `refreshing: true`, a aplikacja co 2,5 s pyta ponownie, pokazując do tego czasu poprzednie liczby.
+3. Gdy odczyt się nie uda, kopia zostaje, a odpowiedź ma `error`. Następna próba jest przy kolejnym przebiegu
+   harmonogramu albo po „Odśwież”.
+
+Usunięcie sklepu usuwa też kopię jego zamówień.
 
 ## Stany sklepu
 

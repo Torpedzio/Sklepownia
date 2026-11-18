@@ -1,12 +1,21 @@
+import random
 import secrets
 import time
+from datetime import timedelta
+from decimal import Decimal
 
 from django.conf import settings
+from django.utils import timezone
 
 from .. import shop_settings
 from ..models import Server, ShopCredentials, ShopSettings
+from ..orders import Order, Status
 from ..platforms import platform_info
 from .base import BaseProvisioner, ProvisioningError
+
+
+FAKE_STATUSES = (Status.NEW, Status.PROCESSING, Status.COMPLETED, Status.CANCELLED, Status.UNFINISHED)
+FAKE_CUSTOMERS = ("Anna N.", "Jan K.", "Ewa W.", "Piotr Z.", "Maria L.", "Tomasz B.")
 
 
 class FakeProvisioner(BaseProvisioner):
@@ -67,6 +76,25 @@ class FakeProvisioner(BaseProvisioner):
     def remove_sample_products(self, shop):
         self._simulate("remove_sample_products")
         return 6 if shop.config.include_sample_products else 0
+
+    def read_orders(self, shop, since, limit):
+        """Made-up orders, the same on every read: from 45 days before the shop was created until now."""
+        self._simulate("read_orders")
+        rng = random.Random(shop.pk)
+        now = timezone.now()
+        placed = shop.created_at - timedelta(days=45)
+        number = 1000
+        orders = []
+        while placed <= now:
+            number += 1
+            status = rng.choices(FAKE_STATUSES, weights=(2, 3, 8, 1, 1))[0]
+            orders.append(Order(
+                external_id=str(number), number=str(number), status=status,
+                total=Decimal(rng.randrange(2900, 39900)) / 100, currency=shop.config.currency,
+                items=rng.randint(1, 4), customer=rng.choice(FAKE_CUSTOMERS), placed_at=placed, changed_at=placed,
+            ))
+            placed += timedelta(hours=rng.randint(5, 30))
+        return [order for order in orders if order.changed_at >= since][:limit]
 
     def _simulate(self, key):
         time.sleep(settings.FAKE_PROVISIONER_STEP_DELAY)

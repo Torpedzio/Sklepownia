@@ -24,6 +24,8 @@ export const Colors = {
     dangerMuted: '#F8E4E1',
     success: '#0F7B5F',
     warning: '#A86B00',
+    // Bars of the sales chart.
+    chart: '#0F7B5F',
     // Receipts stay paper-white in dark mode too.
     receipt: '#FFFFFF',
     receiptInk: '#1D2433',
@@ -47,6 +49,8 @@ export const Colors = {
     dangerMuted: '#402424',
     success: '#3CC59A',
     warning: '#F2C14E',
+    // Darker than primary, so the bars don't glare on the dark surface.
+    chart: '#2DA882',
     receipt: '#F7F7F2',
     receiptInk: '#1D2433',
     receiptMuted: '#6D7487',

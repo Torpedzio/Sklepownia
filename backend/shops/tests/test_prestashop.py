@@ -299,3 +299,26 @@ def test_update_address_moves_the_shop(provisioner, shell, shop, monkeypatch):
 
     assert previous == f"{shop.url.split('://')[0]}://palarnia.stary.example"
     assert shell.php("shop_url")[0][1] == {"domain": shop.url.split("://")[1]}
+
+
+# --- orders for the sales overview ---
+
+
+def test_orders_are_read_from_prestashop(provisioner, shell, shop):
+    from datetime import UTC, datetime
+    from decimal import Decimal
+
+    rows = [
+        {"id": "7", "number": "XKBKNABJK", "status": "processing", "total": "123.456000", "currency": "PLN",
+         "items": 2, "first_name": "Ewa", "last_name": "Wiśniewska", "created": 1794000000, "modified": 1794000300},
+    ]
+    shell.on_php("PS_OS_CANCELED", output=f"Notice\n{OUTPUT_MARKER}{json.dumps(rows)}")
+
+    [order] = provisioner.read_orders(shop, datetime(2026, 11, 1, tzinfo=UTC), 100)
+
+    [(script, data)] = shell.php("PS_OS_CANCELED")
+    assert "date_default_timezone_get()" in script
+    assert data == {"since": int(datetime(2026, 11, 1, tzinfo=UTC).timestamp()), "limit": 100}
+    assert (order.external_id, order.number, order.status, order.total, order.items, order.customer) == (
+        "7", "XKBKNABJK", "processing", Decimal("123.46"), 2, "Ewa W.")
+    assert order.placed_at == datetime.fromtimestamp(1794000000, tz=UTC)

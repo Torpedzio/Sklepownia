@@ -306,3 +306,43 @@ export type PlanChangeResult = {
   payment: Payment | null;
   redirect_url: string | null;
 };
+
+/** Sales summed over a few days: placed orders that aren't cancelled, in the shop's currency. */
+export type SalesPeriod = { orders: number; revenue: string; average: string };
+
+export type SalesDay = { date: string; orders: number; revenue: string };
+
+export type OrderStatus = 'new' | 'processing' | 'completed' | 'cancelled' | 'unfinished';
+
+/** An order as last read from the shop. The customer is a first name and an initial. */
+export type ShopOrder = {
+  number: string;
+  status: OrderStatus;
+  status_display: string;
+  total: string;
+  currency: string;
+  items: number;
+  customer: string;
+  placed_at: string;
+};
+
+/** The sales overview, counted from a copy of the shop's orders that the platform reads every few minutes. */
+export type ShopSales = {
+  /** The shop runs, so its orders are read. */
+  available: boolean;
+  synced_at: string | null;
+  /** A read is under way: ask again in a few seconds. */
+  refreshing: boolean;
+  /** Why the last read failed; empty when it worked. */
+  error: string;
+  currency: string;
+  today: SalesPeriod;
+  last_7_days: SalesPeriod;
+  last_30_days: SalesPeriod;
+  previous_30_days: SalesPeriod;
+  /** The last 30 days, oldest first. */
+  daily: SalesDay[];
+  to_handle: { new: number; processing: number };
+  /** The latest orders, newest first. */
+  recent: ShopOrder[];
+};

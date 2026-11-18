@@ -71,6 +71,21 @@ jedna naraz. Gdy sklep nie działa albo wykonuje poprzednią operację, odpowied
 | `GET shops/{id}/operations/` | 20 ostatnich operacji, od najnowszej |
 | `GET shops/{id}/operations/{operation_id}/` | Jedna operacja: `kind`, `status`, `changes`, `changed_fields` (etykiety zmienionych pól), `result`, `error`, czasy |
 
+### Sprzedaż
+
+Wymaga potwierdzonego e-maila. Worker co `SHOP_ORDERS_SYNC_MINUTES` minut kopiuje do bazy platformy zamówienia
+z ostatnich 90 dni (tylko zmienione od poprzedniego odczytu), a API liczy podsumowanie z tej kopii, więc odpowiada od
+razu, także gdy sklep jest wolny. Klient jest zapisany jako imię i inicjał nazwiska.
+
+| Metoda i ścieżka | Opis |
+|---|---|
+| `GET shops/{id}/sales/` | `{available, synced_at, refreshing, error, currency, today, last_7_days, last_30_days, previous_30_days, daily, to_handle, recent}`. Okresy to `{orders, revenue, average}` w walucie sklepu, liczone z zamówień nowych, w realizacji i zrealizowanych (bez anulowanych i nieopłaconych) według dnia złożenia w strefie platformy. `daily`: 30 dni od najstarszego, `{date, orders, revenue}`. `to_handle`: `{new, processing}`. `recent`: 10 ostatnich zamówień (bez nieopłaconych) z `number, status, status_display, total, currency, items, customer, placed_at`. Gdy kopia ma ponad 2 minuty, zleca odczyt i zwraca `refreshing: true`: aplikacja pyta ponownie co kilka sekund. `available: false` dla sklepu, który nie działa. |
+| `POST shops/{id}/sales/refresh/` | Odczyt zamówień teraz (przycisk „Odśwież”), `202` z tym samym kształtem. Gdy odczyt był przed chwilą (30 s) albo już trwa, nic nowego nie zleca. |
+
+Statusy zamówień (`status`): `new` (złożone, czeka na płatność albo potwierdzenie), `processing` (opłacone, do
+wysłania), `completed`, `cancelled` (także zwrócone i nieudane), `unfinished` (płatność online niedokończona).
+Każda platforma ma własne statusy, mapowane w `read_orders` jej provisionera.
+
 Sekcje i pola ustawień (pełny opis w `/api/docs/` i w [shop_settings.py](../backend/shops/shop_settings.py)):
 
 | Sekcja | Pola |

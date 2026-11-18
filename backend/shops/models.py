@@ -251,3 +251,55 @@ class ShopOperation(models.Model):
 
     def __str__(self):
         return f"{self.get_kind_display()} – {self.shop}"
+
+
+class ShopOrder(models.Model):
+    """
+    An order from the shop, copied for the sales overview in the app (shops/sales.py). Only recent orders are kept,
+    and of the customer only the first name and the initial of the last name.
+    """
+
+    class Status(models.TextChoices):
+        NEW = "new", "Nowe"
+        PROCESSING = "processing", "W realizacji"
+        COMPLETED = "completed", "Zrealizowane"
+        CANCELLED = "cancelled", "Anulowane"
+        # Checkout started but not paid for (e.g. an online payment abandoned); not a sale.
+        UNFINISHED = "unfinished", "Nieopłacone"
+
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="orders")
+    # The platform's own id, and the number the shop shows its customers.
+    external_id = models.CharField(max_length=40)
+    number = models.CharField(max_length=40)
+    status = models.CharField(max_length=20, choices=Status.choices)
+    total = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=3)
+    items = models.PositiveIntegerField(default=0)
+    customer = models.CharField(max_length=80, blank=True)
+    placed_at = models.DateTimeField()
+    changed_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-placed_at", "-id"]
+        constraints = [models.UniqueConstraint(fields=["shop", "external_id"], name="unique_shop_order")]
+        indexes = [models.Index(fields=["shop", "placed_at"])]
+
+    def __str__(self):
+        return f"{self.shop} #{self.number}"
+
+
+class SalesSync(models.Model):
+    """How far the shop's orders have been copied: the latest change read, and when."""
+
+    shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="sales_sync")
+    # The newest order change read so far; the next read starts a little before it.
+    cursor = models.DateTimeField(null=True, blank=True)
+    # The last read that worked, and the last read at all (also one that failed).
+    synced_at = models.DateTimeField(null=True, blank=True)
+    attempted_at = models.DateTimeField(null=True, blank=True)
+    # When the owner opened the overview with old data and a read was queued.
+    requested_at = models.DateTimeField(null=True, blank=True)
+    error = models.CharField(max_length=300, blank=True)
+
+    def __str__(self):
+        return f"{self.shop}: {self.synced_at}"

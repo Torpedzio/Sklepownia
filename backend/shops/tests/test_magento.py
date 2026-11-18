@@ -374,3 +374,33 @@ def test_teardown_removes_the_search_indexes(provisioner, shell, shop, settings)
 
     [delete] = [call for call in shell.calls if call["container"] == "shops-search"]
     assert delete["command"][-1] == f"http://localhost:9200/shop_{shop.pk}_*"
+
+
+# --- orders for the sales overview ---
+
+
+def test_orders_are_read_from_magento_s_database(provisioner, shell, shop):
+    from datetime import UTC, datetime
+    from decimal import Decimal
+
+    lines = [
+        {"id": 3, "number": "000000003", "state": "processing", "total": 89.5, "currency": "PLN", "items": 2.0,
+         "first_name": "Piotr", "last_name": "Zieliński", "created": 1794000000, "modified": 1794000900},
+        {"id": 4, "number": "000000004", "state": "pending_payment", "total": 10, "currency": None, "items": None,
+         "first_name": None, "last_name": None, "created": 1794001000, "modified": None},
+    ]
+    shell.on_command("mariadb", output="\n".join(json.dumps(line) for line in lines) + "\n")
+
+    orders = provisioner.read_orders(shop, datetime(2026, 11, 1, tzinfo=UTC), 500)
+
+    [call] = [call for call in shell.calls if call["command"][0] == "mariadb"]
+    assert "--raw" in call["command"]
+    assert call["command"][call["command"].index("-e") - 1] == f"shop_{shop.pk}"
+    statement = call["command"][-1]
+    assert f"FROM_UNIXTIME({int(datetime(2026, 11, 1, tzinfo=UTC).timestamp())})" in statement
+    assert statement.endswith("LIMIT 500")
+    assert [(o.external_id, o.number, o.status, o.total, o.currency, o.items, o.customer) for o in orders] == [
+        ("3", "000000003", "processing", Decimal("89.50"), "PLN", 2, "Piotr Z."),
+        ("4", "000000004", "unfinished", Decimal("10.00"), shop.config.currency, 0, ""),
+    ]
+    assert orders[1].changed_at == orders[1].placed_at

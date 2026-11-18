@@ -11,11 +11,13 @@ import json
 import re
 import secrets
 import string
+from decimal import Decimal
 
 from django.conf import settings
 
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
+from ..orders import Order, Status as OrderStatus, customer_label, from_timestamp
 from ..provisioning.base import ProvisioningError
 from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_memory, container_name, db_name, mail_relay,
@@ -66,6 +68,26 @@ PRODUCTS_WIDGET = (
     ' conditions_encoded="^[`1`:^[`type`:`Magento||CatalogWidget||Model||Rule||Condition||Combine`,'
     '`aggregator`:`all`,`value`:`1`,`new_child`:``^]^]"}}'
 )
+
+
+# Orders straight from the database: timestamps are compared as Unix time, so the session's time zone doesn't matter.
+READ_ORDERS_SQL = (
+    "SELECT JSON_OBJECT('id', entity_id, 'number', increment_id, 'state', state, 'total', grand_total,"
+    " 'currency', order_currency_code, 'items', total_qty_ordered, 'first_name', customer_firstname,"
+    " 'last_name', customer_lastname, 'created', UNIX_TIMESTAMP(created_at), 'modified', UNIX_TIMESTAMP(updated_at))"
+    " FROM sales_order WHERE updated_at >= FROM_UNIXTIME({since}) ORDER BY updated_at, entity_id LIMIT {limit}"
+)
+# Magento's order states; "pending_payment" waits for an online payment.
+ORDER_STATES = {
+    "new": OrderStatus.NEW,
+    "holded": OrderStatus.NEW,
+    "payment_review": OrderStatus.NEW,
+    "pending_payment": OrderStatus.UNFINISHED,
+    "processing": OrderStatus.PROCESSING,
+    "complete": OrderStatus.COMPLETED,
+    "closed": OrderStatus.CANCELLED,
+    "canceled": OrderStatus.CANCELLED,
+}
 
 
 class MagentoProvisioner(ContainerProvisioner):
@@ -339,6 +361,26 @@ class MagentoProvisioner(ContainerProvisioner):
             "system/smtp/username": "",
             MAIL_SENDER_PATH: relay["sender"],
         })
+
+    def read_orders(self, shop, since, limit):
+        output = self._sql(
+            READ_ORDERS_SQL.format(since=int(since.timestamp()), limit=int(limit)), database=db_name(shop), raw=True,
+        )
+        orders = []
+        for line in filter(None, output.splitlines()):
+            row = json.loads(line, parse_float=Decimal)
+            orders.append(Order(
+                external_id=str(row["id"]),
+                number=row["number"] or str(row["id"]),
+                status=ORDER_STATES.get(row["state"], OrderStatus.NEW),
+                total=Decimal(row["total"] or 0).quantize(Decimal("0.01")),
+                currency=row["currency"] or shop.config.currency,
+                items=int(row["items"] or 0),
+                customer=customer_label(row["first_name"], row["last_name"]),
+                placed_at=from_timestamp(row["created"]),
+                changed_at=from_timestamp(row["modified"] or row["created"]),
+            ))
+        return orders
 
     # --- helpers ---
 

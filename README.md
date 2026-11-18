@@ -13,6 +13,7 @@ a platforma w około dwie minuty uruchamia działający sklep w osobnym kontener
 - Podgląd postępu zakładania krok po kroku i ponowienie kroku, który się nie udał.
 - Dane logowania do panelu WordPressa wysyłane e-mailem, nigdy pokazywane w aplikacji.
 - Ustawienia sklepu (płatności, wysyłka, podatki, region, wygląd) zmieniane z aplikacji.
+- Sprzedaż sklepu w aplikacji: przychód dziś, z 7 i 30 dni, wykres dzienny, zamówienia do obsłużenia i ostatnie zamówienia.
 - Każdy sklep we własnym kontenerze, z własną bazą danych i adresem.
 - Jedna aplikacja na iOS, Androida i przeglądarkę.
 - Panel administratora z użytkownikami, sklepami i wiadomościami z formularza kontaktowego.

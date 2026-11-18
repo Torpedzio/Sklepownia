@@ -5,6 +5,7 @@ import { ActivityIndicator, Linking, StyleSheet, useWindowDimensions, View } fro
 import { backArrowOptions } from '@/components/back-link';
 import { Page } from '@/components/page';
 import { Receipt, type ReceiptRow } from '@/components/receipt';
+import { SalesSummary } from '@/components/sales-summary';
 import { ShopGuidesPanel } from '@/components/shop-guides';
 import { missingForSales, ShopOverview } from '@/components/shop-overview';
 import { TestBadge } from '@/components/shop-sign';
@@ -161,6 +162,8 @@ export default function ShopScreen() {
           </View>
         </View>
       ) : null}
+
+      {active ? <SalesSummary shopId={shop.id} /> : null}
 
       {shop.status === 'suspended' ? (
         <View style={[styles.card, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>

@@ -16,6 +16,8 @@ backend/
 │   ├── management/    polecenia update_shop_addresses i configure_shop_mail
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
+│   ├── orders.py      zamówienie odczytane ze sklepu (Order), wspólne dla platform
+│   ├── sales.py       kopia zamówień ze sklepów i podsumowanie sprzedaży dla aplikacji
 │   ├── choices.py     branże, języki, waluty, kraje, zakres liczby kategorii
 │   ├── fields.py      EncryptedTextField (szyfrowanie Fernet)
 │   ├── services.py    create_shop, retry_shop, delete_shop, get_settings, update_settings, start_operation
@@ -66,6 +68,8 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 | `ProvisioningStep` | Krok zadania: klucz, etykieta dla użytkownika, status, błąd, czasy. |
 | `ShopSettings` | Ostatnio odczytane albo zapisane ustawienia sklepu (`values`, JSON w sekcjach) i czas odczytu ze sklepu. |
 | `ShopOperation` | Praca na działającym sklepie: zmiana ustawień, odczyt ustawień, nowe hasło, usunięcie produktów przykładowych. Zmienione pola, wynik, błąd, kto zlecił. Służy też jako historia zmian. |
+| `ShopOrder` | Kopia zamówienia ze sklepu z ostatnich 90 dni: numer, status sprowadzony do pięciu wspólnych, suma, waluta, liczba sztuk, klient jako „Anna N.”, czas złożenia i ostatniej zmiany. Unikalne po `(shop, external_id)`. |
+| `SalesSync` | Stan odczytu zamówień sklepu: `cursor` (ostatnia zmiana, od której czytać), `synced_at` (udany odczyt), `attempted_at` (ostatnia próba), `requested_at` (zlecony z aplikacji), `error`. |
 
 `slug` musi być unikalny tylko wśród sklepów, które nie są usunięte (ograniczenie `unique_slug_for_live_shops`).
 Zasady adresu: 3–30 znaków, małe litery, cyfry i pojedyncze myślniki, nie na początku ani na końcu,
@@ -134,6 +138,24 @@ w `DOCKER_PROVISIONERS`, motywy migracją danych, metoda `step_<klucz>` symulacj
 Istniejące sklepy mają kroki zapisane w bazie. Nowy krok pojawi się u nich dopiero przy ponowieniu.
 Zmianę etykiet istniejących kroków trzeba przenieść migracją danych (przykład: `0005_plain_step_labels`).
 
+### Sprzedaż
+
+Przebieg: [architektura.md](architektura.md#sprzedaż-w-aplikacji). Pola odpowiedzi: [api.md](api.md#sprzedaż).
+
+- Backend WWW nie ma dostępu do kontenerów sklepów, więc zamówienia czyta worker (`sales.sync`) i zapisuje kopię
+  w `ShopOrder`. API liczy podsumowanie z kopii (`sales.overview`).
+- Odczyt jest przyrostowy: od `cursor` minus 10 minut (zmiany zapisane z opóźnieniem), partiami po 500, najwyżej
+  10 partii naraz. Pierwszy odczyt bierze 90 dni. Starsze zamówienia są usuwane z kopii.
+- `select_for_update(skip_locked=True)` na `SalesSync`: drugi odczyt tego samego sklepu (z harmonogramu i z aplikacji)
+  pomija sklep zamiast czekać.
+- Otwarcie podsumowania zleca odczyt, gdy ostatnia próba była ponad 2 minuty temu, przycisk „Odśwież” po 30 sekundach.
+  Nieudana próba też się liczy, więc zepsuty sklep nie jest odpytywany przy każdym wejściu.
+- `read_orders(shop, since, limit)` w provisionerze platformy zwraca zamówienia zmienione od `since`, od najstarszej
+  zmiany. WooCommerce: `wc_get_orders` przez `wp eval` (działa przy HPOS i przy wpisach). PrestaShop: SQL przez `Db`
+  w skrypcie PHP, czasy przeliczone ze strefy sklepu. Magento: SQL na `sales_order` (`JSON_OBJECT`), bez PHP.
+  Statusy platform są mapowane na `new`, `processing`, `completed`, `cancelled`, `unfinished`; nieznane trafiają do
+  `new`. Symulacja (`FakeProvisioner`) daje powtarzalne zamówienia, wyliczone z `pk` sklepu.
+
 ### Kategorie
 
 [categories.py](../backend/shops/categories.py) zwraca nazwy kategorii dla branży i liczby kategorii (1–20).
@@ -194,6 +216,8 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 | `billing.tasks.send_billing_email` | Opłacona płatność, nieudane odnowienie, koniec planu | Wysyła e-mail o planie i płatności |
 | `shops.tasks.run_shop_operation` | Zmiana i odczyt ustawień, nowe hasło, usunięcie produktów przykładowych | Wykonuje operację (`run_operation`) |
 | `support.tasks.notify_about_contact_message` | Wysłanie formularza kontaktowego | Przekazuje wiadomość e-mailem |
+| `shops.tasks.sync_all_shop_orders` | Co `SHOP_ORDERS_SYNC_MINUTES` minut, domyślnie 15 (Celery beat) | Zleca odczyt zamówień działających sklepów, które nie były czytane od pół interwału |
+| `shops.tasks.sync_shop_orders` | Harmonogram, otwarcie podsumowania sprzedaży, przycisk „Odśwież” | Kopiuje zmienione zamówienia sklepu (`sales.sync`) |
 
 Zadania są kolejkowane przez `transaction.on_commit`, więc worker nigdy nie widzi niezatwierdzonych danych.
 Worker potwierdza zadanie dopiero po jego wykonaniu (`CELERY_TASK_ACKS_LATE`) i bierze naraz jedno

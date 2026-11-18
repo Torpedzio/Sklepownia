@@ -2,7 +2,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
-from .models import ProvisioningJob, ProvisioningStep, Shop, ShopConfig, ShopOperation, ShopTemplate
+from .models import ProvisioningJob, ProvisioningStep, Shop, ShopConfig, ShopOperation, ShopOrder, ShopTemplate
 from .platforms import Platform, platform_info
 from .shop_settings import SECTIONS, describe
 from .slugs import normalize_slug, slug_error
@@ -212,3 +212,44 @@ class ShopSettingsSerializer(serializers.Serializer):
     operation = ShopOperationSerializer(allow_null=True, help_text="Ostatnia operacja na sklepie.")
     busy = serializers.BooleanField(help_text="Sklep wykonuje operację; kolejną można zlecić po jej zakończeniu.")
     options = ShopSettingsOptionsSerializer()
+
+
+class SalesPeriodSerializer(serializers.Serializer):
+    orders = serializers.IntegerField()
+    revenue = serializers.DecimalField(max_digits=14, decimal_places=2, help_text="Suma zamówień brutto.")
+    average = serializers.DecimalField(max_digits=14, decimal_places=2, help_text="Średnia wartość zamówienia.")
+
+
+class SalesDaySerializer(serializers.Serializer):
+    date = serializers.DateField()
+    orders = serializers.IntegerField()
+    revenue = serializers.DecimalField(max_digits=14, decimal_places=2)
+
+
+class SalesToHandleSerializer(serializers.Serializer):
+    new = serializers.IntegerField(help_text="Złożone, jeszcze nieopłacone albo niepotwierdzone.")
+    processing = serializers.IntegerField(help_text="Opłacone, do wysłania.")
+
+
+class ShopOrderSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = ShopOrder
+        fields = ["number", "status", "status_display", "total", "currency", "items", "customer", "placed_at"]
+        extra_kwargs = {"customer": {"help_text": "Imię i inicjał nazwiska."}}
+
+
+class ShopSalesSerializer(serializers.Serializer):
+    available = serializers.BooleanField(help_text="Sklep działa, więc jego zamówienia są odczytywane.")
+    synced_at = serializers.DateTimeField(allow_null=True, help_text="Ostatni odczyt zamówień ze sklepu.")
+    refreshing = serializers.BooleanField(help_text="Trwa odczyt: zapytaj ponownie za kilka sekund.")
+    error = serializers.CharField(help_text="Dlaczego ostatni odczyt się nie udał; puste, gdy się udał.")
+    currency = serializers.CharField(help_text="Waluta sklepu; sumy obejmują zamówienia w tej walucie.")
+    today = SalesPeriodSerializer()
+    last_7_days = SalesPeriodSerializer()
+    last_30_days = SalesPeriodSerializer()
+    previous_30_days = SalesPeriodSerializer(help_text="30 dni przed ostatnimi 30, do porównania.")
+    daily = SalesDaySerializer(many=True, help_text="Ostatnie 30 dni, od najstarszego.")
+    to_handle = SalesToHandleSerializer()
+    recent = ShopOrderSerializer(many=True, help_text="Ostatnie zamówienia, od najnowszego.")

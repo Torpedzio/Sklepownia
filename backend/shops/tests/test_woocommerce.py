@@ -797,3 +797,36 @@ def test_memory_limits_in_bytes(limit, expected):
     from shops.provisioning.container import memory_bytes as _memory_bytes
 
     assert _memory_bytes(limit) == expected
+
+
+# --- orders for the sales overview ---
+
+
+def test_orders_are_read_through_woocommerce_and_named_by_initial(provisioner, shell, shop):
+    from datetime import UTC, datetime
+    from decimal import Decimal
+
+    rows = [
+        {"id": "41", "number": "41", "status": "on-hold", "total": "149.9", "currency": "PLN", "items": 3,
+         "first_name": "Anna", "last_name": "Nowak", "created": 1794000000, "modified": 1794000600},
+        {"id": "42", "number": "", "status": "completed", "total": "20.00", "currency": "", "items": 1,
+         "first_name": "", "last_name": "", "created": 1794001000, "modified": 0},
+        {"id": "43", "number": "43", "status": "checkout-draft", "total": "5.00", "currency": "PLN", "items": 1,
+         "first_name": "", "last_name": "", "created": 1794002000, "modified": 1794002000},
+        {"id": "44", "number": "44", "status": "custom-packing", "total": "5.00", "currency": "EUR", "items": 1,
+         "first_name": "Jan", "last_name": "", "created": 1794003000, "modified": 1794003000},
+    ]
+    shell.on_php("wc_get_orders", output=f"Notice\n{OUTPUT_MARKER}{json.dumps(rows)}")
+
+    orders = provisioner.read_orders(shop, datetime(2026, 11, 1, tzinfo=UTC), 500)
+
+    [(script, data)] = shell.php("wc_get_orders")
+    assert data == {"since": int(datetime(2026, 11, 1, tzinfo=UTC).timestamp()), "limit": 500}
+    assert [(o.external_id, o.number, o.status, o.total, o.currency, o.items, o.customer) for o in orders] == [
+        ("41", "41", "new", Decimal("149.90"), "PLN", 3, "Anna N."),
+        ("42", "42", "completed", Decimal("20.00"), "PLN", 1, ""),
+        ("44", "44", "new", Decimal("5.00"), "EUR", 1, "Jan"),
+    ]
+    assert orders[0].placed_at == datetime.fromtimestamp(1794000000, tz=UTC)
+    assert orders[0].changed_at == datetime.fromtimestamp(1794000600, tz=UTC)
+    assert orders[1].changed_at == orders[1].placed_at

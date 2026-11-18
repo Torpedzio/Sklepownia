@@ -11,6 +11,7 @@ from django.conf import settings
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
+from ..orders import Order, Status as OrderStatus, customer_label, from_timestamp
 from . import Platform
 from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_env, container_name, db_name, mail_relay,
@@ -156,6 +157,51 @@ foreach ($d['methods'] as $method_id => $wanted) {
 }
 WC_Cache_Helper::get_transient_version('shipping', true);
 """ % {"zone": SHIPPING_ZONE_OPTION}
+
+# Orders through WooCommerce's own API, so it works with both order storages (HPOS and posts). Refunds are separate
+# objects (shop_order_refund) and are not listed.
+READ_ORDERS_PHP = """
+$orders = wc_get_orders(array(
+    'type' => 'shop_order',
+    'limit' => (int) $d['limit'],
+    'orderby' => 'modified',
+    'order' => 'ASC',
+    'date_modified' => '>=' . (int) $d['since'],
+    'status' => array_keys(wc_get_order_statuses()),
+));
+$rows = array();
+foreach ($orders as $order) {
+    $created = $order->get_date_created();
+    $modified = $order->get_date_modified() ?: $created;
+    $rows[] = array(
+        'id' => (string) $order->get_id(),
+        'number' => (string) $order->get_order_number(),
+        'status' => $order->get_status(),
+        'total' => (string) $order->get_total(),
+        'currency' => $order->get_currency(),
+        'items' => (int) $order->get_item_count(),
+        'first_name' => $order->get_billing_first_name(),
+        'last_name' => $order->get_billing_last_name(),
+        'created' => $created ? $created->getTimestamp() : 0,
+        'modified' => $modified ? $modified->getTimestamp() : 0,
+    );
+}
+echo "\n%(marker)s" . wp_json_encode($rows);
+""" % {"marker": OUTPUT_MARKER}
+
+# WooCommerce's order statuses (without "wc-"). "pending" waits for an online payment; "on-hold" is placed but not
+# paid yet (e.g. bank transfer). Drafts of the block checkout are not orders yet and are skipped.
+ORDER_STATUSES = {
+    "pending": OrderStatus.UNFINISHED,
+    "on-hold": OrderStatus.NEW,
+    "processing": OrderStatus.PROCESSING,
+    "completed": OrderStatus.COMPLETED,
+    "cancelled": OrderStatus.CANCELLED,
+    "refunded": OrderStatus.CANCELLED,
+    "failed": OrderStatus.CANCELLED,
+    "trash": OrderStatus.CANCELLED,
+}
+SKIPPED_ORDER_STATUSES = {"checkout-draft"}
 
 REMOVE_SAMPLE_PRODUCTS_PHP = """
 $removed = 0;
@@ -547,6 +593,25 @@ class WooCommerceProvisioner(ContainerProvisioner):
         pattern = "/" + SAMPLE_PRODUCT_NAME.pattern + "/u"
         return int(self._php(shop, REMOVE_SAMPLE_PRODUCTS_PHP, {"name_pattern": pattern}))
 
+    def read_orders(self, shop, since, limit):
+        rows = json.loads(self._php(shop, READ_ORDERS_PHP, {"since": int(since.timestamp()), "limit": limit}))
+        return [
+            Order(
+                external_id=row["id"],
+                number=row["number"] or row["id"],
+                # Statuses added by plugins count as placed orders.
+                status=ORDER_STATUSES.get(row["status"], OrderStatus.NEW),
+                total=_order_total(row["total"]),
+                currency=row["currency"] or shop.config.currency,
+                items=row["items"],
+                customer=customer_label(row["first_name"], row["last_name"]),
+                placed_at=from_timestamp(row["created"] or row["modified"]),
+                changed_at=from_timestamp(row["modified"] or row["created"]),
+            )
+            for row in rows
+            if row["status"] not in SKIPPED_ORDER_STATUSES
+        ]
+
     def _configure_mail(self, shop, relay):
         # A must-use plugin: WordPress loads it on its own and the panel can't switch it off.
         self._write_file(shop, MAIL_PLUGIN_PATH, MAIL_PLUGIN.read_text())
@@ -656,6 +721,13 @@ def _int(value, fallback):
         return int(value)
     except (TypeError, ValueError):
         return fallback
+
+
+def _order_total(value):
+    try:
+        return Decimal(value or "0").quantize(Decimal("0.01"))
+    except InvalidOperation:
+        return Decimal("0.00")
 
 
 def _money(value):

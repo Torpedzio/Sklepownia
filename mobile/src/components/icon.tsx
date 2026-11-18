@@ -30,6 +30,7 @@ const ICONS = {
   play: ['play.fill', 'play_arrow'],
   chevronDown: ['chevron.down', 'expand_more'],
   arrowUp: ['arrow.up', 'arrow_upward'],
+  arrowDown: ['arrow.down', 'arrow_downward'],
   logout: ['rectangle.portrait.and.arrow.right', 'logout'],
   cart: ['cart', 'shopping_cart'],
   card: ['creditcard', 'credit_card'],
@@ -41,6 +42,7 @@ const ICONS = {
   camera: ['camera.fill', 'photo_camera'],
   trash: ['trash', 'delete'],
   document: ['doc.text', 'description'],
+  chart: ['chart.bar', 'bar_chart'],
 } as const;
 
 export type IconName = keyof typeof ICONS;

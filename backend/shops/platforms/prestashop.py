@@ -6,6 +6,7 @@ installed with the image's command-line installer and configured by PHP run insi
 import base64
 import json
 import secrets
+from decimal import Decimal
 from pathlib import Path
 
 from django.conf import settings
@@ -13,6 +14,7 @@ from django.conf import settings
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
+from ..orders import Order, customer_label, from_timestamp
 from . import Platform
 from ..provisioning.base import ProvisioningError
 from ..provisioning.container import (
@@ -265,6 +267,50 @@ Configuration::updateValue('%(samples)s', '[]');
 echo "\\n%(marker)s" . $removed;
 """ % {"samples": SAMPLE_PRODUCTS_KEY, "marker": OUTPUT_MARKER}
 
+# Orders straight from the database. PrestaShop stores dates in the shop's time zone (PHP's default after
+# config.inc.php), so they are turned into timestamps here. A state's flags say how far the order got; the
+# cancelled, refunded and payment error states are the ones the shop's configuration names.
+READ_ORDERS_PHP = """
+$tz = new DateTimeZone(date_default_timezone_get());
+$since = (new DateTime('@' . (int) $d['since']))->setTimezone($tz)->format('Y-m-d H:i:s');
+$cancelled = array_map('intval', array(
+    Configuration::get('PS_OS_CANCELED'), Configuration::get('PS_OS_REFUND'), Configuration::get('PS_OS_ERROR'),
+));
+$p = _DB_PREFIX_;
+$rows = Db::getInstance()->executeS(
+    "SELECT o.id_order, o.reference, o.current_state, o.total_paid_tax_incl, o.date_add, o.date_upd,"
+    . " c.iso_code, cu.firstname, cu.lastname, os.paid, os.shipped, os.delivery,"
+    . " (SELECT COALESCE(SUM(od.product_quantity), 0) FROM {$p}order_detail od WHERE od.id_order = o.id_order) AS items"
+    . " FROM {$p}orders o"
+    . " LEFT JOIN {$p}currency c ON c.id_currency = o.id_currency"
+    . " LEFT JOIN {$p}customer cu ON cu.id_customer = o.id_customer"
+    . " LEFT JOIN {$p}order_state os ON os.id_order_state = o.current_state"
+    . " WHERE o.date_upd >= '" . pSQL($since) . "'"
+    . " ORDER BY o.date_upd, o.id_order LIMIT " . (int) $d['limit']
+) ?: array();
+$stamp = function ($value) use ($tz) { return (new DateTime($value, $tz))->getTimestamp(); };
+$out = array();
+foreach ($rows as $r) {
+    if (in_array((int) $r['current_state'], $cancelled, true)) { $status = 'cancelled'; }
+    elseif ($r['shipped'] || $r['delivery']) { $status = 'completed'; }
+    elseif ($r['paid']) { $status = 'processing'; }
+    else { $status = 'new'; }
+    $out[] = array(
+        'id' => (string) $r['id_order'],
+        'number' => (string) $r['reference'],
+        'status' => $status,
+        'total' => (string) $r['total_paid_tax_incl'],
+        'currency' => (string) $r['iso_code'],
+        'items' => (int) $r['items'],
+        'first_name' => (string) $r['firstname'],
+        'last_name' => (string) $r['lastname'],
+        'created' => $stamp($r['date_add']),
+        'modified' => $stamp($r['date_upd']),
+    );
+}
+echo "\n%(marker)s" . json_encode($out);
+""" % {"marker": OUTPUT_MARKER}
+
 ADDRESS_PHP = """
 $row = Db::getInstance()->getRow('SELECT id_shop_url, domain FROM ' . _DB_PREFIX_ . 'shop_url WHERE main = 1');
 if ($row['domain'] !== $d['domain']) {
@@ -435,6 +481,23 @@ class PrestaShopProvisioner(ContainerProvisioner):
 
     def remove_sample_products(self, shop):
         return int(self._php(shop, REMOVE_SAMPLE_PRODUCTS_PHP))
+
+    def read_orders(self, shop, since, limit):
+        rows = json.loads(self._php(shop, READ_ORDERS_PHP, {"since": int(since.timestamp()), "limit": limit}))
+        return [
+            Order(
+                external_id=row["id"],
+                number=row["number"] or row["id"],
+                status=row["status"],
+                total=Decimal(row["total"] or "0").quantize(Decimal("0.01")),
+                currency=row["currency"] or shop.config.currency,
+                items=row["items"],
+                customer=customer_label(row["first_name"], row["last_name"]),
+                placed_at=from_timestamp(row["created"]),
+                changed_at=from_timestamp(row["modified"]),
+            )
+            for row in rows
+        ]
 
     def update_address(self, shop):
         if self._find_container(shop) is None:

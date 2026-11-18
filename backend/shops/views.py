@@ -9,7 +9,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from accounts.permissions import IsEmailVerified
 from billing.models import Plan
 
-from . import services
+from . import sales, services
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import InvalidTransition, Shop, ShopCredentials, ShopOperation, ShopTemplate
 from .platforms import PLATFORMS, Platform, platform_info
@@ -22,6 +22,7 @@ from .serializers import (
     ShopAdminAccessSerializer,
     ShopDetailSerializer,
     ShopOperationSerializer,
+    ShopSalesSerializer,
     ShopSettingsSerializer,
     ShopSerializer,
     ShopTemplateSerializer,
@@ -33,7 +34,7 @@ from .slugs import normalize_slug, slug_error
 # Settings and operations work on a running shop, so they share the creation's permissions.
 VERIFIED_ACTIONS = (
     "create", "retry", "resume", "admin_access", "send_admin_access", "shop_settings", "refresh_settings", "reset_admin_password",
-    "remove_sample_products", "operations", "operation",
+    "remove_sample_products", "operations", "operation", "shop_sales", "refresh_sales",
 )
 OPERATION_HISTORY_LENGTH = 20
 
@@ -136,6 +137,16 @@ def _settings_payload(shop):
             "vat_rates": VAT_RATES,
         },
     }
+
+
+def _sales_payload(shop, state):
+    return ShopSalesSerializer({
+        "available": shop.status == Shop.Status.ACTIVE,
+        "synced_at": state.synced_at,
+        "refreshing": sales.is_refreshing(state),
+        "error": state.error,
+        **sales.overview(shop),
+    }).data
 
 
 def _panel_ready(shop):
@@ -396,6 +407,23 @@ class ShopViewSet(
         if operation is None:
             return Response({"detail": "Nie znaleziono operacji."}, status=status.HTTP_404_NOT_FOUND)
         return Response(ShopOperationSerializer(operation).data)
+
+    @extend_schema(responses={200: ShopSalesSerializer})
+    @action(detail=True, methods=["get"], url_path="sales")
+    def shop_sales(self, request, pk=None):
+        """
+        Sales and recent orders, counted from the copy of the shop's orders. When the copy is a few minutes old,
+        the shop is read again in the background and `refreshing` is true.
+        """
+        shop = self.get_object()
+        return Response(_sales_payload(shop, sales.request_refresh(shop)))
+
+    @extend_schema(request=None, responses={202: ShopSalesSerializer})
+    @action(detail=True, methods=["post"], url_path="sales/refresh")
+    def refresh_sales(self, request, pk=None):
+        """Reads the shop's orders again now (unless that happened half a minute ago)."""
+        shop = self.get_object()
+        return Response(_sales_payload(shop, sales.request_refresh(shop, force=True)), status=status.HTTP_202_ACCEPTED)
 
     def _start(self, kind):
         shop = self.get_object()

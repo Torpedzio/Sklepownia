@@ -237,12 +237,14 @@ class ContainerProvisioner(BaseProvisioner):
             raise CommandError(f"{' '.join(command[:4])}… exited with {result.exit_code}: {excerpt}")
         return output
 
-    def _sql(self, statement, database=None):
+    def _sql(self, statement, database=None, raw=False):
+        """Runs SQL as root; `raw` keeps values as they are (no \\n escapes), e.g. for JSON built in the query."""
         if not settings.SHOPS_DB_ROOT_PASSWORD:
             raise CommandError("SHOPS_DB_ROOT_PASSWORD is not set")
         return self._exec(
             settings.SHOPS_DB_CONTAINER,
-            ["mariadb", "-uroot", "--batch", "--skip-column-names", *([database] if database else []), "-e", statement],
+            ["mariadb", "-uroot", "--batch", "--skip-column-names", *(["--raw"] if raw else []),
+             *([database] if database else []), "-e", statement],
             environment={"MYSQL_PWD": settings.SHOPS_DB_ROOT_PASSWORD},
         )
 

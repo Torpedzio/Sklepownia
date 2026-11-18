@@ -20,6 +20,9 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   - faktury korygujące (np. przy zwrocie) i własne połączenie z KSeF bez Fakturowni;
   - regulamin i polityka prywatności jako strony, do których prowadzą zgody przy płatności;
   - zniżki, okresy próbne, plany roczne, inne metody płatności (BLIK, przelew), wypłata salda przy rezygnacji.
+- **Sprzedaż w aplikacji** jest tylko do podglądu: zamówienia obsługuje się w panelu sklepu. Kopia obejmuje 90 dni,
+  sumy liczą tylko walutę sklepu, a nowe zamówienie pojawia się w aplikacji z opóźnieniem do 15 minut (od razu po
+  „Odśwież”). Brakuje powiadomień o nowym zamówieniu i zestawień dłuższych niż 30 dni.
 - **Testy na urządzeniu:** testy aplikacji działają w Jest; zachowania zależne od urządzenia (przewijanie,
   klawiatura, animacje) sprawdza się ręcznie w Expo Go.
 - **Zdjęcia w przykładowych produktach.** Produkty przykładowe nie mają zdjęć, więc nowy sklep pokazuje szare zaślepki.
