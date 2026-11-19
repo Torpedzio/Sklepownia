@@ -15,8 +15,8 @@ backend/
 │   ├── provisioning/  base.py (kroki), container.py (wspólne dla kontenerów), runner.py (zakładanie),
 │   │                  operations.py (operacje na działającym sklepie), packages.py (wtyczki pobierane od producentów),
 │   │                  fake.py (symulacja)
-│   ├── management/    polecenia update_shop_addresses, configure_shop_mail, publish_shop_documents, backup_shops
-│   │                  i restore_shop
+│   ├── management/    polecenia update_shop_addresses, configure_shop_mail, publish_shop_documents, backup_shops,
+│   │                  restore_shop i update_shop_containers
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
 │   ├── orders.py      zamówienie odczytane ze sklepu (Order), wspólne dla platform
@@ -32,6 +32,8 @@ backend/
 │   └── slugs.py       zasady adresów sklepów i lista zarezerwowanych
 ├── billing/           plany, dane do faktury, płatności, odnowienia, faktury (invoices.py, invoicing/), operatorzy płatności (gateways/)
 ├── push/              powiadomienia push: telefony, tematy, wysyłka (senders/: Expo, log, pamięć), teksty (messages.py)
+├── monitoring/        monitor sklepów i serwera sklepów: runda i naprawy (checks.py), awarie i kto o nich słyszy
+│                      (alerts.py), teksty (texts.py, templates/monitoring/), polecenie check_shops
 ├── support/           formularz kontaktowy
 ├── handbook/          dokumentacja projektu (pliki Markdown) jako strony pod /docs/
 └── conftest.py        wspólne fixtures testów
@@ -274,7 +276,9 @@ Widok w [unavailable.py](../backend/shops/unavailable.py) szuka sklepu po slugu,
 (`TEXTS`): „Wkrótce otwarcie” (`pending`, `provisioning`; `503`, `Retry-After: 300`) albo „Nieczynne” (pozostałe
 stany; `503`, `Retry-After: 3600`). Usunięty sklep, inny host i brak nagłówka dają `404` „Nie ma tu sklepu”.
 Odpowiedź nie trafia do pamięci podręcznej (`never_cache`), a widok przyjmuje każdą metodę bez CSRF (formularz
-wysłany do zamkniętego sklepu też dostaje stronę, a widok niczego nie zmienia).
+wysłany do zamkniętego sklepu też dostaje stronę, a widok niczego nie zmienia). Nagłówek `X-Shop-Unavailable`
+(`missing`, `closed`, `opening`) odróżnia tę stronę od własnej strony sklepu: po nim monitor i czekanie na start
+kontenera poznają, że Traefik nie kieruje jeszcze ruchu do sklepu.
 
 ### Kategorie
 
@@ -328,6 +332,40 @@ Nowe powiadomienie: funkcja w `messages.py` (temat, tytuł, treść, ekran aplik
 zdarzenia. Nowy temat: wartość w `Topic`, pole w `PushPreferences` z migracją, kanał w `CHANNELS` w
 [lib/push.ts](../mobile/src/lib/push.ts) i przełącznik na ekranie „Powiadomienia”.
 
+## Aplikacja `monitoring`
+
+Pilnuje działających sklepów i serwera sklepów. Przebieg: [architektura.md](architektura.md#monitorowanie),
+obsługa: [obsluga.md](obsluga.md#monitorowanie).
+
+| Model | Opis |
+|---|---|
+| `ShopHealth` | Ostatnie sprawdzenie sklepu: porażki z rzędu i od kiedy, co monitor widzi (`problem`), czy powiadomił (`alerted`), co naprawiał w tej serii (`repaired`, `repaired_at`, `repairing`), czas odpowiedzi strony głównej |
+| `Incident` | Awaria: sklep (`shop:<id>`), usługa (`service:<nazwa>`), dysk, serwer (`server:<id>`) albo kopie (`backups:failed`, `backups:missing`). Najwyżej jedna otwarta na klucz; `alerted_at`, gdy obsługa dostała e-mail, `repaired`, gdy monitor sam naprawiał |
+| `Heartbeat` | Ostatnia runda monitora (`monitor`) i ostatnie nocne kopie (`nightly-backups`) |
+
+- Runda (`checks.run`, zadanie `check_shops`) bierze blokadę doradczą PostgreSQL, więc dwie naraz się nie
+  nakładają. Kolejno: `service_problems` provisionera (Docker, proxy, baza sklepów, OpenSearch przy sklepach Magento,
+  przekaźnik poczty, gdy jest kontenerem), sklepy (tylko gdy działają Docker, proxy i baza), `disk_space`, zapełnienie
+  serwerów, wiek `Heartbeat` kopii, na koniec ping `MONITOR_PING_URL`.
+- Sklepy: aktywne, bez trwającej operacji. `container_states()` daje stan kontenerów, a `check_page(shop)` odwiedza
+  stronę główną przez proxy z kontenera sklepu (po kilka naraz, `MONITOR_WORKERS`). `examine` ocenia wynik: brak
+  albo zatrzymany kontener to naprawa `start`, brak odpowiedzi, strona platformy (nagłówek `X-Shop-Unavailable`) albo
+  status inny niż 2xx/3xx to naprawa `restart`. `503` jest w porządku w sklepie zamkniętym w ustawieniach.
+- `record` liczy porażki w `ShopHealth` (z `select_for_update`). Od `MONITOR_FAILURES` z rzędu sklep nie działa
+  i ma otwartą awarię. Naprawa raz na serię porażek: `start` od razu, `restart` gdy sklep nie działa. Zleca ją zadanie
+  `repair_shop` (`checks.repair`), które czeka na healthcheck i routing, sprawdza stronę ponownie i dopiero gdy dalej
+  źle, powiadamia. Rundy w trakcie naprawy (`repairing`, najwyżej `REPAIR_TIMEOUT`) nie liczą porażek.
+- `alerts.shop_down`: push (`Topic.SHOPS`) i e-mail do właściciela bez technicznej przyczyny, e-mail do obsługi
+  z tym, co widzi monitor i co naprawiał; `alerts.shop_back` po pierwszym udanym sprawdzeniu. Pozostałe awarie
+  (`alerts.problem`) obsługa dostaje przy drugim sprawdzeniu z rzędu (kopie od razu) i po ich końcu (`alerts.solved`).
+  Wysyłkę robią zadania po zatwierdzeniu transakcji.
+- `shops.tasks.back_up_all_shops` woła `alerts.nightly_backups_done` z listą sklepów bez kopii.
+- API sklepu ma `down_since`: od kiedy działający sklep nie działa, gdy właściciel już o tym wie.
+- Provisioner: `can_monitor`, `container_states`, `check_page`, `start_shop`, `restart_shop`, `service_problems`,
+  `disk_space` ([base.py](../backend/shops/provisioning/base.py)). `start_shop` nie zakłada pustego sklepu, gdy nie ma
+  ani kontenera, ani wolumenu. `FakeProvisioner` symuluje awarie przez atrybuty klasy (`containers`, `pages`,
+  `services`, `disk`, `repairs_help`) i zapisuje naprawy w `repairs`.
+
 ## Aplikacja `support`
 
 `ContactMessage` zapisuje wiadomości z formularza kontaktowego (imię, e-mail, temat, treść, ewentualny użytkownik).
@@ -351,7 +389,7 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 | `accounts.tasks.send_verification_email` | Rejestracja, ponowne wysłanie kodu | Wysyła kod potwierdzający |
 | `shops.tasks.provision_shop` | Założenie i ponowienie sklepu | Wykonuje kroki zadania (`run_job`) |
 | `shops.tasks.teardown_shop` | Usunięcie sklepu albo konta | Robi kopię „Stan sprzed usunięcia sklepu” (bez niej, gdy się nie uda), usuwa kontener, wolumen i bazę; przy usuniętym koncie bez kopii, a potem usuwa kopie i wiersz sklepu |
-| `shops.tasks.back_up_all_shops` | Co noc o `SHOPS_BACKUP_HOUR` (Celery beat) | Kopia każdego działającego i zawieszonego sklepu, potem porządki w repozytorium (`backups.back_up_all`) |
+| `shops.tasks.back_up_all_shops` | Co noc o `SHOPS_BACKUP_HOUR` (Celery beat) | Kopia każdego działającego i zawieszonego sklepu, potem porządki w repozytorium (`backups.back_up_all`); monitor dostaje listę nieudanych |
 | `accounts.tasks.send_account_deleted_email` | Usunięcie konta | Potwierdzenie na dawny adres z listą usuniętych sklepów |
 | `shops.tasks.send_admin_access_email` | Koniec zakładania, nowe hasło, prośba z aplikacji | Wysyła właścicielowi e-mail ze szczegółami sklepu i danymi logowania ([emails.py](../backend/shops/emails.py)); przy błędzie serwera pocztowego ponawia |
 | `billing.tasks.renew_subscriptions` | Co 15 minut (Celery beat) | Odnawia plany, ponawia nieudane odnowienia, kończy anulowane i niezapłacone |
@@ -367,6 +405,10 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 | `shops.tasks.count_shop_products` | Otwarcie listy startowej z otwartym krokiem produktów | Liczy własne i przykładowe produkty w sklepie (`checklist.count`) |
 | `push.tasks.send_push` | Nowe zamówienie, koniec zakładania sklepu, nieudana opłata, koniec planu | Wysyła powiadomienie na telefony użytkownika; ponawia, gdy Expo nie odpowiada |
 | `push.tasks.check_push_receipts` | Co 15 minut (Celery beat) | Sprawdza potwierdzenia wysłanych powiadomień, usuwa telefony bez aplikacji |
+| `monitoring.tasks.check_shops` | Co `MONITOR_INTERVAL_MINUTES` minut, domyślnie 5 (Celery beat; runda czekająca dłużej w kolejce przepada) | Runda monitora (`checks.run`) |
+| `monitoring.tasks.repair_shop` | Runda znalazła zatrzymany albo nieodpowiadający sklep | Uruchamia albo restartuje kontener, sprawdza sklep ponownie, przy dalszej awarii powiadamia |
+| `monitoring.tasks.send_shop_email` | Sklep nie działa, znowu działa | E-mail do właściciela; ponawia przy błędzie SMTP |
+| `monitoring.tasks.send_staff_alert` | Awaria i jej koniec | E-mail na `ALERT_EMAILS`; ponawia przy błędzie SMTP |
 
 Zadania są kolejkowane przez `transaction.on_commit`, więc worker nigdy nie widzi niezatwierdzonych danych.
 Worker potwierdza zadanie dopiero po jego wykonaniu (`CELERY_TASK_ACKS_LATE`) i bierze naraz jedno
@@ -382,6 +424,8 @@ docker compose exec worker  python manage.py configure_shop_mail     # poczta w 
 docker compose exec backend python manage.py publish_shop_documents  # nowa wersja wzorów regulaminu w sklepach
 docker compose exec worker  python manage.py backup_shops [slug…]     # kopie zapasowe teraz
 docker compose exec worker  python manage.py restore_shop <id|slug> [--backup N]   # przywrócenie, też usuniętego sklepu
+docker compose exec worker  python manage.py check_shops [slug…]      # runda monitora teraz
+docker compose exec worker  python manage.py update_shop_containers [slug…] [--dry-run]   # kontenery jak nowe (np. z healthcheckiem)
 docker compose exec backend python manage.py spectacular --file schema.yml   # schemat OpenAPI do pliku
 ```
 
@@ -397,7 +441,8 @@ regulamin z aplikacji w starszej wersji wzorów niż `documents.VERSION` (z `--a
 Publikuje worker, więc polecenie działa w każdym kontenerze backendu. Sklep zajęty inną operacją jest pomijany
 z komunikatem; wystarczy uruchomić polecenie jeszcze raz.
 
-`backup_shops` i `restore_shop` opisuje [obsluga.md](obsluga.md#kopie-zapasowe).
+`backup_shops` i `restore_shop` opisuje [obsluga.md](obsluga.md#kopie-zapasowe), `check_shops`
+i `update_shop_containers` [obsluga.md](obsluga.md#monitorowanie).
 
 ## Panel admina
 
@@ -409,6 +454,8 @@ http://localhost:8000/admin/ (konto z `createsuperuser`). Zawiera:
 - **Zadania zakładania:** podgląd kroków i błędów.
 - **Operacje na sklepach:** historia zmian ustawień i innych operacji, ze zmienionymi polami i błędami (bez kluczy płatności).
 - **Kopie zapasowe sklepów** (Shop backups): rodzaj, stan, rozmiar, snapshot i błąd nieudanych kopii, tylko do odczytu.
+- **Monitorowanie:** awarie (trwające i zakończone, z czasem trwania i naprawą), stan sklepów (ostatnie sprawdzenie,
+  co monitor widzi, czas odpowiedzi) i ostatnie uruchomienia rundy i nocnych kopii, tylko do odczytu.
 - **Wiadomości kontaktowe.**
 
 ## Testy

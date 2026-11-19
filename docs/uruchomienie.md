@@ -158,6 +158,12 @@ Bez ustawień poczty w `.env` backend wypisuje wiadomości w logach (`EMAIL_BACK
 | `SHOPS_BACKUP_DELETED_DAYS` | `14` | Ile dni zostaje ostatnia kopia usuniętego sklepu |
 | `SHOPS_BACKUP_MANUAL_PER_DAY` | `3` | Ile kopii dziennie właściciel może zrobić sam |
 | `SHOPS_BACKUP_IMAGE`, `SHOPS_BACKUP_VOLUME`, `SHOPS_BACKUP_CACHE_VOLUME` | `shops/backup:0.19.1`, `shops-backups`, `shops-backup-cache` | Obraz narzędzia kopii, wolumen repozytorium i wolumen pamięci podręcznej restic |
+| `MONITOR_INTERVAL_MINUTES` | `5` | Co ile minut monitor sprawdza sklepy i serwer sklepów ([monitorowanie](obsluga.md#monitorowanie)) |
+| `MONITOR_FAILURES` | `2` | Po ilu nieudanych sprawdzeniach z rzędu sklep nie działa (restart, potem powiadomienia) |
+| `ALERT_EMAILS` | `CONTACT_EMAIL` | Adresy obsługi (po przecinku) na alarmy monitora |
+| `MONITOR_DISK_MIN_FREE_PERCENT`, `MONITOR_SERVER_FULL_PERCENT` | `10`, `90` | Alarm przy mniej wolnego miejsca na dysku serwera sklepów i przy takim zapełnieniu serwera (`Server.max_shops`) |
+| `MONITOR_PING_URL` | puste | Adres pingowany po każdej rundzie (np. Healthchecks.io), który alarmuje, gdy monitor przestanie działać |
+| `MONITOR_WORKERS` | `8` | Ile sklepów naraz sprawdza runda |
 | `FAKE_PROVISIONER_STEP_DELAY` | `2` | Sekundy na krok w symulacji |
 | `FAKE_PROVISIONER_FAIL_AT_STEP` | puste | Klucz kroku, na którym symulacja ma się wysypać |
 

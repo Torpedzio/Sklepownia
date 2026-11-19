@@ -35,6 +35,8 @@ export type Shop = {
   /** From before paid plans: works without a plan and doesn't count towards its limit. */
   is_test: boolean;
   created_at: string;
+  /** Since when the running shop hasn't answered its customers (the monitor told the owner); null while it works. */
+  down_since: string | null;
 };
 
 export type ShopTemplate = {

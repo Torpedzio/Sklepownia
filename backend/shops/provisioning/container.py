@@ -16,10 +16,13 @@ import requests
 from django.conf import settings
 from django.db.models import Count, F, Q
 from django.utils.dateparse import parse_datetime
-from docker.errors import NotFound
+from docker.errors import DockerException, NotFound
 
 from ..models import Server, Shop, ShopCredentials
-from .base import Backup, BaseProvisioner, NothingToBackUp, ProvisioningError, Snapshot
+from ..unavailable import UNAVAILABLE_HEADER
+from .base import (
+    Backup, BaseProvisioner, ContainerState, NothingToBackUp, PageCheck, ProvisioningError, Snapshot,
+)
 
 # Where the platform's files live in the container, in the shop's volume.
 FILES_PATH = "/var/www/html"
@@ -30,6 +33,36 @@ BACKUP_CACHE = "/cache"
 BACKUP_FILES = "/shop/files"
 # Marks backup containers, with the shop's id ("" for work on the whole repository).
 BACKUP_LABEL = "shops.backup"
+# Marks shop containers, with the shop's id.
+SHOP_LABEL = "shops.id"
+
+
+class _Healthcheck(docker.types.Healthcheck):
+    """docker-py's Healthcheck that keeps StartInterval."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        start_interval = kwargs.get("start_interval", kwargs.get("StartInterval"))
+        if start_interval is not None:
+            self["StartInterval"] = start_interval
+
+
+# docker-py (7.2) rebuilds a container's healthcheck from the options it knows, which end at API 1.29, so it drops
+# StartInterval (API 1.44) and a starting shop would be checked once a minute instead of every few seconds.
+docker.types.containers.Healthcheck = _Healthcheck
+
+# Docker's check of a shop's web server (seconds). Traefik sends visitors only to a healthy container, so a shop
+# that is starting or hangs gets the platform's "temporarily unavailable" page instead of an error. While the shop
+# starts, it is checked every few seconds and failures don't count; then once a minute, unhealthy after 3 failures.
+HEALTH_INTERVAL = 60
+HEALTH_TIMEOUT = 15
+HEALTH_RETRIES = 3
+HEALTH_START_PERIOD = 300
+HEALTH_START_INTERVAL = 3
+# How long the monitor's visit to a page may take (seconds).
+PAGE_TIMEOUT = 20
+# Seconds to wait for Traefik to send visitors to a container that just became healthy.
+ROUTE_TIMEOUT = 30
 
 
 class CommandError(Exception):
@@ -82,6 +115,26 @@ class ContainerProvisioner(BaseProvisioner):
     def after_restore(self, shop):
         """Bring what lives outside the shop's files and database (e.g. its search index) in line with them."""
 
+    def healthcheck(self, shop):
+        """
+        Docker's healthcheck of the shop's container: its home page, as the shop's address. Any answer below 500
+        counts, and 503 too, so a redirect or a closed shop (PrestaShop's maintenance mode) keeps its visitors.
+        """
+        host = shop.url.split("://", 1)[1]
+        test = (
+            f"code=$(curl -s -o /dev/null -w '%{{http_code}}' --max-time {HEALTH_TIMEOUT - 5} "
+            f"-H 'Host: {host}' http://localhost/); "
+            '[ "$code" = 503 ] || { [ "$code" -ge 200 ] && [ "$code" -lt 500 ]; }'
+        )
+        return {
+            "Test": ["CMD-SHELL", test],
+            "Interval": seconds(HEALTH_INTERVAL),
+            "Timeout": seconds(HEALTH_TIMEOUT),
+            "Retries": HEALTH_RETRIES,
+            "StartPeriod": seconds(HEALTH_START_PERIOD),
+            "StartInterval": seconds(HEALTH_START_INTERVAL),
+        }
+
     # --- steps every platform has ---
 
     def step_allocate_server(self, shop):
@@ -120,22 +173,14 @@ class ContainerProvisioner(BaseProvisioner):
             f"traefik.http.routers.{name}.rule": f"Host(`{shop.domain}`)",
             f"traefik.http.routers.{name}.entrypoints": "web",
             f"traefik.http.services.{name}.loadbalancer.server.port": "80",
-            "shops.id": str(shop.pk),
+            SHOP_LABEL: str(shop.pk),
             "shops.slug": shop.slug,
         }
         container = self._find_container(shop)
-        # The files live in the volume, so a container with outdated env or Traefik labels (a new domain)
-        # can be replaced without losing anything.
         memory = self.memory(shop)
-        outdated = container is not None and (
-            container_env(container, self.ENV_KEYS) != environment
-            or not labels.items() <= container.labels.items()
-            # A different plan means a different memory limit.
-            or container.attrs.get("HostConfig", {}).get("Memory") != memory_bytes(memory)
-            # A rebuilt image (e.g. new platform code) reaches running shops this way.
-            or self._image_changed(container)
-        )
-        if outdated:
+        healthcheck = self.healthcheck(shop)
+        # The files live in the volume, so an outdated container can be replaced without losing anything.
+        if container is not None and self._outdated(container, environment, labels, memory, healthcheck):
             container.remove(force=True)
             container = None
         if container is None:
@@ -150,6 +195,7 @@ class ContainerProvisioner(BaseProvisioner):
                 volumes={name: {"bind": self.VOLUME_PATH, "mode": "rw"}},
                 environment=environment,
                 labels=labels,
+                healthcheck=healthcheck,
             )
         container.start()
         for _ in range(self.START_TIMEOUT):
@@ -158,8 +204,62 @@ class ContainerProvisioner(BaseProvisioner):
             time.sleep(1)
         raise ProvisioningError(self.START_FAILED)
 
+    def container_outdated(self, shop):
+        """Whether the shop's container is not as step_start_container would make it now (False without one)."""
+        container = self._find_container(shop)
+        if container is None:
+            return False
+        name = container_name(shop)
+        labels = {f"traefik.http.routers.{name}.rule": f"Host(`{shop.domain}`)", SHOP_LABEL: str(shop.pk)}
+        return self._outdated(
+            container, self.container_environment(shop), labels, self.memory(shop), self.healthcheck(shop),
+        )
+
+    def _outdated(self, container, environment, labels, memory, healthcheck):
+        current_health = container.attrs.get("Config", {}).get("Healthcheck") or {}
+        return (
+            # Outdated env or Traefik labels (a new domain).
+            container_env(container, self.ENV_KEYS) != environment
+            or not labels.items() <= container.labels.items()
+            # A different plan means a different memory limit.
+            or container.attrs.get("HostConfig", {}).get("Memory") != memory_bytes(memory)
+            # Containers from before the healthcheck, or with an older one.
+            or any(current_health.get(key) != value for key, value in healthcheck.items())
+            # A rebuilt image (e.g. new platform code) reaches running shops this way.
+            or self._image_changed(container)
+        )
+
+    def _wait_until_routed(self, shop, timeout=None):
+        """
+        Wait until the shop's container is healthy and Traefik sends visitors to it (it skips containers that are
+        starting or unhealthy). Returns whether it happened within `timeout` seconds; the caller finds out what's wrong.
+        """
+        deadline = time.monotonic() + (timeout or HEALTH_START_PERIOD)
+        container = self._find_container(shop)
+        while container is not None and time.monotonic() < deadline:
+            container.reload()
+            health = (container.attrs.get("State", {}).get("Health") or {}).get("Status")
+            if health is None:
+                # A container from before the healthcheck: Traefik sends visitors to it as soon as it runs.
+                return container.status == "running"
+            if health == "healthy":
+                break
+            time.sleep(HEALTH_START_INTERVAL)
+        else:
+            return False
+        # Traefik learns about the change from Docker's events, a moment later.
+        routed_by = min(deadline, time.monotonic() + ROUTE_TIMEOUT)
+        while True:
+            if not self.check_page(shop).unavailable:
+                return True
+            if time.monotonic() >= routed_by:
+                return False
+            time.sleep(1)
+
     def _check_pages(self, shop, checks):
         """Fetch `checks` ([(label, [curl args… url])]) through the proxy like a visitor would; each must be 200."""
+        # The shop may have just started: until its first healthcheck passes, the proxy shows the platform's page.
+        self._wait_until_routed(shop)
         host = shop.url.split("://", 1)[1]
         for label, args in checks:
             status = self._exec(
@@ -257,6 +357,88 @@ class ContainerProvisioner(BaseProvisioner):
 
     def prune_backups(self):
         self._backup_tool(["prune"])
+
+    # --- health: what the monitor checks (monitoring/) ---
+
+    def can_monitor(self):
+        return True
+
+    def container_states(self):
+        states = {}
+        for container in self.client.containers.list(all=True, filters={"label": SHOP_LABEL}):
+            try:
+                shop_id = int(container.labels[SHOP_LABEL])
+            except (KeyError, ValueError):
+                continue
+            state = container.attrs.get("State", {})
+            health = (state.get("Health") or {}).get("Status")
+            states[shop_id] = ContainerState(status=state.get("Status", container.status), health=health)
+        return states
+
+    def check_page(self, shop, path="/"):
+        host = shop.url.split("://", 1)[1]
+        command = [
+            "curl", "-s", "-o", "/dev/null", "--max-time", str(PAGE_TIMEOUT), "-H", f"Host: {host}",
+            "-w", f"%{{http_code}} %{{time_total}} %header{{{UNAVAILABLE_HEADER}}}", self.proxy_url(path),
+        ]
+        # From inside the shop's container: the worker is not in the shops' network.
+        try:
+            result = self.client.containers.get(container_name(shop)).exec_run(command)
+        except (DockerException, requests.RequestException) as exc:
+            return PageCheck(status=None, error=f"Nie da się wejść do kontenera sklepu ({exc.__class__.__name__}).")
+        status, _, rest = result.output.decode(errors="replace").strip().partition(" ")
+        took, _, unavailable = rest.partition(" ")
+        if result.exit_code != 0 or not status.isdigit() or status == "000":
+            reason = CURL_ERRORS.get(result.exit_code, f"curl zakończył się kodem {result.exit_code}")
+            return PageCheck(status=None, seconds=_float(took), error=reason)
+        return PageCheck(status=int(status), seconds=_float(took), unavailable=bool(unavailable.strip()))
+
+    def start_shop(self, shop):
+        if self._find_container(shop) is None and not self._volume_exists(shop):
+            # A new container would start an empty shop in place of the lost one: that is for a person to decide
+            # (e.g. python manage.py restore_shop).
+            raise ProvisioningError(f"Nie ma kontenera ani wolumenu {container_name(shop)} z plikami sklepu.")
+        self.step_start_container(shop)
+        return self._wait_until_routed(shop)
+
+    def restart_shop(self, shop):
+        container = self.client.containers.get(container_name(shop))
+        container.restart(timeout=30)
+        return self._wait_until_routed(shop)
+
+    def service_problems(self, required, optional=()):
+        try:
+            self.client.ping()
+        except (DockerException, requests.RequestException):
+            return {"docker": "Docker nie odpowiada."}
+        problems = {}
+        for name in [*required, *optional]:
+            try:
+                container = self.client.containers.get(name)
+            except NotFound:
+                if name not in optional:
+                    problems[name] = "Nie ma takiego kontenera."
+                continue
+            except (DockerException, requests.RequestException) as exc:
+                problems[name] = f"Docker nie podał stanu kontenera ({exc.__class__.__name__})."
+                continue
+            state = container.attrs.get("State", {})
+            health = (state.get("Health") or {}).get("Status")
+            if state.get("Status") != "running":
+                problems[name] = f"Kontener nie działa ({state.get('Status')})."
+            elif health == "unhealthy":
+                problems[name] = "Kontener działa, ale nie przechodzi swojego healthchecka."
+        return problems
+
+    def disk_space(self):
+        # The shops' database and Docker volumes are on one disk; the database container can say how full it is.
+        try:
+            output = self._exec(settings.SHOPS_DB_CONTAINER, ["df", "-Pk", "/var/lib/mysql"])
+            fields = output.splitlines()[-1].split()
+            total, free = int(fields[1]) * 1024, int(fields[3]) * 1024
+        except (CommandError, DockerException, requests.RequestException, IndexError, ValueError):
+            return None
+        return free, total
 
     def _volume_exists(self, shop):
         try:
@@ -368,6 +550,28 @@ class ContainerProvisioner(BaseProvisioner):
              *([database] if database else []), "-e", statement],
             environment={"MYSQL_PWD": settings.SHOPS_DB_ROOT_PASSWORD},
         )
+
+
+# Why curl got no answer, by its exit code.
+CURL_ERRORS = {
+    6: "Nie da się ustalić adresu serwera proxy.",
+    7: "Serwer proxy nie przyjmuje połączeń.",
+    28: f"Brak odpowiedzi w {PAGE_TIMEOUT} s.",
+    52: "Serwer zakończył połączenie bez odpowiedzi.",
+    56: "Połączenie zerwane w trakcie odpowiedzi.",
+}
+
+
+def seconds(value):
+    """Docker takes durations in nanoseconds."""
+    return int(value * 1_000_000_000)
+
+
+def _float(value):
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def container_name(shop):

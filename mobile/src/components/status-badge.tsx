@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing, type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { ShopStatus } from '@/lib/types';
+import type { Shop, ShopStatus } from '@/lib/types';
 
 const STATUS_COLOR: Record<ShopStatus, [ThemeColor, ThemeColor]> = {
   pending: ['warning', 'accentMuted'],
@@ -17,6 +17,14 @@ const STATUS_COLOR: Record<ShopStatus, [ThemeColor, ThemeColor]> = {
 export function StatusBadge({ status, label }: { status: ShopStatus; label: string }) {
   const [color, background] = STATUS_COLOR[status];
   return <Badge label={label} color={color} background={background} />;
+}
+
+/** The shop's state; a running shop that doesn't answer its customers says so. */
+export function ShopStatusBadge({ shop }: { shop: Pick<Shop, 'status' | 'status_display' | 'down_since'> }) {
+  if (shop.status === 'active' && shop.down_since) {
+    return <Badge label="Nie odpowiada" color="danger" background="dangerMuted" />;
+  }
+  return <StatusBadge status={shop.status} label={shop.status_display} />;
 }
 
 /** A pill with a dot: the label says the state, the color only backs it up. */

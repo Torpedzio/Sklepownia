@@ -45,7 +45,7 @@ Limity zapytań: logowanie, rejestracja i ustawianie nowego hasła 10 na minutę
 
 | Metoda i ścieżka | Opis |
 |---|---|
-| `GET shops/` | Sklepy użytkownika (bez usuniętych): `id, name, slug, url, status, status_display, platform, platform_display, is_test, created_at`. `platform`: `woocommerce` albo `prestashop`. `is_test`: sklep sprzed płatnych planów |
+| `GET shops/` | Sklepy użytkownika (bez usuniętych): `id, name, slug, url, status, status_display, platform, platform_display, is_test, created_at, down_since`. `platform`: `woocommerce`, `prestashop` albo `magento`. `is_test`: sklep sprzed płatnych planów. `down_since`: od kiedy działający sklep nie odpowiada klientom (gdy monitor już powiadomił właściciela), inaczej `null` |
 | `POST shops/` | Założenie sklepu (wymaga potwierdzonego e-maila i aktywnego planu). `201` ze szczegółami sklepu. `402` bez planu, `400` przy zajętym adresie albo osiągniętym limicie planu (sklepy testowe się nie liczą); limit sklepów Magento daje błąd pola `platform`. |
 | `GET shops/{id}/` | Szczegóły: pola z listy plus `panel_name` (np. „panel PrestaShop”), `setup_time` (ile trwa zakładanie, np. „około dwóch minut”), `config` (wybory z formularza) i `provisioning` (ostatnie zadanie z krokami; kroki zależą od platformy) |
 | `DELETE shops/{id}/` | Usunięcie, `204`. W trakcie zakładania `409`. |

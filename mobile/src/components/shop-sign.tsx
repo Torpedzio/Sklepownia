@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Awning } from '@/components/awning';
 import { Icon } from '@/components/icon';
-import { StatusBadge } from '@/components/status-badge';
+import { ShopStatusBadge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -34,7 +34,7 @@ export function ShopSign({ shop }: { shop: Shop }) {
               {shop.url.replace(/^https?:\/\//, '')}
             </ThemedText>
             <View style={styles.badges}>
-              <StatusBadge status={shop.status} label={shop.status_display} />
+              <ShopStatusBadge shop={shop} />
               {shop.is_test ? <TestBadge /> : null}
             </View>
           </View>

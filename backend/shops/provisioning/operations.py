@@ -36,6 +36,8 @@ def run_operation(operation_id):
             _update_settings(provisioner, shop, operation.changes, operation.secret_values)
         elif operation.kind == Kind.SYNC_SETTINGS:
             _sync(provisioner, shop)
+            # E.g. the owner renamed the shop in its admin panel: the app shows the new name.
+            _follow_settings(shop)
         elif operation.kind == Kind.RESET_ADMIN_PASSWORD:
             provisioner.reset_admin_password(shop)
         elif operation.kind == Kind.REMOVE_SAMPLE_PRODUCTS:
@@ -147,10 +149,21 @@ def _follow_settings(shop):
     theme = ShopTemplate.objects.filter(slug=values["appearance"]["theme"], platform=shop.platform).first()
     if theme is not None:
         changes["appearance"] = {"theme": theme.slug}
+    before = _own_fields(shop)
     _apply_to_shop(shop, changes)
+    if _own_fields(shop) == before:
+        return
     with transaction.atomic():
         shop.save(update_fields=["name", "updated_at"])
         shop.config.save()
+
+
+def _own_fields(shop):
+    config = shop.config
+    return (
+        shop.name, config.description, config.contact_email, config.language, config.currency, config.country,
+        config.template_id,
+    )
 
 
 def _sync(provisioner, shop):

@@ -1,0 +1,13 @@
+{% autoescape off %}{{ heading }}
+{{ subheading }}
+
+{{ intro }}
+
+SZCZEGÓŁY
+{% for label, value in rows %}{{ label }}: {{ value }}
+{% endfor %}
+Stan sklepu zobaczysz też w aplikacji, na ekranie sklepu.
+
+--
+{{ platform }}. Wiadomość wysłana na {{ recipient }}, adres konta, na którym działa ten sklep.
+{% endautoescape %}

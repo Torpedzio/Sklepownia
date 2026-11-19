@@ -38,6 +38,9 @@ TEXTS = {
 }
 # When a visitor or a search engine may try again (seconds).
 RETRY_AFTER = {"closed": 3600, "opening": 300}
+# Says the page came from here and not from the shop ("closed", "opening" or "missing"): the platform's checks of
+# a shop through the proxy tell a shop that is down from one that answers (monitoring/).
+UNAVAILABLE_HEADER = "X-Shop-Unavailable"
 OPENING = {Shop.Status.PENDING, Shop.Status.PROVISIONING}
 
 
@@ -57,11 +60,14 @@ def shop_unavailable(request):
     host = request.headers.get("X-Forwarded-Host", "").split(",")[0]
     shop = shop_at(host) if host else None
     if shop is None:
-        return render(request, "shops/unavailable.html", {"lang": "pl", "missing": True}, status=404)
+        response = render(request, "shops/unavailable.html", {"lang": "pl", "missing": True}, status=404)
+        response[UNAVAILABLE_HEADER] = "missing"
+        return response
     state = "opening" if shop.status in OPENING else "closed"
     config = getattr(shop, "config", None)
     language = config.language if config else Language.PL
     context = {"lang": language[:2], "name": shop.name, **TEXTS.get(language, TEXTS[Language.PL])[state]}
     response = render(request, "shops/unavailable.html", context, status=503)
     response["Retry-After"] = str(RETRY_AFTER[state])
+    response[UNAVAILABLE_HEADER] = state
     return response

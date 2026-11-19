@@ -70,9 +70,11 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
     zaraz po załadowaniu;
   - ekrany za logowaniem mają w karcie przeglądarki tylko nazwę serwisu;
   - plany w stronie z serwera przeglądarka trzyma do przeładowania strony (dane `loader` są zapamiętywane na sesję).
-- **Start kontenera sklepu:** przez kilka sekund od startu kontenera (zakładanie, przywrócenie, restart) Traefik
-  ma już regułę sklepu, a serwer w środku jeszcze nie odpowiada, więc gość dostaje `502` zamiast strony
-  „Sklep chwilowo niedostępny”. Zaradziłby healthcheck kontenera (Traefik pomija kontenery, które nie są zdrowe).
+- **Monitorowanie** ([architektura.md](architektura.md#monitorowanie)): monitor nie ma historii dostępności ani
+  strony stanu dla właścicieli (tylko awarie w panelu admina), nie alarmuje o wolnych sklepach (czas odpowiedzi
+  zapisuje bez progu) ani o błędach zakładania sklepów. Sprawdza sklep od środka serwera sklepów, więc nie widzi
+  problemów z DNS, HTTPS i certyfikatem; to wymaga sprawdzania z zewnątrz. Kontenery sprzed healthchecka trzeba
+  raz odtworzyć (`update_shop_containers`).
 - **Zdjęcia w przykładowych produktach.** Produkty przykładowe nie mają zdjęć, więc nowy sklep pokazuje szare zaślepki.
 - **Porady w innych językach.** Instrukcja logowania i porady podają polskie nazwy z paneli WordPressa,
   PrestaShop i Magento, także dla sklepów założonych w innym języku. Polski pakiet Magento nie tłumaczy kilku
@@ -115,14 +117,16 @@ Projekt działa dziś tylko lokalnie. Przed uruchomieniem dla użytkowników trz
 4. **Kopie zapasowe poza serwerem.** Kopie sklepów są dziś w repozytorium restic na serwerze sklepów
    ([infra/shops/README.md](../infra/shops/README.md#kopie-zapasowe)), więc nie przetrwają utraty serwera. Trzeba je
    kopiować na zewnątrz (`restic copy` albo drugie repozytorium w S3 lub B2, z osobnym hasłem), regularnie sprawdzać
-   repozytorium (`restic check`, co jakiś czas z `--read-data-subset`) i alarmować, gdy nocne kopie się nie robią.
-   Hasło repozytorium musi być w sejfie poza serwerem.
+   repozytorium (`restic check`, co jakiś czas z `--read-data-subset`). Hasło repozytorium musi być w sejfie poza
+   serwerem.
 5. **Poczta:** dostawca SMTP dla platformy (zmienne `EMAIL_*`, zamiast Mailpit) z rekordami SPF i DKIM domeny.
    Dla sklepów przekaźnik na serwerze sklepów w miejsce `shops-mail` (np. Postfix), który trzyma dane logowania
    do dostawcy i przepuszcza tylko nadawców z `SHOPS_MAIL_DOMAIN`, z limitem wiadomości na sklep. Domena
    `SHOPS_MAIL_DOMAIN` potrzebuje SPF i DKIM, a poczta przychodząca na `<slug>@` najlepiej przekierowana
    do właściciela, gdyby ktoś odpisał na adres nadawcy zamiast na Reply-To.
-6. **Monitorowanie:** zdrowie sklepów, błędy zakładania, zajętość serwera (`Server.max_shops`).
+6. **Monitorowanie platformy z zewnątrz:** `MONITOR_PING_URL` z usługą, która alarmuje, gdy rundy monitora ustaną
+   (padł worker, beat albo serwer), sprawdzanie API i strony platformy oraz kilku sklepów spoza serwera (DNS, HTTPS,
+   certyfikaty), `ALERT_EMAILS` z adresami dyżurnych i zbieranie błędów aplikacji (np. Sentry).
 7. **Wiele serwerów sklepów.** Model `Server` i krok przydziału serwera są gotowe, ale provisionery
    rozmawiają tylko z lokalnym Dockerem.
 8. **Aplikacja w sklepach z aplikacjami:** ikony, ekran startowy, nazwa w `app.json` i build przez EAS.

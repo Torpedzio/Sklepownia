@@ -188,7 +188,7 @@ class ShopViewSet(
         return (
             Shop.objects.filter(owner=self.request.user)
             .exclude(status=Shop.Status.DELETED)
-            .select_related("config__template")
+            .select_related("config__template", "health")
         )
 
     def get_serializer_class(self):

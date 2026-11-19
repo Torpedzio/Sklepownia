@@ -202,6 +202,33 @@ def test_refresh_reads_the_shop(auth_client, shop, django_capture_on_commit_call
     assert auth_client.get(settings_url(shop)).data["synced_at"] is not None
 
 
+def test_refresh_takes_the_name_the_owner_gave_the_shop_in_its_panel(
+    auth_client, shop, django_capture_on_commit_callbacks, monkeypatch,
+):
+    from shops.provisioning.fake import FakeProvisioner
+
+    read = FakeProvisioner.read_settings
+
+    def renamed(self, shop):
+        values = read(self, shop)
+        values["general"] = {**values["general"], "name": "Sklep z Panelu"}
+        return values
+
+    monkeypatch.setattr(FakeProvisioner, "read_settings", renamed)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        auth_client.post(settings_url(shop, "refresh/"))
+
+    assert Shop.objects.get(pk=shop.pk).name == "Sklep z Panelu"
+    assert auth_client.get(f"/api/shops/{shop.pk}/").data["name"] == "Sklep z Panelu"
+
+    # Nothing changed since: the shop isn't saved again.
+    updated = Shop.objects.get(pk=shop.pk).updated_at
+    with django_capture_on_commit_callbacks(execute=True):
+        auth_client.post(settings_url(shop, "refresh/"))
+    assert Shop.objects.get(pk=shop.pk).updated_at == updated
+
+
 def test_reset_admin_password_gives_a_new_one(auth_client, shop, django_capture_on_commit_callbacks):
     before = shop.credentials.admin_password
 

@@ -103,6 +103,8 @@ def provisioner():
     instance = WooCommerceProvisioner()
     # cached_property: an instance attribute replaces the real Docker client.
     instance.__dict__["client"] = MagicMock()
+    # The proxy reaches the container at once (the waiting is tested in monitoring/tests/test_docker.py).
+    instance._wait_until_routed = lambda shop, timeout=None: True
     return instance
 
 
@@ -448,6 +450,10 @@ def test_start_container_creates_a_new_one_behind_the_proxy(provisioner, shop):
     assert kwargs["name"] == f"shop-{shop.pk}"
     assert kwargs["labels"][f"traefik.http.routers.shop-{shop.pk}.rule"] == f"Host(`{shop.domain}`)"
     assert kwargs["environment"]["WORDPRESS_DB_NAME"] == f"shop_{shop.pk}"
+    # Traefik sends visitors only to a healthy container: the home page at the shop's address must answer.
+    health = kwargs["healthcheck"]
+    assert f"-H 'Host: {shop.domain}' http://localhost/" in health["Test"][1]
+    assert (health["Retries"], health["StartInterval"]) == (3, 3_000_000_000)
     container.start.assert_called_once()
 
 
@@ -695,11 +701,17 @@ def test_a_container_of_the_current_image_is_kept(provisioner, shop):
         "shops.id": str(shop.pk),
         "shops.slug": shop.slug,
     }
+    current.attrs["Config"]["Healthcheck"] = provisioner.healthcheck(shop)
 
     provisioner.step_start_container(shop)
 
     current.remove.assert_not_called()
     current.start.assert_called_once()
+    assert provisioner.container_outdated(shop) is False
+
+    # A container from before the healthcheck gets one: it is made again.
+    del current.attrs["Config"]["Healthcheck"]
+    assert provisioner.container_outdated(shop) is True
 
 
 def test_a_missing_image_keeps_the_container(provisioner, shop):

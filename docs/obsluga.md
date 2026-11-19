@@ -39,7 +39,7 @@ Objaw niedziałającego serwera sklepów: sklepy nie odpowiadają, a `update_sho
 ```bash
 docker compose logs -f backend      # zapytania do API
 docker compose logs -f worker       # zakładanie sklepów, wysyłka e-maili (treść wiadomości: http://localhost:8030)
-docker compose logs -f beat         # harmonogram zadań (odnowienia planów co 15 minut)
+docker compose logs -f beat         # harmonogram zadań (odnowienia planów co 15 minut, monitor co 5)
 docker logs -f shop-<id>            # serwer WWW konkretnego sklepu
 docker logs -f shops-proxy          # Traefik
 ```
@@ -71,6 +71,35 @@ Użytkownik i panel admina widzą komunikat skrócony.
 | Właściciel nie może założyć sklepu („Wybierz plan”) | Brak aktywnego planu albo zaległa płatność. Stan w panelu admina: Płatności → Subskrypcje; plan można tam nadać ręcznie. |
 | Przywrócenie kopii kończy się „…Sklep ma z powrotem stan sprzed próby” | Przyczyna w `docker compose logs worker` („Restoring backup … failed”). Sklep działa w stanie sprzed próby, a na liście jest kopia tego stanu. Przy „…ani wrócić do stanu sprzed próby” sklep potrzebuje ręki: `restore_shop <id>` i najnowsza kopia „Stan sprzed przywrócenia kopii”. |
 | Aplikacja w przeglądarce pokazuje stary kod | Pamięć podręczna Metro: `npx expo start -c`. |
+| Właściciel dostał „Sklep nie działa” | Co widzi monitor i co naprawiał: e-mail obsługi albo panel admina, Monitorowanie → Awarie. Logi sklepu: `docker logs shop-<id>`, naprawy: `docker compose logs worker` („Repairing shop …”). Po naprawie najbliższa runda (do 5 minut) wyśle „znowu działa”; od razu: `check_shops <slug>`. |
+| Monitor nie sprawdza sklepów | Działają `beat` i worker? Panel admina, Monitorowanie → Ostatnie uruchomienia: `monitor`. Runda pomija sklepy, w których worker coś robi (np. przywraca kopię), a wszystkie, gdy nie działa Docker, proxy albo baza sklepów (wtedy obsługa dostaje e-mail). |
+
+## Monitorowanie
+
+Jak działa: [architektura.md](architektura.md#monitorowanie). Awarie, stan sklepów i ostatnie uruchomienia są
+w panelu admina: Monitorowanie (tylko do odczytu). E-maile dla obsługi idą na `ALERT_EMAILS` (domyślnie
+`CONTACT_EMAIL`), lokalnie do Mailpit: http://localhost:8030.
+
+```bash
+docker compose exec worker python manage.py check_shops [<slug>…]                  # runda teraz, z wynikiem
+docker compose exec worker python manage.py update_shop_containers --dry-run       # które kontenery są nieaktualne
+docker compose exec worker python manage.py update_shop_containers [<slug>…]       # zastąpienie ich
+```
+
+`check_shops` robi to, co runda z harmonogramu, łącznie z naprawami i powiadomieniami. Ze slugami sprawdza tylko
+te sklepy (usługi, dysk i kopie zawsze).
+
+**Kontenery sprzed healthchecka.** Nowe i przywrócone sklepy dostają healthcheck od razu, starsze dopiero po
+`update_shop_containers`. Polecenie zastępuje też kontenery ze starym obrazem albo limitem pamięci. Pliki sklepu
+są w wolumenie, a baza w `shops-db`, więc nic nie ginie, ale sklep nie odpowiada przez kilkanaście sekund (Magento
+dłużej): uruchamiaj je poza godzinami ruchu. Sklepy, w których worker coś robi, pomija.
+
+**Sklep bez kontenera i wolumenu** (np. pliki usunięte ręcznie) monitor tylko zgłasza: nowy kontener byłby pustym
+sklepem. Taki sklep przywróć z kopii (`restore_shop`) albo usuń.
+
+**Pilnowanie monitora.** Gdy padnie worker albo beat, rundy ustają bez alarmu. Ustaw `MONITOR_PING_URL` na adres
+usługi typu „dead man's switch” (np. Healthchecks.io z okresem 5 minut): monitor pinguje ją po każdej rundzie, a ona
+alarmuje, gdy pingi ustaną.
 
 ## Kopie zapasowe
 
@@ -93,10 +122,11 @@ działający i odczytuje go na nowo. Odmówi, gdy adres ma już inny sklep. Ostr
 sklepów, niż pozwala jego plan: wtedy ustal z nim, co dalej (np. zawieszenie innego sklepu). Sklep usuniętego
 konta nie ma kopii.
 
-Gdy kopie się nie robią: działa `beat` (`docker compose ps beat`)? Jest `SHOPS_BACKUP_PASSWORD` w `.env` workera
-i obraz `shops/backup:0.19.1` (`cd infra/shops && docker compose build backup`)? Błąd każdej kopii jest w panelu
-admina i w `docker compose logs worker` („Backing up shop …”). Zostały kontenery narzędzia (`docker ps -a --filter
-label=shops.backup`)? Usuwa je nocny przebieg.
+Gdy kopie się nie robią albo w części sklepów się nie udały, obsługa dostaje e-mail od monitora. Działa `beat`
+(`docker compose ps beat`)? Jest `SHOPS_BACKUP_PASSWORD` w `.env` workera i obraz `shops/backup:0.19.1`
+(`cd infra/shops && docker compose build backup`)? Błąd każdej kopii jest w panelu admina i w `docker compose logs
+worker` („Backing up shop …”). Zostały kontenery narzędzia (`docker ps -a --filter label=shops.backup`)? Usuwa je
+nocny przebieg.
 
 ## Ręczne operacje na sklepie
 

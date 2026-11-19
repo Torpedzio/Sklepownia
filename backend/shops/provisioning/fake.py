@@ -8,10 +8,12 @@ from django.conf import settings
 from django.utils import timezone
 
 from .. import shop_settings
-from ..models import Server, ShopChecklist, ShopCredentials, ShopSettings
+from ..models import Server, Shop, ShopChecklist, ShopCredentials, ShopSettings
 from ..orders import Order, Status
 from ..platforms import platform_info
-from .base import Backup, BaseProvisioner, NothingToBackUp, ProductCount, ProvisioningError, Snapshot
+from .base import (
+    Backup, BaseProvisioner, ContainerState, NothingToBackUp, PageCheck, ProductCount, ProvisioningError, Snapshot,
+)
 
 
 FAKE_STATUSES = (Status.NEW, Status.PROCESSING, Status.COMPLETED, Status.CANCELLED, Status.UNFINISHED)
@@ -26,6 +28,15 @@ class FakeProvisioner(BaseProvisioner):
     snapshots = {}
     # Snapshot ids restored, oldest first.
     restored = []
+    # Simulated breakdowns, set by tests; everything works otherwise. {shop id: ContainerState, or None when the
+    # container is gone}, {shop id: PageCheck}, {service name: problem} and (free, total) bytes of the disk.
+    containers = {}
+    pages = {}
+    services = {}
+    disk = None
+    # (shop id, "start" or "restart") the monitor did, oldest first; whether they fix the shop.
+    repairs = []
+    repairs_help = True
 
     def run_step(self, key, shop):
         time.sleep(settings.FAKE_PROVISIONER_STEP_DELAY)
@@ -115,6 +126,53 @@ class FakeProvisioner(BaseProvisioner):
 
     def prune_backups(self):
         pass
+
+    # --- health ---
+
+    def can_monitor(self):
+        return True
+
+    def container_states(self):
+        """Running shops have a running container, suspended ones a stopped one."""
+        live = {
+            Shop.Status.ACTIVE: ContainerState("running", "healthy"),
+            Shop.Status.SUSPENDED: ContainerState("exited"),
+        }
+        states = {
+            shop_id: live[status]
+            for shop_id, status in Shop.objects.filter(status__in=live).values_list("pk", "status")
+        }
+        for shop_id, state in self.containers.items():
+            if state is None:
+                states.pop(shop_id, None)
+            else:
+                states[shop_id] = state
+        return states
+
+    def check_page(self, shop):
+        return self.pages.get(shop.pk, PageCheck(status=200, seconds=0.12))
+
+    def start_shop(self, shop):
+        return self._repair(shop, "start")
+
+    def restart_shop(self, shop):
+        return self._repair(shop, "restart")
+
+    def service_problems(self, required, optional=()):
+        if "docker" in self.services:
+            return {"docker": self.services["docker"]}
+        return {name: problem for name, problem in self.services.items() if name in [*required, *optional]}
+
+    def disk_space(self):
+        return self.disk
+
+    def _repair(self, shop, action):
+        self._simulate(action)
+        type(self).repairs.append((shop.pk, action))
+        if self.repairs_help:
+            self.containers.pop(shop.pk, None)
+            self.pages.pop(shop.pk, None)
+        return self.repairs_help
 
     def remove_sample_products(self, shop):
         self._simulate("remove_sample_products")

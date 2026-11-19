@@ -81,6 +81,8 @@ def shell(monkeypatch):
 def provisioner():
     instance = MagentoProvisioner()
     instance.__dict__["client"] = MagicMock()
+    # The proxy reaches the container at once (the waiting is tested in monitoring/tests/test_docker.py).
+    instance._wait_until_routed = lambda shop, timeout=None: True
     return instance
 
 

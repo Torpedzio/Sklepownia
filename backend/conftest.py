@@ -45,6 +45,10 @@ def _test_settings(settings, tmp_path, monkeypatch):
 
     monkeypatch.setattr(FakeProvisioner, "snapshots", {})
     monkeypatch.setattr(FakeProvisioner, "restored", [])
+    # Every shop and service works until a test breaks one.
+    for name, value in {"containers": {}, "pages": {}, "services": {}, "disk": None, "repairs": []}.items():
+        monkeypatch.setattr(FakeProvisioner, name, value)
+    monkeypatch.setattr(FakeProvisioner, "repairs_help", True)
     settings.SHOPS_BACKUP_PASSWORD = "backup-secret"
     # Throttle counters live in the cache; keep tests independent.
     cache.clear()

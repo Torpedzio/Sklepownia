@@ -16,6 +16,14 @@ export function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+/** When, briefly: "10:42" today, "18 listopada, 10:42" on another day. */
+export function formatMoment(iso: string, now = new Date()) {
+  const date = new Date(iso);
+  const time = date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+  if (date.toDateString() === now.toDateString()) return time;
+  return `${date.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' })}, ${time}`;
+}
+
 /** A calendar day ("2026-11-18") as a local date, not midnight UTC. */
 export function parseDay(day: string) {
   const [year, month, date] = day.split('-').map(Number);

@@ -55,13 +55,25 @@ class ShopCreateSerializer(serializers.Serializer):
 class ShopSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     platform_display = serializers.CharField(source="get_platform_display", read_only=True)
+    down_since = serializers.SerializerMethodField(
+        help_text="Od kiedy działający sklep nie odpowiada klientom (monitor powiadomił już właściciela); null, gdy "
+        "działa.",
+    )
 
     class Meta:
         model = Shop
         fields = [
             "id", "name", "slug", "url", "status", "status_display", "platform", "platform_display",
-            "is_test", "created_at",
+            "is_test", "created_at", "down_since",
         ]
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_down_since(self, shop):
+        # Shops without a check yet have no health; the monitor only checks running ones.
+        health = getattr(shop, "health", None)
+        if shop.status != Shop.Status.ACTIVE or health is None or health.down_since is None:
+            return None
+        return serializers.DateTimeField().to_representation(health.down_since)
 
 
 class ShopConfigSerializer(serializers.ModelSerializer):

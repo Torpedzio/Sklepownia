@@ -269,7 +269,7 @@ def test_restoring_waits_for_a_running_operation(auth_client, shop, verified_use
 def test_without_a_password_backups_are_off(auth_client, shop, monkeypatch):
     monkeypatch.setattr(FakeProvisioner, "can_back_up", lambda self: False)
 
-    assert backups.back_up_all() == 0
+    assert backups.back_up_all() == []
     assert not ShopBackup.objects.exists()
     assert auth_client.get(url(shop)).data["enabled"] is False
     assert auth_client.post(url(shop)).status_code == 409
@@ -307,7 +307,7 @@ def test_a_failed_backup_is_recorded_for_the_admin_and_the_night_goes_on(shop, v
 
     monkeypatch.setattr(FakeProvisioner, "backup", backup)
 
-    assert backups.back_up_all() == 1
+    assert len(backups.back_up_all()) == 1
 
     failed = ShopBackup.objects.get(shop=shop)
     assert failed.status == ShopBackup.Status.FAILED

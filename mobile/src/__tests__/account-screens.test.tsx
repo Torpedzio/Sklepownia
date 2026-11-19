@@ -217,6 +217,7 @@ describe('shop list', () => {
     platform: 'woocommerce',
     platform_display: 'WooCommerce',
     is_test: false,
+    down_since: null,
     created_at: '2026-11-01T10:00:00Z',
   });
 
@@ -246,6 +247,15 @@ describe('shop list', () => {
     await renderScreen(<ShopsScreen />);
 
     expect(await screen.findByText(/To limit Twojego planu\./)).toBeTruthy();
+  });
+
+  test('marks a running shop that does not answer its customers', async () => {
+    signedIn(anna);
+    mockApi({ 'GET /shops/': [[{ ...shop(1, 'active'), down_since: '2026-11-19T10:42:00Z' }, shop(2, 'active')]] });
+    await renderScreen(<ShopsScreen />);
+
+    expect(await screen.findByText('Nie odpowiada')).toBeTruthy();
+    expect(screen.getAllByText('active')).toHaveLength(1);
   });
 
   test('marks test shops and leads to choosing a plan without one', async () => {
@@ -418,6 +428,7 @@ describe('account overview and security', () => {
     platform,
     platform_display: platform,
     is_test: isTest,
+    down_since: null,
     created_at: '2026-11-01T10:00:00Z',
   });
 

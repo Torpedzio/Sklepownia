@@ -138,11 +138,11 @@ def forget_all(shop):
 
 
 def back_up_all():
-    """Every night: copies each running or suspended shop, then maintain(). Returns how many copies failed."""
+    """Every night: copies each running or suspended shop, then maintain(). Returns the shops left without a copy."""
     if not enabled():
         logger.warning("Shop backups are off: SHOPS_BACKUP_PASSWORD is not set")
-        return 0
-    failed = 0
+        return []
+    failed = []
     for shop in Shop.objects.filter(status__in=BACKED_UP).order_by("pk"):
         if _busy(shop):
             # E.g. a restore under way: a copy of a half-restored shop would be worse than none.
@@ -153,7 +153,7 @@ def back_up_all():
         except NothingToBackUp:
             logger.warning("Shop %s has no files to back up", shop.pk)
         except ProvisioningError:
-            failed += 1
+            failed.append(shop)
     maintain()
     return failed
 

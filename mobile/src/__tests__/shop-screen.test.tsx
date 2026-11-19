@@ -53,6 +53,22 @@ test('a closed shop says customers cannot see it', async () => {
   expect(await screen.findByText('Sklep jest zamknięty dla klientów')).toBeTruthy();
 });
 
+test('a shop that does not answer says so and that it is being looked into', async () => {
+  const since = new Date();
+  since.setHours(10, 42, 0, 0);
+  await open(shopDetail({ down_since: since.toISOString() }), { 'GET /shops/7/settings/': shopSettings() });
+
+  expect(await screen.findByText('Sklep nie działa')).toBeTruthy();
+  expect(
+    screen.getByText(
+      'Od 10:42 klienci nie mogą wejść do sklepu. Już to sprawdzamy i damy znać, gdy znowu zadziała.',
+    ),
+  ).toBeTruthy();
+  expect(screen.getByText('Nie odpowiada')).toBeTruthy();
+  expect(screen.queryByText('Aktywny')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Otwórz sklep' })).toBeTruthy();
+});
+
 test('the buttons open the shop, its settings and the WordPress panel', async () => {
   const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue();
   await open(shopDetail(), { 'GET /shops/7/settings/': shopSettings() });

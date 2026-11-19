@@ -139,6 +139,7 @@ export function shopDetail(overrides: Partial<ShopDetail> = {}): ShopDetail {
     panel_name: 'panel WordPressa',
     setup_time: 'około dwóch minut',
     is_test: false,
+    down_since: null,
     created_at: '2026-11-05T10:00:00Z',
     config: {
       industry: 'food',

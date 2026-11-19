@@ -1,6 +1,7 @@
 from smtplib import SMTPException
 
 from celery import shared_task
+from django.utils import timezone
 
 from push import messages
 from push import services as push
@@ -112,4 +113,10 @@ def sync_all_shop_orders():
 @shared_task
 def back_up_all_shops():
     """Scheduled by Celery beat every night (SHOPS_BACKUP_HOUR)."""
-    backups.back_up_all()
+    from monitoring import alerts
+
+    started = timezone.now()
+    failed = backups.back_up_all()
+    if backups.enabled():
+        # The monitor raises the alarm when this stops happening, and the staff hears about the failures.
+        alerts.nightly_backups_done(failed, started)

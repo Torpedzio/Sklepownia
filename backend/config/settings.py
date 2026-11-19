@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'handbook',
     'billing',
     'push',
+    'monitoring',
 ]
 
 MIDDLEWARE = [
@@ -349,6 +350,20 @@ PUSH_SENDER = os.environ.get("PUSH_SENDER", "push.senders.expo.ExpoSender")
 # Needed only with "enhanced security for push notifications" on in the Expo project.
 EXPO_ACCESS_TOKEN = os.environ.get("EXPO_ACCESS_TOKEN", "")
 
+# Monitoring (monitoring/): how often running shops and the shop node are checked, after how many failed checks
+# in a row a shop counts as down (its owner and the staff hear about it), and who the staff are.
+MONITOR_INTERVAL_MINUTES = int(os.environ.get("MONITOR_INTERVAL_MINUTES", "5"))
+MONITOR_FAILURES = int(os.environ.get("MONITOR_FAILURES", "2"))
+ALERT_EMAILS = [email.strip() for email in os.environ.get("ALERT_EMAILS", CONTACT_EMAIL).split(",") if email.strip()]
+# Below this share of free disk space, and above this share of a server's shop limit, the staff is told.
+MONITOR_DISK_MIN_FREE_PERCENT = int(os.environ.get("MONITOR_DISK_MIN_FREE_PERCENT", "10"))
+MONITOR_SERVER_FULL_PERCENT = int(os.environ.get("MONITOR_SERVER_FULL_PERCENT", "90"))
+# Opened after every round, e.g. a check of healthchecks.io: it raises the alarm when the rounds stop (the worker,
+# beat or the whole platform is down). Empty: nothing is called.
+MONITOR_PING_URL = os.environ.get("MONITOR_PING_URL", "")
+# How many shops are visited at once.
+MONITOR_WORKERS = int(os.environ.get("MONITOR_WORKERS", "8"))
+
 CELERY_BEAT_SCHEDULE = {
     "renew-subscriptions": {"task": "billing.tasks.renew_subscriptions", "schedule": 15 * 60},
     "reconcile-payments": {"task": "billing.tasks.reconcile_payments", "schedule": 5 * 60},
@@ -356,4 +371,11 @@ CELERY_BEAT_SCHEDULE = {
     "sync-shop-orders": {"task": "shops.tasks.sync_all_shop_orders", "schedule": SHOP_ORDERS_SYNC_MINUTES * 60},
     "check-push-receipts": {"task": "push.tasks.check_push_receipts", "schedule": 15 * 60},
     "back-up-shops": {"task": "shops.tasks.back_up_all_shops", "schedule": crontab(hour=SHOPS_BACKUP_HOUR, minute=0)},
+    # A round stuck in the queue behind a busy worker is dropped: rounds run back to back would count a shop's
+    # failures within seconds.
+    "check-shops": {
+        "task": "monitoring.tasks.check_shops",
+        "schedule": MONITOR_INTERVAL_MINUTES * 60,
+        "options": {"expires": MONITOR_INTERVAL_MINUTES * 60},
+    },
 }

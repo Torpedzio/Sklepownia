@@ -10,7 +10,7 @@ import { ShopChecklist } from '@/components/shop-checklist';
 import { ShopGuidesPanel } from '@/components/shop-guides';
 import { missingForSales, ShopOverview } from '@/components/shop-overview';
 import { TestBadge } from '@/components/shop-sign';
-import { StatusBadge } from '@/components/status-badge';
+import { ShopStatusBadge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing, WideBreakpoint } from '@/constants/theme';
@@ -20,10 +20,11 @@ import { useTheme } from '@/hooks/use-theme';
 import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 import { api } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
-import { panelLocative, panelTitle } from '@/lib/format';
+import { formatMoment, panelLocative, panelTitle } from '@/lib/format';
 import type { ShopAdminAccess, ShopDetail, ShopSettings, ShopStatus } from '@/lib/types';
 
 const IN_PROGRESS = ['pending', 'provisioning'];
+const DOWN_REFRESH = 60_000;
 
 export default function ShopScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,7 +37,9 @@ export default function ShopScreen() {
     isStale,
     refresh,
   } = useApiQuery<ShopDetail>(`/shops/${id}/`, {
-    refetchInterval: (data) => (data && IN_PROGRESS.includes(data.status) ? 1500 : false),
+    // While the shop doesn't answer, the screen shows by itself when it works again.
+    refetchInterval: (data) =>
+      data && IN_PROGRESS.includes(data.status) ? 1500 : data?.down_since ? DOWN_REFRESH : false,
   });
   // The overview of a running shop shows its settings as last read from the shop.
   const { data: settings } = useApiQuery<ShopSettings>(`/shops/${id}/settings/`, {
@@ -104,6 +107,7 @@ export default function ShopScreen() {
   const job = shop.provisioning;
   const inProgress = IN_PROGRESS.includes(shop.status);
   const active = shop.status === 'active';
+  const down = active && Boolean(shop.down_since);
   const rows: ReceiptRow[] = (job?.steps ?? []).map((step) => ({
     label: step.label,
     status: step.status,
@@ -145,20 +149,30 @@ export default function ShopScreen() {
           {shop.url}
         </ThemedText>
         <View style={styles.badges}>
-          <StatusBadge status={shop.status} label={shop.status_display} />
+          <ShopStatusBadge shop={shop} />
           {shop.is_test ? <TestBadge /> : null}
         </View>
       </View>
 
       {active ? (
-        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <ThemedText type="heading">{closed ? 'Sklep jest zamknięty dla klientów' : 'Twój sklep działa'}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {closed
-              ? 'Klienci widzą stronę „Wkrótce otwarcie”. Otworzysz sklep w ustawieniach, gdy będzie gotowy.'
-              : missing.length
-                ? `Zanim ogłosisz sklep, ustaw ${missing.join(' i ')}. Bez tego klienci nie złożą zamówienia.`
-                : `Klienci mogą już kupować. Produkty dodasz w ${panelLocative(shop.panel_name)}, a resztę zmienisz w ustawieniach.`}
+        <View
+          style={[
+            styles.card,
+            down
+              ? { backgroundColor: theme.dangerMuted, borderColor: theme.danger }
+              : { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}>
+          <ThemedText type="heading">
+            {down ? 'Sklep nie działa' : closed ? 'Sklep jest zamknięty dla klientów' : 'Twój sklep działa'}
+          </ThemedText>
+          <ThemedText type="small" themeColor={down ? undefined : 'textSecondary'}>
+            {down
+              ? `Od ${formatMoment(shop.down_since!)} klienci nie mogą wejść do sklepu. Już to sprawdzamy i damy znać, gdy znowu zadziała.`
+              : closed
+                ? 'Klienci widzą stronę „Wkrótce otwarcie”. Otworzysz sklep w ustawieniach, gdy będzie gotowy.'
+                : missing.length
+                  ? `Zanim ogłosisz sklep, ustaw ${missing.join(' i ')}. Bez tego klienci nie złożą zamówienia.`
+                  : `Klienci mogą już kupować. Produkty dodasz w ${panelLocative(shop.panel_name)}, a resztę zmienisz w ustawieniach.`}
           </ThemedText>
           <View style={styles.actions}>
             <Button title="Otwórz sklep" icon="external" onPress={() => Linking.openURL(shop.url)} />

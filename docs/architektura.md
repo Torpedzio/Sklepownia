@@ -30,8 +30,8 @@
 | Backend | REST API, uwierzytelnianie JWT, logika sklepów, panel admina Django | [backend/](../backend/) |
 | PostgreSQL | Konta, sklepy, konfiguracja, zaszyfrowane hasła sklepów, postęp zakładania | `db` w [docker-compose.yml](../docker-compose.yml) |
 | Redis | Kolejka zadań Celery | `redis` |
-| Worker Celery | Wykonuje długie zadania: zakładanie i usuwanie sklepów, wysyłkę e-maili, odnowienia planów | `worker` |
-| Celery beat | Zleca zadania według harmonogramu (`CELERY_BEAT_SCHEDULE`, czas polski): co 15 minut odnowienia planów, odczyt zamówień ze sklepów i potwierdzenia powiadomień push, co 5 minut płatności i faktury czekające na wynik, o 3:00 kopie zapasowe sklepów | `beat` |
+| Worker Celery | Wykonuje długie zadania: zakładanie i usuwanie sklepów, wysyłkę e-maili, odnowienia planów, sprawdzanie sklepów ([monitorowanie](#monitorowanie)) | `worker` |
+| Celery beat | Zleca zadania według harmonogramu (`CELERY_BEAT_SCHEDULE`, czas polski): co 15 minut odnowienia planów, odczyt zamówień ze sklepów i potwierdzenia powiadomień push, co 5 minut płatności i faktury czekające na wynik oraz runda monitora, o 3:00 kopie zapasowe sklepów | `beat` |
 | Tpay | Operator płatności: strona płatności kartą, zapisywanie i obciążanie karty, powiadomienia ([platnosci.md](platnosci.md)) | zewnętrzny |
 | Mailpit | Lokalny serwer SMTP: przyjmuje całą pocztę i pokazuje ją w przeglądarce. Na produkcji zastępuje go dostawca poczty. | `mail` |
 | Poczta sklepów | Przekaźnik, przez który sklepy wysyłają e-maile do klientów ([poczta sklepów](../infra/shops/README.md#poczta-sklepów)). Lokalnie drugi Mailpit, na produkcji przekaźnik do dostawcy poczty. | `shops-mail` |
@@ -132,6 +132,31 @@ pokazuje listę, a nocny przebieg decyduje, co usunąć ([backups.py](../backend
    Gdy przywrócenie się nie uda, sklep wraca do stanu sprzed próby tą samą drogą.
 4. Usunięcie sklepu robi najpierw kopię „Stan sprzed usunięcia sklepu”, trzymaną 14 dni: obsługa może sklep przywrócić
    (`restore_shop`). Usunięcie konta usuwa kopie jego sklepów od razu (miejsce zwalnia się przy nocnym przebiegu).
+
+## Monitorowanie
+
+Monitor ([monitoring/](../backend/monitoring/)) pilnuje, czy klienci mogą wejść do sklepów i czy serwer sklepów ma
+czym ich obsłużyć.
+
+1. Kontener sklepu ma healthcheck: `curl` strony głównej z adresem sklepu wewnątrz kontenera, co minutę (przez
+   pierwsze 5 minut po starcie co 3 s). Traefik kieruje ruch tylko do zdrowych kontenerów, więc gość startującego albo
+   zepsutego sklepu widzi stronę „Sklep chwilowo niedostępny” zamiast błędu. Zakładanie, przywrócenie i naprawa
+   czekają, aż kontener będzie zdrowy i Traefik zacznie kierować do niego ruch.
+2. Co 5 minut `beat` zleca rundę. Worker sprawdza usługi serwera sklepów, a potem każdy działający sklep tak, jak
+   wchodzi klient: przez Traefika, z nazwą hosta sklepu (zapytanie wychodzi z kontenera sklepu, bo worker nie jest
+   w sieci sklepów). Porażka to brak odpowiedzi, błąd albo strona platformy zamiast sklepu (nagłówek
+   `X-Shop-Unavailable`); sklep zamknięty w ustawieniach może odpowiadać `503`.
+3. Zatrzymany kontener monitor uruchamia od razu. Sklep, który nie odpowiada dwa razy z rzędu, nie działa: monitor
+   restartuje kontener (raz na awarię), czeka na healthcheck i sprawdza ponownie.
+4. Gdy to nie pomaga, właściciel dostaje powiadomienie push i e-mail „Sklep nie działa, już to sprawdzamy”, aplikacja
+   pokazuje przy sklepie „Nie odpowiada”, a obsługa dostaje e-mail z przyczyną na `ALERT_EMAILS`. Po pierwszym
+   udanym sprawdzeniu oboje dostają „znowu działa”.
+5. Obsługa słyszy też o usługach (Docker, proxy, baza, OpenSearch, poczta sklepów), małej ilości miejsca na dysku,
+   prawie pełnym serwerze i kopiach zapasowych (nie udały się albo nie robiły się od ponad doby). Gdy nie działa
+   Docker, proxy albo baza, runda nie ocenia sklepów: przyczyna jest jedna i obsługa już o niej wie.
+
+Awarie są w panelu admina (Monitorowanie → Awarie). Runda kończy się pingiem `MONITOR_PING_URL`, jeśli jest
+ustawiony: zewnętrzna usługa alarmuje, gdy pingi ustaną, czyli gdy padnie worker, beat albo cała platforma.
 
 ## Lista startowa
 

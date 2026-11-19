@@ -103,8 +103,9 @@ Sklepy ze skryptu `provision-shop.sh` mają adres ustalony przy zakładaniu i po
 
 ## Adres bez działającego sklepu
 
-Traefik zna tylko działające kontenery: zatrzymany kontener (sklep zawieszony przez plan, sklep w trakcie
-zakładania przed startem kontenera, kontener, który się restartuje) znika z jego reguł. Takie adresy łapie router
+Traefik zna tylko działające i zdrowe kontenery: zatrzymany kontener (sklep zawieszony przez plan, sklep w trakcie
+zakładania przed startem kontenera) i kontener, który dopiero startuje albo nie przechodzi
+[healthchecka](#healthcheck-kontenerów-sklepów), znika z jego reguł. Takie adresy łapie router
 `shop-fallback` z [traefik/fallback.yml](traefik/fallback.yml) (priorytet 1, więc reguła `Host` sklepu zawsze
 wygrywa) i wysyła je do platformy pod `SHOPS_FALLBACK_URL/shop-unavailable/`. Adres, o który pytał gość, idzie
 w nagłówku `X-Forwarded-Host`, który Traefik ustawia sam (wysłany przez gościa odrzuca).
@@ -113,7 +114,7 @@ Platforma sprawdza sklep w swojej bazie ([unavailable.py](../../backend/shops/un
 
 | Sklep pod adresem | Odpowiedź |
 |---|---|
-| zawieszony, działający (kontener się restartuje) albo nieudany | `503`, `Retry-After: 3600`, szyld „Nieczynne” |
+| zawieszony, działający (kontener startuje albo jest chory) albo nieudany | `503`, `Retry-After: 3600`, szyld „Nieczynne” |
 | w kolejce albo w trakcie zakładania | `503`, `Retry-After: 300`, szyld „Wkrótce otwarcie” |
 | nie ma go, usunięty albo obca domena | `404`, „Nie ma tu sklepu” |
 
@@ -125,8 +126,23 @@ komputerze (`http://host.docker.internal:8000`). Traefik nie przekazuje adresu s
 więc w `DJANGO_ALLOWED_HOSTS` platformy musi być host z `SHOPS_FALLBACK_URL`. Zmiana pliku lub zmiennej
 wymaga odtworzenia proxy: `docker compose up -d proxy` (sprawdź najpierw, że żaden sklep się nie zakłada).
 
-Od startu kontenera do uruchomienia serwera w środku (kilka sekund) reguła sklepu już istnieje, więc gość
-dostaje wtedy `502 Bad Gateway` od Traefika, nie tę stronę.
+Odpowiedź ma nagłówek `X-Shop-Unavailable` (`closed`, `opening`, `missing`): po nim monitor i czekanie na start
+kontenera odróżniają tę stronę od strony sklepu.
+
+### Healthcheck kontenerów sklepów
+
+Kontener sklepu ma healthcheck (`ContainerProvisioner.healthcheck`): `curl` strony głównej na `localhost` w kontenerze,
+z adresem sklepu w nagłówku `Host`. Kontener jest zdrowy przy odpowiedzi 200–499 albo 503 (sklep zamknięty, np. tryb
+konserwacji PrestaShop). Docker sprawdza co 60 s, a po 3 nieudanych próbach z rzędu uznaje kontener za chory. Przez
+pierwsze 5 minut po starcie sprawdza co 3 s (`start_interval`, Docker 25 i nowszy), więc zdrowy sklep dostaje ruch
+kilka sekund po starcie serwera w środku. docker-py 7.2 gubi `StartInterval`, dlatego
+[container.py](../../backend/shops/provisioning/container.py) podmienia `docker.types.containers.Healthcheck`.
+
+Traefik pomija kontenery, które startują albo są chore, więc gość widzi wtedy stronę platformy zamiast `502`.
+Zakładanie, przywrócenie kopii i naprawy monitora czekają, aż kontener będzie zdrowy, a Traefik skieruje do niego
+ruch. Kontenery sprzed healthchecka (albo po jego zmianie) odtwarza `update_shop_containers`
+([docs/obsluga.md](../../docs/obsluga.md#monitorowanie)). Zdrowie kontenera: `docker ps` (kolumna STATUS)
+albo `docker inspect shop-<id> --format '{{json .State.Health}}'`.
 
 ## Kopie zapasowe
 

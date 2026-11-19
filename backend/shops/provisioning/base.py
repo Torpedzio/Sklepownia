@@ -30,6 +30,35 @@ class Snapshot:
 
 
 @dataclass(frozen=True)
+class ContainerState:
+    """
+    A shop's container as Docker sees it: `status` as Docker names it (running, exited, restarting…) and `health`
+    from its healthcheck (healthy, unhealthy, starting), None for a container without one.
+    """
+
+    status: str
+    health: str | None = None
+
+    @property
+    def running(self):
+        return self.status == "running"
+
+
+@dataclass(frozen=True)
+class PageCheck:
+    """
+    A visit to a page of the shop through the proxy, as a customer would make it: the HTTP status (None when nothing
+    came back, `error` says why), how long it took, and whether the platform's "temporarily unavailable" page answered
+    instead of the shop (the proxy had no healthy container to send it to).
+    """
+
+    status: int | None
+    seconds: float | None = None
+    unavailable: bool = False
+    error: str = ""
+
+
+@dataclass(frozen=True)
 class ProductCount:
     """Products in the shop, in any state but deleted: the owner's own, and the samples added at setup."""
 
@@ -70,6 +99,13 @@ class BaseProvisioner:
 
     def refresh_resources(self, shop):
         """Apply the owner's current plan (e.g. memory) to a running shop."""
+
+    def container_outdated(self, shop):
+        """
+        Whether the shop's container is not as a new one would be now, e.g. from before the healthcheck (False
+        without one). start_shop replaces it.
+        """
+        return False
 
     def configure_mail(self, shop):
         """
@@ -153,3 +189,40 @@ class BaseProvisioner:
     def prune_backups(self):
         """Free the space of removed snapshots."""
         raise NotImplementedError
+
+    # --- health (see monitoring/) ---
+
+    def can_monitor(self):
+        """Whether the shops' containers can be checked at all."""
+        return False
+
+    def container_states(self):
+        """{shop id: ContainerState} for every shop container on the node; a shop without a container is missing."""
+        raise NotImplementedError
+
+    def check_page(self, shop):
+        """Visit the shop's home page through the proxy (PageCheck). The shop's container must be running."""
+        raise NotImplementedError
+
+    def start_shop(self, shop):
+        """
+        Start the shop's stopped container (a new one when only the container is gone, not the shop's files) and wait
+        until the proxy reaches it; returns whether it does.
+        """
+        raise NotImplementedError
+
+    def restart_shop(self, shop):
+        """Restart the shop's running container and wait until the proxy reaches it; returns whether it does."""
+        raise NotImplementedError
+
+    def service_problems(self, required, optional=()):
+        """
+        {name: what is wrong} for the shared services (containers) that don't work, {"docker": ...} when Docker
+        itself doesn't answer. An `optional` service is only checked when its container exists (e.g. the shops'
+        mail relay is a container locally, but a provider's server in production).
+        """
+        raise NotImplementedError
+
+    def disk_space(self):
+        """(free bytes, total bytes) of the disk the shops keep their data on, or None when unknown."""
+        return None
