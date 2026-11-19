@@ -190,7 +190,9 @@ export type ShopOperationKind =
   | 'sync_settings'
   | 'reset_admin_password'
   | 'remove_sample_products'
-  | 'publish_documents';
+  | 'publish_documents'
+  | 'create_backup'
+  | 'restore_backup';
 
 /** A list item of a document; one level of items can sit inside. */
 export type DocumentListItem = { text: string; items?: DocumentListItem[] };
@@ -212,7 +214,10 @@ export type ShopOperation = {
   changes: Partial<{ [S in SettingsSection]: Partial<ShopSettingsValues[S]> }>;
   /** Labels of the changed fields, e.g. ["Waluta"]. */
   changed_fields: string[];
-  result: { removed?: number };
+  /** removed: sample products deleted; before: the backup of the shop made before restoring another. */
+  result: { removed?: number; before?: number };
+  /** The moment of the backup made (create_backup) or restored (restore_backup). */
+  backup_created_at: string | null;
   error: string;
   created_at: string;
   started_at: string | null;
@@ -220,6 +225,31 @@ export type ShopOperation = {
 };
 
 export type PaymentOperator = 'przelewy24' | 'payu';
+
+export type ShopBackup = {
+  id: number;
+  kind: 'nightly' | 'manual' | 'before_restore' | 'before_delete';
+  kind_display: string;
+  /** The moment restoring it takes the shop back to. */
+  created_at: string;
+  /** Bytes of the shop's files and database in it. */
+  size: number | null;
+};
+
+export type ShopBackups = {
+  /** Backups work on the platform at all. */
+  enabled: boolean;
+  /** Newest first. */
+  backups: ShopBackup[];
+  /** Backups the owner can still make today. */
+  manual_left: number;
+  manual_per_day: number;
+  /** The newest backup of each of this many latest days and weeks stays. */
+  keep_daily: number;
+  keep_weekly: number;
+  /** When the next nightly backups start. */
+  nightly_at: string;
+};
 
 export type ShopSettings = {
   values: ShopSettingsValues;

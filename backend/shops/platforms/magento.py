@@ -100,6 +100,8 @@ ORDER_STATES = {
 class MagentoProvisioner(ContainerProvisioner):
     START_FAILED = "Magento nie wystartował."
     VOLUME_PATH = DATA_PATH
+    # Caches and sessions in var/; logs and the shop's settings (env.php) and images (media/) are kept.
+    BACKUP_EXCLUDES = ("var/cache", "var/page_cache", "var/session", "var/view_preprocessed")
 
     def image(self):
         return settings.SHOPS_MAGENTO_IMAGE
@@ -330,10 +332,18 @@ class MagentoProvisioner(ContainerProvisioner):
     def reset_admin_password(self, shop):
         credentials = self._credentials(shop)
         password = _password()
-        # Also logs out whoever was signed in with the old one.
-        self._set_admin(shop, password)
+        self.set_admin_password(shop, password)
         credentials.admin_password = password
         credentials.save(update_fields=["admin_password", "updated_at"])
+
+    def set_admin_password(self, shop, password):
+        # Also logs out whoever was signed in with the old one.
+        self._set_admin(shop, password)
+
+    def after_restore(self, shop):
+        # The search engine still has the products as they were before; the restored database rebuilds them.
+        self._magento(shop, ["indexer:reindex"])
+        self._magento(shop, ["cache:flush"])
 
     def publish_documents(self, shop, documents):
         # The action is newer than some shops' containers: one from an older image is replaced first.

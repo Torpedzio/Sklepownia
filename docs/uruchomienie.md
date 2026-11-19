@@ -15,6 +15,7 @@ Potrzebny tylko przy `SHOP_PROVISIONER=docker`. Z symulacją (`FakeProvisioner`)
 cd infra/shops
 cp .env.example .env               # wpisz SHOPS_DB_ROOT_PASSWORD
 docker compose build wordpress magento   # obrazy sklepów WooCommerce i Magento (Magento ~10 min)
+docker compose build backup              # kopie zapasowe sklepów (restic)
 docker compose up -d                     # Traefik (shops-proxy), MariaDB (shops-db), OpenSearch (shops-search)
 ```
 
@@ -25,7 +26,9 @@ Szczegóły: [infra/shops/README.md](../infra/shops/README.md).
 ```bash
 cp .env.example .env
 # uzupełnij: DJANGO_SECRET_KEY, FIELD_ENCRYPTION_KEY, SHOPS_DB_ROOT_PASSWORD (to samo co w infra/shops/.env)
+# i SHOPS_BACKUP_PASSWORD (bez niego sklepy nie mają kopii zapasowych)
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"   # FIELD_ENCRYPTION_KEY
+python -c "import secrets; print(secrets.token_urlsafe(32))"                                # SHOPS_BACKUP_PASSWORD
 
 docker compose up -d                                   # db, redis, backend, worker, beat, mail
 docker compose exec backend python manage.py migrate
@@ -149,6 +152,12 @@ Bez ustawień poczty w `.env` backend wypisuje wiadomości w logach (`EMAIL_BACK
 | `SHOPS_CONTAINER_MEMORY` | `512m` | Limit pamięci kontenera sklepu bez planu i sklepu testowego |
 | `SHOPS_MAGENTO_MEMORY` | `1536m` | Najmniejszy limit pamięci sklepu Magento, niezależnie od planu |
 | `SHOPS_PACKAGE_CACHE` | `/tmp/sklepownia-packages` | Folder workera na pobrane wtyczki płatności (sprawdzane sumą SHA-256, pobierane raz) |
+| `SHOPS_BACKUP_PASSWORD` | puste | Hasło repozytorium kopii zapasowych sklepów. Puste: kopie wyłączone. **Bez niego kopii nie da się odczytać**, więc jego kopia musi być też poza serwerem |
+| `SHOPS_BACKUP_HOUR` | `3` | Godzina nocnych kopii (czas polski) |
+| `SHOPS_BACKUP_KEEP_DAILY`, `SHOPS_BACKUP_KEEP_WEEKLY` | `7`, `4` | Z ilu ostatnich dni i tygodni zostaje po jednej kopii (oprócz wszystkich z ostatniej doby) |
+| `SHOPS_BACKUP_DELETED_DAYS` | `14` | Ile dni zostaje ostatnia kopia usuniętego sklepu |
+| `SHOPS_BACKUP_MANUAL_PER_DAY` | `3` | Ile kopii dziennie właściciel może zrobić sam |
+| `SHOPS_BACKUP_IMAGE`, `SHOPS_BACKUP_VOLUME`, `SHOPS_BACKUP_CACHE_VOLUME` | `shops/backup:0.19.1`, `shops-backups`, `shops-backup-cache` | Obraz narzędzia kopii, wolumen repozytorium i wolumen pamięci podręcznej restic |
 | `FAKE_PROVISIONER_STEP_DELAY` | `2` | Sekundy na krok w symulacji |
 | `FAKE_PROVISIONER_FAIL_AT_STEP` | puste | Klucz kroku, na którym symulacja ma się wysypać |
 

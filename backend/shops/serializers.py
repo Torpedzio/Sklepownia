@@ -3,7 +3,8 @@ from rest_framework import serializers
 
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
 from .models import (
-    ProvisioningJob, ProvisioningStep, Shop, ShopChecklist, ShopConfig, ShopOperation, ShopOrder, ShopTemplate,
+    ProvisioningJob, ProvisioningStep, Shop, ShopBackup, ShopChecklist, ShopConfig, ShopOperation, ShopOrder,
+    ShopTemplate,
 )
 from .platforms import Platform, platform_info
 from .shop_settings import OPERATORS, SECTIONS, describe
@@ -167,12 +168,16 @@ class ShopOperationSerializer(serializers.ModelSerializer):
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     changed_fields = serializers.SerializerMethodField(help_text="Etykiety zmienionych pól, np. „Waluta”.")
+    backup_created_at = serializers.DateTimeField(
+        source="backup.created_at", read_only=True, allow_null=True,
+        help_text="Chwila, z której jest kopia zapasowa zrobiona (create_backup) albo przywrócona (restore_backup).",
+    )
 
     class Meta:
         model = ShopOperation
         fields = [
             "id", "kind", "kind_display", "status", "status_display", "changes", "changed_fields",
-            "result", "error", "created_at", "started_at", "finished_at",
+            "result", "backup_created_at", "error", "created_at", "started_at", "finished_at",
         ]
 
     def get_changed_fields(self, operation) -> list[str]:
@@ -308,3 +313,26 @@ class ShopChecklistSerializer(serializers.Serializer):
 
 class ChecklistUpdateSerializer(serializers.Serializer):
     hidden = serializers.BooleanField(help_text="Ukrywa listę albo pokazuje ją z powrotem.")
+
+
+class ShopBackupSerializer(serializers.ModelSerializer):
+    kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+
+    class Meta:
+        model = ShopBackup
+        fields = ["id", "kind", "kind_display", "created_at", "size"]
+        extra_kwargs = {
+            "created_at": {"help_text": "Chwila, do której przywrócenie cofa sklep."},
+            "size": {"help_text": "Bajty plików i bazy sklepu w kopii."},
+        }
+
+
+class ShopBackupsSerializer(serializers.Serializer):
+    enabled = serializers.BooleanField(help_text="Kopie zapasowe działają na tym serwerze.")
+    backups = ShopBackupSerializer(many=True, help_text="Kopie, do których można wrócić, od najnowszej.")
+    manual_left = serializers.IntegerField(help_text="Ile kopii właściciel może jeszcze dziś zrobić sam.")
+    manual_per_day = serializers.IntegerField(help_text="Ile kopii dziennie właściciel może zrobić sam.")
+    keep_daily = serializers.IntegerField(help_text="Z ilu ostatnich dni zostaje najnowsza kopia.")
+    keep_weekly = serializers.IntegerField(help_text="Z ilu ostatnich tygodni zostaje najnowsza kopia.")
+    nightly_at = serializers.DateTimeField(help_text="Kiedy powstaną następne kopie nocne.")
+

@@ -14,6 +14,8 @@ from datetime import timedelta
 from pathlib import Path
 import os
 
+from celery.schedules import crontab
+
 
 def env_list(name, default=""):
     return [item.strip() for item in os.environ.get(name, default).split(",") if item.strip()]
@@ -224,6 +226,8 @@ CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "http://localhost:8081")
 # Celery
 
 CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+# Scheduled hours (crontab in CELERY_BEAT_SCHEDULE) are local time, like the rest of the platform.
+CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 
@@ -275,6 +279,23 @@ SHOPS_MAIL_DOMAIN = os.environ.get("SHOPS_MAIL_DOMAIN") or (
 # Where the worker keeps the plugins it installs in shops on demand (shops/provisioning/packages.py),
 # so each is downloaded once. Any folder the worker can write to; losing it only means downloading again.
 SHOPS_PACKAGE_CACHE = os.environ.get("SHOPS_PACKAGE_CACHE", "/tmp/sklepownia-packages")
+
+# Backups of the shops (shops/backups.py): restic snapshots of each shop's files and database in a volume on the
+# shop node, made by throwaway containers of the image from infra/shops/backup. Without a password there are none.
+# The password encrypts the repository: keep a copy away from the server, without it the backups can't be read.
+SHOPS_BACKUP_PASSWORD = os.environ.get("SHOPS_BACKUP_PASSWORD", "")
+SHOPS_BACKUP_IMAGE = os.environ.get("SHOPS_BACKUP_IMAGE", "shops/backup:0.19.1")
+SHOPS_BACKUP_VOLUME = os.environ.get("SHOPS_BACKUP_VOLUME", "shops-backups")
+SHOPS_BACKUP_CACHE_VOLUME = os.environ.get("SHOPS_BACKUP_CACHE_VOLUME", "shops-backup-cache")
+# Every night at this hour (TIME_ZONE) the shops are copied and backups beyond those kept are removed.
+SHOPS_BACKUP_HOUR = int(os.environ.get("SHOPS_BACKUP_HOUR", "3"))
+# Kept: everything from the last day, and the newest backup of each of the latest days and weeks.
+SHOPS_BACKUP_KEEP_DAILY = int(os.environ.get("SHOPS_BACKUP_KEEP_DAILY", "7"))
+SHOPS_BACKUP_KEEP_WEEKLY = int(os.environ.get("SHOPS_BACKUP_KEEP_WEEKLY", "4"))
+# A deleted shop's last backup is kept this many days, so a shop deleted by mistake can be brought back.
+SHOPS_BACKUP_DELETED_DAYS = int(os.environ.get("SHOPS_BACKUP_DELETED_DAYS", "14"))
+# Backups an owner can make in a day, on top of the nightly ones.
+SHOPS_BACKUP_MANUAL_PER_DAY = int(os.environ.get("SHOPS_BACKUP_MANUAL_PER_DAY", "3"))
 
 
 # Billing
@@ -334,4 +355,5 @@ CELERY_BEAT_SCHEDULE = {
     "process-invoices": {"task": "billing.tasks.process_invoices", "schedule": 5 * 60},
     "sync-shop-orders": {"task": "shops.tasks.sync_all_shop_orders", "schedule": SHOP_ORDERS_SYNC_MINUTES * 60},
     "check-push-receipts": {"task": "push.tasks.check_push_receipts", "schedule": 15 * 60},
+    "back-up-shops": {"task": "shops.tasks.back_up_all_shops", "schedule": crontab(hour=SHOPS_BACKUP_HOUR, minute=0)},
 }

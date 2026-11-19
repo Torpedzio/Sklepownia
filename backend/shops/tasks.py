@@ -5,7 +5,7 @@ from celery import shared_task
 from push import messages
 from push import services as push
 
-from . import sales
+from . import backups, sales
 from .emails import admin_access_message
 from .models import ProvisioningJob, SalesSync, Shop, ShopOperation, ShopOrder
 from .provisioning import get_provisioner
@@ -30,12 +30,17 @@ def teardown_shop(shop_id):
     shop = Shop.objects.select_related("owner").filter(pk=shop_id).first()
     if shop is None:
         return
+    account_deleted = shop.owner.deleted_at is not None
+    if not account_deleted:
+        # Kept for a while, so a shop deleted by mistake can still be brought back (python manage.py restore_shop).
+        backups.back_up_before_delete(shop)
     get_provisioner(shop.platform).teardown(shop)
     # The copy of its orders goes with the shop: it holds customers' names.
     ShopOrder.objects.filter(shop=shop).delete()
     SalesSync.objects.filter(shop=shop).delete()
-    if shop.owner.deleted_at is not None:
-        # The owner deleted the account: nothing of the shop is kept, its settings and history included.
+    if account_deleted:
+        # The owner deleted the account: nothing of the shop is kept, its backups, settings and history included.
+        backups.forget_all(shop)
         shop.delete()
 
 
@@ -102,3 +107,9 @@ def count_shop_products(shop_id):
 def sync_all_shop_orders():
     """Scheduled by Celery beat (SHOP_ORDERS_SYNC_MINUTES)."""
     sales.sync_all()
+
+
+@shared_task
+def back_up_all_shops():
+    """Scheduled by Celery beat every night (SHOPS_BACKUP_HOUR)."""
+    backups.back_up_all()

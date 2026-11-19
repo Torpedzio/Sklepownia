@@ -6,7 +6,7 @@ import ShopSettingsScreen from '@/app/shops/[id]/settings';
 import { NotificationsProvider } from '@/context/notifications';
 import { ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
-import type { ShopOperation, ShopSettings } from '@/lib/types';
+import type { ShopBackup, ShopBackups, ShopOperation, ShopSettings } from '@/lib/types';
 import { mockApi, type Routes } from '@/testing/api';
 import { shopSettings } from '@/testing/fixtures';
 
@@ -29,6 +29,7 @@ function operation(overrides: Partial<ShopOperation> = {}): ShopOperation {
     changes: {},
     changed_fields: [],
     result: {},
+    backup_created_at: null,
     error: '',
     created_at: new Date().toISOString(),
     started_at: null,
@@ -495,3 +496,111 @@ test('the templates are only for shops selling from Poland', async () => {
     screen.getByRole('switch', { name: 'Regulamin i polityka prywatności z aplikacji' }).props.accessibilityState,
   ).toMatchObject({ disabled: true });
 });
+
+const BACKUPS = 'GET /shops/7/backups/';
+// Local times, so the screen shows the same in any time zone.
+const monday = new Date(2026, 10, 16, 3, 0).toISOString();
+const nightly: ShopBackup = { id: 11, kind: 'nightly', kind_display: 'Kopia nocna', created_at: monday, size: 215_000_000 };
+
+function shopBackups(overrides: Partial<ShopBackups> = {}): ShopBackups {
+  return {
+    enabled: true,
+    backups: [],
+    manual_left: 3,
+    manual_per_day: 3,
+    keep_daily: 7,
+    keep_weekly: 4,
+    nightly_at: new Date(2026, 10, 20, 3, 0).toISOString(),
+    ...overrides,
+  };
+}
+
+test('backups are listed, and one is made now without asking', async () => {
+  const started = operation({ id: 8, kind: 'create_backup' });
+  const done = shopSettings({}, { ...fresh, operation: { ...started, status: 'succeeded' } });
+  const { api } = await open('kopie', {
+    [SETTINGS]: [shopSettings({}, fresh), done],
+    [BACKUPS]: shopBackups({ backups: [nightly] }),
+    'POST /shops/7/backups/': started,
+  });
+
+  expect(await screen.findByText('16 listopada, 03:00')).toBeTruthy();
+  expect(screen.getByText('Kopia nocna, 215 MB')).toBeTruthy();
+  expect(screen.getByText(/Zostaje najnowsza kopia z każdego z ostatnich 7 dni i 4 tygodni/)).toBeTruthy();
+  expect(screen.getByText(/Dziś możesz zrobić jeszcze 3/)).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Zrób kopię' }));
+
+  expect(confirm).not.toHaveBeenCalled();
+  expect(api.sent('POST /shops/7/backups/')).toHaveLength(1);
+  expect(await screen.findByText('Kopia zapasowa jest gotowa.')).toBeTruthy();
+  // The list is read again, with the new backup.
+  await waitFor(() => expect(api.calls.filter((call) => call.key === BACKUPS).length).toBeGreaterThan(1));
+});
+
+test('restoring a backup asks first, and then says which one is back', async () => {
+  const started = operation({ id: 9, kind: 'restore_backup', backup_created_at: monday });
+  const done = shopSettings({}, { ...fresh, operation: { ...started, status: 'succeeded' } });
+  const { api } = await open('kopie', {
+    [SETTINGS]: [shopSettings({}, fresh), done],
+    [BACKUPS]: shopBackups({ backups: [nightly] }),
+    'POST /shops/7/backups/11/restore/': started,
+  });
+
+  await fireEvent.press(await screen.findByRole('button', { name: 'Przywróć kopię z 16 listopada, 03:00' }));
+
+  expect(confirm).toHaveBeenCalledWith(
+    'Przywrócić kopię z 16 listopada, 03:00?',
+    expect.stringContaining('zamówienia i zmiany zrobione później znikną ze sklepu'),
+    'Przywróć',
+  );
+  expect(api.sent('POST /shops/7/backups/11/restore/')).toHaveLength(1);
+  expect(
+    await screen.findByText('Przywróciliśmy kopię z 16 listopada, 03:00. Stan sprzed przywrócenia jest na liście kopii.'),
+  ).toBeTruthy();
+});
+
+test('nothing is restored without saying yes', async () => {
+  (confirm as jest.Mock).mockResolvedValueOnce(false);
+  const { api } = await open('kopie', {
+    [SETTINGS]: shopSettings({}, fresh),
+    [BACKUPS]: shopBackups({ backups: [nightly] }),
+  });
+
+  await fireEvent.press(await screen.findByRole('button', { name: 'Przywróć kopię z 16 listopada, 03:00' }));
+
+  expect(api.calls.map((call) => call.key)).not.toContain('POST /shops/7/backups/11/restore/');
+});
+
+test('a new shop learns when its first backup comes, and the backups of the day run out', async () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(3, 0, 0, 0);
+  await open('kopie', {
+    [SETTINGS]: shopSettings({}, fresh),
+    [BACKUPS]: shopBackups({ manual_left: 0, nightly_at: tomorrow.toISOString() }),
+  });
+
+  expect(await screen.findByText('Kopii jeszcze nie ma. Pierwsza powstanie jutro o 03:00.')).toBeTruthy();
+  expect(screen.getByText(/Na dziś to już wszystkie kopie/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Zrób kopię' }).props.accessibilityState).toMatchObject({ disabled: true });
+});
+
+test('while a backup is restored the screen says the shop is closed for a while', async () => {
+  await open('kopie', {
+    [SETTINGS]: shopSettings({}, { ...fresh, busy: true, operation: operation({ kind: 'restore_backup', status: 'running' }) }),
+    [BACKUPS]: shopBackups({ backups: [nightly] }),
+  });
+
+  expect(await screen.findByText('Przywracamy sklep z kopii. Przez kilka minut będzie nieczynny…')).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: 'Przywróć kopię z 16 listopada, 03:00' }).props.accessibilityState,
+  ).toMatchObject({ disabled: true });
+});
+
+test('backups switched off on the platform are not offered', async () => {
+  await open('kopie', { [SETTINGS]: shopSettings({}, fresh), [BACKUPS]: shopBackups({ enabled: false }) });
+
+  expect(await screen.findByText(/Kopie zapasowe są chwilowo wyłączone/)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Zrób kopię' })).toBeNull();
+});
+

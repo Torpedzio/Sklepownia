@@ -3,8 +3,8 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
-from .. import documents, shop_settings
-from ..models import ShopChecklist, ShopOperation, ShopSettings, ShopTemplate
+from .. import backups, documents, shop_settings
+from ..models import ShopBackup, ShopChecklist, ShopOperation, ShopSettings, ShopTemplate
 from . import get_provisioner
 from .base import ProvisioningError
 
@@ -44,6 +44,13 @@ def run_operation(operation_id):
             ShopChecklist.objects.filter(shop=shop).update(sample_products=0)
         elif operation.kind == Kind.PUBLISH_DOCUMENTS:
             _publish_again(provisioner, shop)
+        elif operation.kind == Kind.CREATE_BACKUP:
+            operation.backup = backups.back_up(shop, ShopBackup.Kind.MANUAL)
+        elif operation.kind == Kind.RESTORE_BACKUP:
+            if operation.backup is None:
+                # Removed by the nightly clean-up after the owner picked it.
+                raise ProvisioningError(backups.BACKUP_GONE)
+            operation.result = {"before": backups.restore(shop, operation.backup).pk}
     except Exception as exc:
         logger.exception("Shop operation %s (%s) on shop %s failed", operation.pk, operation.kind, shop.pk)
         # Raw exception text may contain internals, so the owner only sees it for known errors.
@@ -115,6 +122,37 @@ def _apply_to_shop(shop, changes):
         config.template = ShopTemplate.objects.get(slug=changes["appearance"]["theme"])
 
 
+def read_back(shop):
+    """
+    For a shop changed outside these operations (a restored backup): its settings are read again, and the documents
+    the platform writes are published again, as the shop may have older ones or none.
+    """
+    provisioner = get_provisioner(shop.platform)
+    _sync_quietly(provisioner, shop)
+    _follow_settings(shop)
+    try:
+        _publish_again(provisioner, shop)
+    except Exception:
+        logger.exception("Publishing the documents of shop %s again failed", shop.pk)
+
+
+def _follow_settings(shop):
+    """
+    The shop's own fields (its name in the app, language, theme...) take what the shop has now: after a restore,
+    what the backup had, not what was changed after it.
+    """
+    values = _stored(shop).values
+    changes = {"general": values["general"], "region": values["region"]}
+    # Only a theme of the shop's platform: Shop.config.template is what the shop is set up with again.
+    theme = ShopTemplate.objects.filter(slug=values["appearance"]["theme"], platform=shop.platform).first()
+    if theme is not None:
+        changes["appearance"] = {"theme": theme.slug}
+    _apply_to_shop(shop, changes)
+    with transaction.atomic():
+        shop.save(update_fields=["name", "updated_at"])
+        shop.config.save()
+
+
 def _sync(provisioner, shop):
     stored = _stored(shop)
     values = provisioner.read_settings(shop)
@@ -140,4 +178,4 @@ def _finish(operation, status):
     operation.finished_at = timezone.now()
     # Applied or not, the keys are gone: a failed change is typed again.
     operation.secrets = ""
-    operation.save(update_fields=["status", "error", "result", "secrets", "finished_at"])
+    operation.save(update_fields=["status", "error", "result", "backup", "secrets", "finished_at"])

@@ -69,7 +69,34 @@ Użytkownik i panel admina widzą komunikat skrócony.
 | Klienci nie mogą zapłacić przez Przelewy24 | Zwykle adres IP serwera nie jest dodany w panelu Przelewy24 albo klucze są z innego trybu (testowy i produkcyjny mają różne). Adres, który pokazuje aplikacja, ustawisz w panelu admina: Serwery → `public_ip`. Ustawienia wtyczki sprawdzisz w panelu sklepu. |
 | Zapis ustawień kończy się „Nie udało się opublikować regulaminu i polityki prywatności…” albo dokumenty w sklepie są stare | Publikację robi worker przy zapisie, gdy w sekcji Regulamin dokumenty są włączone. Pozostałe zmiany z tego zapisu są już w sklepie; przyczyna w `docker compose logs worker` („Shop operation … failed”). Po zmianie wzorów (nowe `documents.VERSION`): `docker compose exec backend python manage.py publish_shop_documents`. Magento: po zmianie modułu przebuduj obraz (`cd infra/shops && docker compose build magento`); kontener sklepu odtworzy się przy następnej publikacji. |
 | Właściciel nie może założyć sklepu („Wybierz plan”) | Brak aktywnego planu albo zaległa płatność. Stan w panelu admina: Płatności → Subskrypcje; plan można tam nadać ręcznie. |
+| Przywrócenie kopii kończy się „…Sklep ma z powrotem stan sprzed próby” | Przyczyna w `docker compose logs worker` („Restoring backup … failed”). Sklep działa w stanie sprzed próby, a na liście jest kopia tego stanu. Przy „…ani wrócić do stanu sprzed próby” sklep potrzebuje ręki: `restore_shop <id>` i najnowsza kopia „Stan sprzed przywrócenia kopii”. |
 | Aplikacja w przeglądarce pokazuje stary kod | Pamięć podręczna Metro: `npx expo start -c`. |
+
+## Kopie zapasowe
+
+Jak działają: [infra/shops/README.md](../infra/shops/README.md#kopie-zapasowe). Kopie i ich błędy widać w panelu
+admina: Shops → Shop backups (tylko do odczytu). Polecenia uruchamia worker, bo tylko on ma dostęp do Dockera:
+
+```bash
+docker compose exec worker python manage.py backup_shops <slug> [<slug>…]   # kopia wybranych sklepów teraz
+docker compose exec worker python manage.py backup_shops                    # wszystkie sklepy i porządki jak w nocy
+docker compose exec worker python manage.py restore_shop <id|slug>          # kopie sklepu z numerami
+docker compose exec worker python manage.py restore_shop <id|slug> --backup <numer>
+```
+
+Przywrócenie działającego sklepu działa jak w aplikacji: najpierw kopia obecnego stanu, a gdy przywrócenie się nie
+uda, sklep wraca do niej.
+
+**Usunięty sklep** wraca w ciągu 14 dni od usunięcia z kopii „Stan sprzed usunięcia sklepu”: `restore_shop <id>`
+(numerem, bo adres mógł już zająć inny sklep). Polecenie odtwarza kontener, bazę i pliki, ustawia sklep jako
+działający i odczytuje go na nowo. Odmówi, gdy adres ma już inny sklep. Ostrzeże, gdy właściciel ma teraz więcej
+sklepów, niż pozwala jego plan: wtedy ustal z nim, co dalej (np. zawieszenie innego sklepu). Sklep usuniętego
+konta nie ma kopii.
+
+Gdy kopie się nie robią: działa `beat` (`docker compose ps beat`)? Jest `SHOPS_BACKUP_PASSWORD` w `.env` workera
+i obraz `shops/backup:0.19.1` (`cd infra/shops && docker compose build backup`)? Błąd każdej kopii jest w panelu
+admina i w `docker compose logs worker` („Backing up shop …”). Zostały kontenery narzędzia (`docker ps -a --filter
+label=shops.backup`)? Usuwa je nocny przebieg.
 
 ## Ręczne operacje na sklepie
 

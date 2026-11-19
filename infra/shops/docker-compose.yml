@@ -96,9 +96,30 @@ services:
     build: ./magento
     profiles: ["build"]
 
+  # Backups of the shops (backup/shop-backup.sh): the worker runs it for each backup and restore. By hand, e.g.
+  # SHOPS_BACKUP_PASSWORD=… docker compose run --rm backup snapshots
+  backup:
+    image: shops/backup:0.19.1
+    build: ./backup
+    profiles: ["build"]
+    environment:
+      RESTIC_REPOSITORY: /repository
+      RESTIC_CACHE_DIR: /cache
+      RESTIC_PASSWORD: ${SHOPS_BACKUP_PASSWORD:-}
+    volumes:
+      - backups:/repository
+      - backup-cache:/cache
+
 volumes:
   dbdata:
   searchdata:
+  # The restic repository with every shop's backups. Named without the project prefix, as the worker knows it
+  # (SHOPS_BACKUP_VOLUME). `docker compose down -v` would remove it with everything else.
+  backups:
+    name: shops-backups
+  # restic's index cache, so a backup doesn't read the whole repository first (SHOPS_BACKUP_CACHE_VOLUME).
+  backup-cache:
+    name: shops-backup-cache
 
 networks:
   shops:

@@ -39,6 +39,7 @@ const ICONS = {
   globe: ['globe', 'language'],
   power: ['power', 'power_settings_new'],
   history: ['clock.arrow.circlepath', 'history'],
+  backup: ['arrow.counterclockwise.circle', 'settings_backup_restore'],
   camera: ['camera.fill', 'photo_camera'],
   trash: ['trash', 'delete'],
   document: ['doc.text', 'description'],

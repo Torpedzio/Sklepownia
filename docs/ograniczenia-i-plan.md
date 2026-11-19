@@ -112,7 +112,11 @@ Projekt działa dziś tylko lokalnie. Przed uruchomieniem dla użytkowników trz
    albo osobny agent na serwerze sklepów z własnym API.
 3. **Serwer aplikacji.** Gunicorn lub uvicorn zamiast `runserver`, `DJANGO_DEBUG=0`, konkretne `DJANGO_ALLOWED_HOSTS`
    (z hostem z `SHOPS_FALLBACK_URL` serwera sklepów) i `CORS_ALLOWED_ORIGINS`, pliki statyczne, kopie zapasowe PostgreSQL.
-4. **Kopie zapasowe sklepów:** wolumenów sklepów i baz MariaDB (indeksy OpenSearch da się odbudować `indexer:reindex`).
+4. **Kopie zapasowe poza serwerem.** Kopie sklepów są dziś w repozytorium restic na serwerze sklepów
+   ([infra/shops/README.md](../infra/shops/README.md#kopie-zapasowe)), więc nie przetrwają utraty serwera. Trzeba je
+   kopiować na zewnątrz (`restic copy` albo drugie repozytorium w S3 lub B2, z osobnym hasłem), regularnie sprawdzać
+   repozytorium (`restic check`, co jakiś czas z `--read-data-subset`) i alarmować, gdy nocne kopie się nie robią.
+   Hasło repozytorium musi być w sejfie poza serwerem.
 5. **Poczta:** dostawca SMTP dla platformy (zmienne `EMAIL_*`, zamiast Mailpit) z rekordami SPF i DKIM domeny.
    Dla sklepów przekaźnik na serwerze sklepów w miejsce `shops-mail` (np. Postfix), który trzyma dane logowania
    do dostawcy i przepuszcza tylko nadawców z `SHOPS_MAIL_DOMAIN`, z limitem wiadomości na sklep. Domena

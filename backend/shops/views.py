@@ -9,7 +9,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from accounts.permissions import IsEmailVerified
 from billing.models import Plan
 
-from . import checklist, documents, sales, services, shop_settings
+from . import backups, checklist, documents, sales, services, shop_settings
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import InvalidTransition, Shop, ShopCredentials, ShopOperation, ShopTemplate
 from .platforms import PLATFORMS, Platform, platform_info
@@ -23,6 +23,7 @@ from .serializers import (
     FormOptionsSerializer,
     ShopCreateSerializer,
     ShopAdminAccessSerializer,
+    ShopBackupsSerializer,
     ShopChecklistSerializer,
     ShopDetailSerializer,
     ShopOperationSerializer,
@@ -38,9 +39,12 @@ from .slugs import normalize_slug, slug_error
 # Settings and operations work on a running shop, so they share the creation's permissions.
 VERIFIED_ACTIONS = (
     "create", "retry", "resume", "admin_access", "send_admin_access", "shop_settings", "refresh_settings", "reset_admin_password",
-    "remove_sample_products", "operations", "operation", "shop_sales", "refresh_sales",
+    "remove_sample_products", "operations", "operation", "shop_sales", "refresh_sales", "shop_backups",
+    "restore_backup",
 )
 OPERATION_HISTORY_LENGTH = 20
+BACKUPS_DISABLED = "Kopie zapasowe są chwilowo wyłączone."
+BACKUP_LIMIT = "Na dziś to już wszystkie kopie, które możesz zrobić sam. Kolejną zrobisz jutro, a w nocy powstanie kopia nocna."
 
 NOT_ACTIVE = "Ustawienia można zmieniać, gdy sklep działa."
 PANEL_NOT_READY = "Panel będzie dostępny, gdy sklep zostanie założony."
@@ -472,6 +476,61 @@ class ShopViewSet(
             serializer.is_valid(raise_exception=True)
             checklist.hide(shop, serializer.validated_data["hidden"])
         return Response(ShopChecklistSerializer(checklist.overview(shop)).data)
+
+    @extend_schema(methods=["GET"], responses={200: ShopBackupsSerializer})
+    @extend_schema(
+        methods=["POST"], request=None,
+        responses={
+            202: ShopOperationSerializer,
+            409: OpenApiResponse(description="Sklep nie działa, jest zajęty albo kopie są wyłączone."),
+            429: OpenApiResponse(description="Właściciel zrobił już dziś tyle kopii, ile wolno."),
+        },
+    )
+    @action(detail=True, methods=["get", "post"], url_path="backups")
+    def shop_backups(self, request, pk=None):
+        """
+        Backups of the shop: made every night and on request (POST, a few a day), kept for the last days and weeks.
+        A POST queues a backup as an operation; its end shows in the settings like other operations.
+        """
+        shop = self.get_object()
+        if request.method == "POST":
+            try:
+                operation = services.start_backup(shop, request.user)
+            except services.BackupsDisabled:
+                return Response({"detail": BACKUPS_DISABLED}, status=status.HTTP_409_CONFLICT)
+            except services.BackupLimitReached:
+                return Response({"detail": BACKUP_LIMIT}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            except (services.ShopNotActive, services.OperationInProgress) as exc:
+                return _operation_conflict(exc)
+            return Response(ShopOperationSerializer(operation).data, status=status.HTTP_202_ACCEPTED)
+        return Response(ShopBackupsSerializer(backups.overview(shop)).data)
+
+    @extend_schema(
+        request=None,
+        parameters=[OpenApiParameter("backup_id", int, OpenApiParameter.PATH)],
+        responses={
+            202: ShopOperationSerializer,
+            404: OpenApiResponse(description="Nie ma takiej kopii."),
+            409: OpenApiResponse(description="Sklep nie działa, jest zajęty albo kopie są wyłączone."),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path=r"backups/(?P<backup_id>[0-9]+)/restore")
+    def restore_backup(self, request, pk=None, backup_id=None):
+        """
+        Brings the shop back to the backup: its files, settings, products and orders as they were then. How the shop
+        is now is backed up first, so this can be undone. The shop is closed for the few minutes it takes.
+        """
+        shop = self.get_object()
+        backup = backups.restorable(shop).filter(pk=backup_id).first()
+        if backup is None:
+            return Response({"detail": "Nie znaleziono kopii zapasowej."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            operation = services.start_restore(shop, request.user, backup)
+        except services.BackupsDisabled:
+            return Response({"detail": BACKUPS_DISABLED}, status=status.HTTP_409_CONFLICT)
+        except (services.ShopNotActive, services.OperationInProgress) as exc:
+            return _operation_conflict(exc)
+        return Response(ShopOperationSerializer(operation).data, status=status.HTTP_202_ACCEPTED)
 
     def _start(self, kind):
         shop = self.get_object()

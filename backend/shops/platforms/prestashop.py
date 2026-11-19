@@ -521,6 +521,8 @@ echo "\\n%(marker)s" . $row['domain'];
 class PrestaShopProvisioner(ContainerProvisioner):
     ENV_KEYS = tuple(CONTAINER_ENV)
     START_FAILED = "PrestaShop nie wystartował."
+    # Symfony's and Smarty's compiled caches: PrestaShop builds them again on the first visit.
+    BACKUP_EXCLUDES = ("var/cache",)
 
     def image(self):
         return settings.SHOPS_PRESTASHOP_IMAGE
@@ -685,10 +687,13 @@ class PrestaShopProvisioner(ContainerProvisioner):
     def reset_admin_password(self, shop):
         credentials = self._credentials(shop)
         password = secrets.token_urlsafe(18)
-        # Also logs out whoever was signed in with the old one.
-        self._php(shop, ADMIN_PHP, {"email": credentials.admin_login, "password": password})
+        self.set_admin_password(shop, password)
         credentials.admin_password = password
         credentials.save(update_fields=["admin_password", "updated_at"])
+
+    def set_admin_password(self, shop, password):
+        # Also logs out whoever was signed in with the old one.
+        self._php(shop, ADMIN_PHP, {"email": self._credentials(shop).admin_login, "password": password})
 
     def remove_sample_products(self, shop):
         return int(self._php(shop, REMOVE_SAMPLE_PRODUCTS_PHP))

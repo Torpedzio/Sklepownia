@@ -20,6 +20,7 @@
                                    │             (WooCommerce, PrestaShop albo Magento)   │
                                    │                       MariaDB shops-db ◀─┤           │
                                    │            OpenSearch shops-search ◀─┘ (Magento)     │
+                                   │  kopie zapasowe: restic w wolumenie shops-backups     │
                                    └──────────────────────────────────────────────────────┘
 ```
 
@@ -30,13 +31,14 @@
 | PostgreSQL | Konta, sklepy, konfiguracja, zaszyfrowane hasła sklepów, postęp zakładania | `db` w [docker-compose.yml](../docker-compose.yml) |
 | Redis | Kolejka zadań Celery | `redis` |
 | Worker Celery | Wykonuje długie zadania: zakładanie i usuwanie sklepów, wysyłkę e-maili, odnowienia planów | `worker` |
-| Celery beat | Zleca zadania według harmonogramu (`CELERY_BEAT_SCHEDULE`): co 15 minut odnowienia planów, odczyt zamówień ze sklepów i potwierdzenia powiadomień push, co 5 minut płatności i faktury czekające na wynik | `beat` |
+| Celery beat | Zleca zadania według harmonogramu (`CELERY_BEAT_SCHEDULE`, czas polski): co 15 minut odnowienia planów, odczyt zamówień ze sklepów i potwierdzenia powiadomień push, co 5 minut płatności i faktury czekające na wynik, o 3:00 kopie zapasowe sklepów | `beat` |
 | Tpay | Operator płatności: strona płatności kartą, zapisywanie i obciążanie karty, powiadomienia ([platnosci.md](platnosci.md)) | zewnętrzny |
 | Mailpit | Lokalny serwer SMTP: przyjmuje całą pocztę i pokazuje ją w przeglądarce. Na produkcji zastępuje go dostawca poczty. | `mail` |
 | Poczta sklepów | Przekaźnik, przez który sklepy wysyłają e-maile do klientów ([poczta sklepów](../infra/shops/README.md#poczta-sklepów)). Lokalnie drugi Mailpit, na produkcji przekaźnik do dostawcy poczty. | `shops-mail` |
 | Traefik | Kieruje ruch do kontenera sklepu po nazwie hosta; adresy bez działającego sklepu do strony „Sklep chwilowo niedostępny” platformy | `shops-proxy` w [infra/shops/](../infra/shops/) |
 | MariaDB | Jedna instancja, osobna baza i użytkownik dla każdego sklepu | `shops-db` |
 | OpenSearch | Wyszukiwarka sklepów Magento, osobne indeksy dla każdego sklepu | `shops-search` |
+| Kopie zapasowe | Repozytorium restic z kopiami baz i plików sklepów; kopie robi i przywraca jednorazowy kontener narzędzia uruchamiany przez workera ([kopie zapasowe](#kopie-zapasowe)) | wolumen `shops-backups`, obraz `shops/backup:0.19.1` |
 | Kontener sklepu | Jeden na sklep: WordPress + WooCommerce + motyw, PrestaShop albo Magento ([platformy](#platformy-sklepów)) | `shop-<id>`, obraz `shops/wordpress:7.1`, `prestashop/prestashop:9.2.1-apache` albo `shops/magento:4.0.0` |
 
 Backend i worker to ten sam kod. Tylko worker ma dostęp do socketu Dockera, bo tylko on zakłada kontenery.
@@ -113,6 +115,24 @@ wejść do kontenera sklepu. Podsumowanie liczy się z kopii, więc otwiera się
 
 Usunięcie sklepu usuwa też kopię jego zamówień.
 
+## Kopie zapasowe
+
+Kopia to zrzut bazy sklepu i pliki z jego wolumenu, zapisane jako snapshot w repozytorium restic na serwerze sklepów
+([szczegóły](../infra/shops/README.md#kopie-zapasowe)). Indeksem repozytorium jest `ShopBackup`: z niego aplikacja
+pokazuje listę, a nocny przebieg decyduje, co usunąć ([backups.py](../backend/shops/backups.py)).
+
+1. Co noc `beat` zleca `back_up_all_shops`: worker kopiuje po kolei sklepy działające i zawieszone (pomija te
+   z trwającą operacją), a potem `maintain()`: uzgadnia indeks z repozytorium (usuwa wiersze kopii, których nie ma,
+   przyjmuje kopie bez wiersza, usuwa kopie sklepów, których już nie ma) i usuwa kopie spoza okresu przechowywania.
+2. Właściciel robi kopię (`create_backup`) albo przywraca jedną z listy (`restore_backup`). To operacje sklepu jak
+   zmiana ustawień: jedna naraz, aplikacja odpytuje ich wynik.
+3. Przywrócenie: kopia obecnego stanu, przywrócenie (kontener zatrzymany na około minutę), a potem sklep jest
+   czytany od nowa: ustawienia, nazwa i region sklepu w platformie, dokumenty, zamówienia (kopia zamówień zaczyna się
+   od zera, więc nie przychodzą powiadomienia o starych zamówieniach) i liczba produktów na liście startowej.
+   Gdy przywrócenie się nie uda, sklep wraca do stanu sprzed próby tą samą drogą.
+4. Usunięcie sklepu robi najpierw kopię „Stan sprzed usunięcia sklepu”, trzymaną 14 dni: obsługa może sklep przywrócić
+   (`restore_shop`). Usunięcie konta usuwa kopie jego sklepów od razu (miejsce zwalnia się przy nocnym przebiegu).
+
 ## Lista startowa
 
 Ekran nowego sklepu pokazuje kroki do zrobienia przed sprzedażą
@@ -151,7 +171,7 @@ O nowym zamówieniu powiadomienie przychodzi przy najbliższym odczycie sklepu, 
 | `active` | Sklep działa | `suspended`, `deleted` |
 | `failed` | Zakładanie przerwane błędem | `pending` (ponowienie), `suspended`, `deleted` |
 | `suspended` | Niedostępny w obecnym planie: kontener zatrzymany, dane zostają | `active`, `failed` (przywrócenie sklepu, którego zakładanie się nie skończyło), `deleted` |
-| `deleted` | Usunięty (wiersz zostaje w bazie) | — |
+| `deleted` | Usunięty (wiersz zostaje w bazie) | — (w ciągu 14 dni obsługa może go przywrócić z kopii poleceniem `restore_shop`, poza maszyną stanów) |
 
 Dozwolone przejścia są w `Shop.ALLOWED_TRANSITIONS` ([models.py](../backend/shops/models.py)).
 Niedozwolone przejście rzuca `InvalidTransition`; API zamienia je na `409 Conflict`
@@ -214,5 +234,7 @@ więc po zmianie domeny trzeba przenieść istniejące sklepy poleceniem `update
 - Komunikaty błędów kroków pokazywane użytkownikowi pochodzą tylko z `ProvisioningError`; inne wyjątki
   (mogące zawierać hasła lub nazwy hostów) zastępuje ogólny komunikat, a szczegóły trafiają do logów workera.
 - Endpointy logowania, weryfikacji e-maila i formularza kontaktowego mają limity zapytań (throttling).
+- Kopie zapasowe są szyfrowane hasłem `SHOPS_BACKUP_PASSWORD` (restic). Kontener narzędzia dostaje wolumen sklepu
+  tylko do odczytu przy kopii; do zapisu tylko przy przywracaniu.
 - Worker ma dostęp do socketu Dockera, czyli w praktyce uprawnienia roota na serwerze sklepów.
   Na produkcji trzeba to ograniczyć: [docs/ograniczenia-i-plan.md](ograniczenia-i-plan.md).

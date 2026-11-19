@@ -15,12 +15,14 @@ backend/
 │   ├── provisioning/  base.py (kroki), container.py (wspólne dla kontenerów), runner.py (zakładanie),
 │   │                  operations.py (operacje na działającym sklepie), packages.py (wtyczki pobierane od producentów),
 │   │                  fake.py (symulacja)
-│   ├── management/    polecenia update_shop_addresses, configure_shop_mail i publish_shop_documents
+│   ├── management/    polecenia update_shop_addresses, configure_shop_mail, publish_shop_documents, backup_shops
+│   │                  i restore_shop
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
 │   ├── orders.py      zamówienie odczytane ze sklepu (Order), wspólne dla platform
 │   ├── sales.py       kopia zamówień ze sklepów i podsumowanie sprzedaży dla aplikacji
 │   ├── checklist.py   lista startowa nowego sklepu: kroki odhaczane same i liczenie produktów
+│   ├── backups.py     kopie zapasowe: kopia, przywrócenie, nocny przebieg, przechowywanie, lista dla aplikacji
 │   ├── unavailable.py strona pod adresem sklepu, którego kontener nie działa (szablon templates/shops/unavailable.html)
 │   ├── documents.py   regulamin i polityka prywatności sklepu ze wzorów (templates/shops/documents/), wersja wzorów
 │   ├── choices.py     branże, języki, waluty, kraje, zakres liczby kategorii
@@ -74,7 +76,8 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 | `ProvisioningJob` | Jedna próba założenia sklepu (status, błąd, czasy). Ponowienie tworzy nowe zadanie. |
 | `ProvisioningStep` | Krok zadania: klucz, etykieta dla użytkownika, status, błąd, czasy. |
 | `ShopSettings` | Ostatnio odczytane albo zapisane ustawienia sklepu (`values`, JSON w sekcjach) i czas odczytu ze sklepu. |
-| `ShopOperation` | Praca na działającym sklepie: zmiana ustawień, odczyt ustawień, nowe hasło, usunięcie produktów przykładowych. Zmienione pola, wynik, błąd, kto zlecił. Służy też jako historia zmian. `secrets` (zaszyfrowane) trzyma klucze płatności online tylko do końca operacji. |
+| `ShopOperation` | Praca na działającym sklepie: zmiana ustawień, odczyt ustawień, nowe hasło, usunięcie produktów przykładowych, kopia zapasowa i jej przywrócenie (`backup`: kopia zrobiona albo przywracana). Zmienione pola, wynik, błąd, kto zlecił. Służy też jako historia zmian. `secrets` (zaszyfrowane) trzyma klucze płatności online tylko do końca operacji. |
+| `ShopBackup` | Kopia zapasowa sklepu, indeks repozytorium restic: rodzaj (`nightly`, `manual`, `before_restore`, `before_delete`), stan (gotowa albo błąd z opisem dla admina), `snapshot_id` (unikalny), rozmiar, czas. Zostaje po usunięciu sklepu, dopóki trzyma ją okres przechowywania. |
 | `ShopOrder` | Kopia zamówienia ze sklepu z ostatnich 90 dni: numer, status sprowadzony do pięciu wspólnych, suma, waluta, liczba sztuk, klient jako „Anna N.”, czas złożenia i ostatniej zmiany. Unikalne po `(shop, external_id)`. |
 | `ShopChecklist` | Lista startowa sklepu: `products` i `sample_products` (policzone w sklepie, `null` przed pierwszym liczeniem), `counted_at` (udane liczenie), `attempted_at` (ostatnia próba), `requested_at` (zlecone przy otwarciu listy), `hidden_at` (właściciel ukrył listę). Kroki: `ShopChecklist.Step`. |
 | `SalesSync` | Stan odczytu zamówień sklepu: `cursor` (ostatnia zmiana, od której czytać), `synced_at` (udany odczyt), `attempted_at` (ostatnia próba), `requested_at` (zlecony z aplikacji), `error`. |
@@ -236,6 +239,32 @@ Pola odpowiedzi i kroki: [api.md](api.md#lista-startowa).
 - Kroki zależą od platformy (sekcje ustawień w `platforms/__init__.py`) i od tego, czy sklep dostał produkty
   przykładowe.
 
+### Kopie zapasowe
+
+Przebieg: [architektura.md](architektura.md#kopie-zapasowe). Repozytorium i narzędzie:
+[infra/shops/README.md](../infra/shops/README.md#kopie-zapasowe). Logika w [backups.py](../backend/shops/backups.py).
+
+- Provisioner ma `backup(shop, tag)`, `restore_backup(shop, snapshot_id)`, `list_backups()`, `forget_backups(ids)`
+  i `prune_backups()`. `ContainerProvisioner` uruchamia na nie kontener `SHOPS_BACKUP_IMAGE` z wolumenem sklepu
+  (do odczytu przy kopii), repozytorium i pamięcią podręczną restic, czeka najwyżej `BACKUP_TIMEOUT` (godzina),
+  czyta wynik i usuwa kontener. Platforma podaje `BACKUP_EXCLUDES` (pamięć podręczna) i `after_restore` (Magento:
+  przebudowa indeksów i czyszczenie pamięci podręcznej). `FakeProvisioner` trzyma kopie w pamięci.
+- Sklep bez wolumenu (np. założony symulatorem) daje `NothingToBackUp` i jest pomijany. Nieudana kopia zostaje jako
+  wiersz z błędem przez 7 dni, a właściciel widzi tylko „Nie udało się zrobić kopii zapasowej…”.
+- `restore(shop, backup)`: kopia `before_restore`, przywrócenie, `read_again(shop)`. Przy błędzie przywraca
+  `before_restore` i zgłasza `RESTORE_FAILED`; gdy i to się nie uda, `RESTORE_BROKEN`. `read_again` czyta ustawienia
+  (`operations.read_back`: także nazwa, opis, e-mail, region i motyw w `Shop`/`ShopConfig` za tym, co ma sklep),
+  publikuje dokumenty, czyści kopię zamówień i `SalesSync` (pierwszy odczyt niczego nie ogłasza), zeruje liczby
+  produktów listy startowej i zleca odczyt zamówień. Hasło admina wraca do zapisanego w `ShopCredentials`.
+- Przechowywanie (`kept`, czas polski): wszystko z ostatniej doby, najnowsza kopia z każdego z `SHOPS_BACKUP_KEEP_DAILY`
+  ostatnich dni i `SHOPS_BACKUP_KEEP_WEEKLY` tygodni (ISO), które mają kopię. Usunięty sklep: tylko najnowsza, przez
+  `SHOPS_BACKUP_DELETED_DAYS` dni od jej zrobienia. Sklep z trwającą operacją jest pomijany i w kopii, i w porządkach.
+- `maintain()` usuwa wiersze tylko po udanym odczycie listy z repozytorium (złe hasło kończy się błędem, nie pustą
+  listą). Kopię bez wiersza przyjmuje dopiero, gdy ma ponad godzinę, żeby nie policzyć dwa razy kopii, która właśnie
+  się zapisuje. Hostów innych niż `shop-<id>` nie dotyka.
+- Właściciel robi najwyżej `SHOPS_BACKUP_MANUAL_PER_DAY` kopii dziennie (liczą się operacje `create_backup` od północy,
+  bez nieudanych). Kopie z polecenia `backup_shops` się nie liczą.
+
 ### Strona niedziałającego sklepu
 
 Traefik serwera sklepów wysyła adresy, pod którymi nie działa żaden kontener, na `/shop-unavailable/` z adresem
@@ -321,7 +350,8 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 |---|---|---|
 | `accounts.tasks.send_verification_email` | Rejestracja, ponowne wysłanie kodu | Wysyła kod potwierdzający |
 | `shops.tasks.provision_shop` | Założenie i ponowienie sklepu | Wykonuje kroki zadania (`run_job`) |
-| `shops.tasks.teardown_shop` | Usunięcie sklepu albo konta | Usuwa kontener, wolumen i bazę; przy usuniętym koncie także wiersz sklepu |
+| `shops.tasks.teardown_shop` | Usunięcie sklepu albo konta | Robi kopię „Stan sprzed usunięcia sklepu” (bez niej, gdy się nie uda), usuwa kontener, wolumen i bazę; przy usuniętym koncie bez kopii, a potem usuwa kopie i wiersz sklepu |
+| `shops.tasks.back_up_all_shops` | Co noc o `SHOPS_BACKUP_HOUR` (Celery beat) | Kopia każdego działającego i zawieszonego sklepu, potem porządki w repozytorium (`backups.back_up_all`) |
 | `accounts.tasks.send_account_deleted_email` | Usunięcie konta | Potwierdzenie na dawny adres z listą usuniętych sklepów |
 | `shops.tasks.send_admin_access_email` | Koniec zakładania, nowe hasło, prośba z aplikacji | Wysyła właścicielowi e-mail ze szczegółami sklepu i danymi logowania ([emails.py](../backend/shops/emails.py)); przy błędzie serwera pocztowego ponawia |
 | `billing.tasks.renew_subscriptions` | Co 15 minut (Celery beat) | Odnawia plany, ponawia nieudane odnowienia, kończy anulowane i niezapłacone |
@@ -330,7 +360,7 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 | `billing.tasks.deliver_invoice` | Gdy faktura jest gotowa | Wysyła ją e-mailem z PDF; ponawia przy błędzie SMTP |
 | `billing.tasks.process_invoices` | Co 5 minut (Celery beat) | Ponawia nieudane wystawienia, pyta o stan w KSeF, wysyła faktury, których e-mail nie wyszedł |
 | `billing.tasks.send_billing_email` | Opłacona płatność, nieudane odnowienie, koniec planu | Wysyła e-mail o planie i płatności |
-| `shops.tasks.run_shop_operation` | Zmiana i odczyt ustawień, nowe hasło, usunięcie produktów przykładowych | Wykonuje operację (`run_operation`) |
+| `shops.tasks.run_shop_operation` | Zmiana i odczyt ustawień, nowe hasło, usunięcie produktów przykładowych, kopia i jej przywrócenie | Wykonuje operację (`run_operation`) |
 | `support.tasks.notify_about_contact_message` | Wysłanie formularza kontaktowego | Przekazuje wiadomość e-mailem |
 | `shops.tasks.sync_all_shop_orders` | Co `SHOP_ORDERS_SYNC_MINUTES` minut, domyślnie 15 (Celery beat) | Zleca odczyt zamówień działających sklepów, które nie były czytane od pół interwału |
 | `shops.tasks.sync_shop_orders` | Harmonogram, otwarcie podsumowania sprzedaży albo listy startowej, przycisk „Odśwież” | Kopiuje zmienione zamówienia sklepu (`sales.sync`) i powiadamia o nowych |
@@ -350,6 +380,8 @@ docker compose exec backend python manage.py createsuperuser
 docker compose exec worker  python manage.py update_shop_addresses   # po zmianie SHOPS_BASE_DOMAIN
 docker compose exec worker  python manage.py configure_shop_mail     # poczta w sklepach sprzed niej albo po zmianie SHOPS_SMTP_*
 docker compose exec backend python manage.py publish_shop_documents  # nowa wersja wzorów regulaminu w sklepach
+docker compose exec worker  python manage.py backup_shops [slug…]     # kopie zapasowe teraz
+docker compose exec worker  python manage.py restore_shop <id|slug> [--backup N]   # przywrócenie, też usuniętego sklepu
 docker compose exec backend python manage.py spectacular --file schema.yml   # schemat OpenAPI do pliku
 ```
 
@@ -365,6 +397,8 @@ regulamin z aplikacji w starszej wersji wzorów niż `documents.VERSION` (z `--a
 Publikuje worker, więc polecenie działa w każdym kontenerze backendu. Sklep zajęty inną operacją jest pomijany
 z komunikatem; wystarczy uruchomić polecenie jeszcze raz.
 
+`backup_shops` i `restore_shop` opisuje [obsluga.md](obsluga.md#kopie-zapasowe).
+
 ## Panel admina
 
 http://localhost:8000/admin/ (konto z `createsuperuser`). Zawiera:
@@ -374,6 +408,7 @@ http://localhost:8000/admin/ (konto z `createsuperuser`). Zawiera:
 - **Sklepy z konfiguracją:** status jest tylko do odczytu. Zmienia się go przez serwisy, nie przez formularz.
 - **Zadania zakładania:** podgląd kroków i błędów.
 - **Operacje na sklepach:** historia zmian ustawień i innych operacji, ze zmienionymi polami i błędami (bez kluczy płatności).
+- **Kopie zapasowe sklepów** (Shop backups): rodzaj, stan, rozmiar, snapshot i błąd nieudanych kopii, tylko do odczytu.
 - **Wiadomości kontaktowe.**
 
 ## Testy
@@ -395,6 +430,7 @@ Ustawienia testowe są w [conftest.py](../backend/conftest.py) i nie zależą od
 | `shops/tests/test_settings.py` | Ustawienia sklepu: odczyt, walidacja, zapis przez operacje, kolejka jednej operacji, błędy, nowe hasło, produkty przykładowe |
 | `shops/tests/test_documents.py` | Regulamin i polityka prywatności: dane z faktur, publikacja przy włączeniu i po zmianach, wymagane pola i formaty, tylko Polska, podgląd, treść wzorów, polecenie `publish_shop_documents`, krok listy startowej |
 | `shops/tests/test_online_payments.py` | Płatności online w ustawieniach: klucze tylko w drodze do sklepu (szyfrowane, czyszczone, ukryte w historii), wymagane pola, nowy tryb, format, Magento |
+| `shops/tests/test_backups.py` | Kopie zapasowe: lista i limit kopii właściciela, przywrócenie z kopią stanu sprzed niego i powrotem po błędzie, odczyt sklepu po przywróceniu, noc, przechowywanie, uzgadnianie z repozytorium, usunięcie sklepu i konta, polecenia, kontener narzędzia restic |
 | `shops/tests/test_packages.py` | Pobieranie wtyczek: jedno pobranie i pamięć podręczna, odrzucenie pliku o innej sumie, uszkodzona kopia, brak sieci |
 | `shops/tests/test_woocommerce.py` | Polecenia, które `WooCommerceProvisioner` wysyła do kontenerów (WP-CLI, MariaDB, curl), na podstawionej powłoce bez Dockera |
 | `shops/tests/test_prestashop.py` | To samo dla `PrestaShopProvisioner`: instalator, skrypty PHP i ich dane, sprawdzenie sklepu i panelu |

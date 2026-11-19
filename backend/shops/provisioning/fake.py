@@ -11,7 +11,7 @@ from .. import shop_settings
 from ..models import Server, ShopChecklist, ShopCredentials, ShopSettings
 from ..orders import Order, Status
 from ..platforms import platform_info
-from .base import BaseProvisioner, ProductCount, ProvisioningError
+from .base import Backup, BaseProvisioner, NothingToBackUp, ProductCount, ProvisioningError, Snapshot
 
 
 FAKE_STATUSES = (Status.NEW, Status.PROCESSING, Status.COMPLETED, Status.CANCELLED, Status.UNFINISHED)
@@ -20,6 +20,12 @@ FAKE_CUSTOMERS = ("Anna N.", "Jan K.", "Ewa W.", "Piotr Z.", "Maria L.", "Tomasz
 
 class FakeProvisioner(BaseProvisioner):
     """Simulates provisioning without touching any infrastructure."""
+
+    # The simulated backup repository, {snapshot id: Snapshot}. It lives in the process, so it starts empty
+    # whenever the worker does.
+    snapshots = {}
+    # Snapshot ids restored, oldest first.
+    restored = []
 
     def run_step(self, key, shop):
         time.sleep(settings.FAKE_PROVISIONER_STEP_DELAY)
@@ -76,6 +82,39 @@ class FakeProvisioner(BaseProvisioner):
     def reset_admin_password(self, shop):
         self._simulate("reset_admin_password")
         ShopCredentials.objects.filter(shop=shop).update(admin_password=secrets.token_urlsafe(18))
+
+    def set_admin_password(self, shop, password):
+        self._simulate("set_admin_password")
+
+    # --- backups ---
+
+    def can_back_up(self):
+        return True
+
+    def backup(self, shop, tag):
+        self._simulate("backup")
+        # Shops get their credentials early in the setup; before that there is nothing of them to copy.
+        if not ShopCredentials.objects.filter(shop=shop).exists():
+            raise NothingToBackUp()
+        snapshot = Snapshot(
+            id=secrets.token_hex(32), host=f"shop-{shop.pk}", time=timezone.now(), tags=(tag,), size=48_000_000,
+        )
+        self.snapshots[snapshot.id] = snapshot
+        return Backup(snapshot_id=snapshot.id, size=snapshot.size)
+
+    def restore_backup(self, shop, snapshot_id):
+        self._simulate("restore_backup")
+        self.restored.append(snapshot_id)
+
+    def list_backups(self):
+        return list(self.snapshots.values())
+
+    def forget_backups(self, snapshot_ids):
+        for snapshot_id in snapshot_ids:
+            self.snapshots.pop(snapshot_id, None)
+
+    def prune_backups(self):
+        pass
 
     def remove_sample_products(self, shop):
         self._simulate("remove_sample_products")

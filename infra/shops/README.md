@@ -26,6 +26,7 @@ przeglądarka ──▶ Traefik :8080 ──Host: <slug>.<SHOPS_BASE_DOMAIN>─�
                                        MariaDB (shops-db): osobna baza i użytkownik na sklep
                                        OpenSearch (shops-search): wyszukiwarka sklepów Magento, indeksy shop_<id>_*
                                        Mailpit (shops-mail): poczta wysłana przez sklepy, podgląd :8031
+                                       wolumen shops-backups: kopie zapasowe sklepów (restic)
 ```
 
 ## Uruchomienie
@@ -34,6 +35,7 @@ przeglądarka ──▶ Traefik :8080 ──Host: <slug>.<SHOPS_BASE_DOMAIN>─�
 cd infra/shops
 cp .env.example .env                       # wpisz SHOPS_DB_ROOT_PASSWORD (i SHOPS_FALLBACK_URL poza tym komputerem)
 docker compose build wordpress magento     # obrazy sklepów; Magento buduje się ~10 min
+docker compose build backup                # narzędzie kopii zapasowych (restic i klient MariaDB)
 docker compose up -d                       # Traefik, MariaDB, OpenSearch i Mailpit sklepów
 ```
 
@@ -125,6 +127,37 @@ wymaga odtworzenia proxy: `docker compose up -d proxy` (sprawdź najpierw, że �
 
 Od startu kontenera do uruchomienia serwera w środku (kilka sekund) reguła sklepu już istnieje, więc gość
 dostaje wtedy `502 Bad Gateway` od Traefika, nie tę stronę.
+
+## Kopie zapasowe
+
+Co noc o `SHOPS_BACKUP_HOUR` (domyślnie 3:00 czasu polskiego, zadanie `beat`) worker kopiuje każdy działający
+i zawieszony sklep: zrzut jego bazy (`mariadb-dump --single-transaction`, więc sklep działa dalej) i pliki z wolumenu
+`shop-<id>`. Właściciel może też zrobić kopię sam (3 dziennie) i wrócić do dowolnej kopii w ustawieniach sklepu
+w aplikacji.
+
+Kopie są w jednym repozytorium [restic](https://restic.net) w wolumenie `shops-backups`: zaszyfrowane hasłem
+`SHOPS_BACKUP_PASSWORD` z głównego `.env` i bez powtórzeń, więc każda kolejna kopia sklepu zajmuje tyle, ile się
+w nim zmieniło. Robi je jednorazowy kontener z obrazu `shops/backup:0.19.1` ([backup/](backup/): restic, klient
+MariaDB i skrypt [shop-backup.sh](backup/shop-backup.sh)). Worker uruchamia go przez socket Dockera i usuwa po pracy.
+
+| Co | Jak |
+|---|---|
+| Kopia | Snapshot z hostem `shop-<id>`, tagiem rodzaju kopii i ścieżką `/shop`: `database.sql` i `files/` (wolumen sklepu). Bez plików, które sklep odtworzy sam: WooCommerce `wp-content/cache`, `wp-content/upgrade`; PrestaShop `var/cache`; Magento `var/cache`, `var/page_cache`, `var/session`, `var/view_preprocessed`. Indeksów OpenSearch nie ma w kopii. |
+| Przechowywanie | Wszystko z ostatniej doby oraz najnowsza kopia z każdego z 7 ostatnich dni i 4 ostatnich tygodni (`SHOPS_BACKUP_KEEP_DAILY`, `SHOPS_BACKUP_KEEP_WEEKLY`). Usunięty sklep: jego ostatnia kopia przez 14 dni (`SHOPS_BACKUP_DELETED_DAYS`). Usunięte konto: nic, od razu. Nadmiar usuwa nocny przebieg (`restic forget` i `prune`). |
+| Przywrócenie | Najpierw kopia obecnego stanu („Stan sprzed przywrócenia kopii”). Potem: zatrzymanie kontenera, baza od nowa ze zrzutu, pliki z kopii (`restore --delete`, więc pliki dodane później znikają), start kontenera, w Magento `indexer:reindex` i `cache:flush`, adres sklepu, poczta i aktualne hasło admina z `ShopCredentials`. Gdy coś się nie uda, sklep wraca do kopii zrobionej na początku. Trwa około minuty. |
+
+Bez `SHOPS_BACKUP_PASSWORD` kopie są wyłączone, a aplikacja to mówi. **Hasło trzeba trzymać też poza serwerem:**
+bez niego kopii nie da się odczytać, a zmiana hasła w `.env` nie zmienia hasła repozytorium (`restic key passwd`).
+Repozytorium jest na tym samym serwerze co sklepy, więc chroni przed pomyłką i usunięciem, ale nie przed utratą
+serwera. Kopia poza serwerem jest w planie ([docs/ograniczenia-i-plan.md](../../docs/ograniczenia-i-plan.md)).
+`docker compose down -v` usuwa także wolumeny kopii.
+
+Polecenia (kopie na żądanie, przywrócenie, przywrócenie usuniętego sklepu): [docs/obsluga.md](../../docs/obsluga.md#kopie-zapasowe).
+Podgląd repozytorium bez backendu:
+
+```bash
+SHOPS_BACKUP_PASSWORD=… docker compose run --rm backup snapshots    # lista snapshotów (JSON)
+```
 
 ## Uwagi techniczne
 

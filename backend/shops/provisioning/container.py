@@ -4,6 +4,7 @@ the Traefik proxy, with its files in a volume and a separate database in the sha
 """
 
 import io
+import json
 import posixpath
 import secrets
 import tarfile
@@ -11,15 +12,24 @@ import time
 from functools import cached_property
 
 import docker
+import requests
 from django.conf import settings
 from django.db.models import Count, F, Q
+from django.utils.dateparse import parse_datetime
 from docker.errors import NotFound
 
 from ..models import Server, Shop, ShopCredentials
-from .base import BaseProvisioner, ProvisioningError
+from .base import Backup, BaseProvisioner, NothingToBackUp, ProvisioningError, Snapshot
 
 # Where the platform's files live in the container, in the shop's volume.
 FILES_PATH = "/var/www/html"
+
+# Where the backup container (infra/shops/backup) has the repository, restic's cache and the shop's volume.
+BACKUP_REPOSITORY = "/repository"
+BACKUP_CACHE = "/cache"
+BACKUP_FILES = "/shop/files"
+# Marks backup containers, with the shop's id ("" for work on the whole repository).
+BACKUP_LABEL = "shops.backup"
 
 
 class CommandError(Exception):
@@ -40,6 +50,10 @@ class ContainerProvisioner(BaseProvisioner):
     VOLUME_PATH = FILES_PATH
     # Seconds the container gets to become ready.
     START_TIMEOUT = 60
+    # Paths in the shop's volume left out of backups: caches the platform builds again by itself.
+    BACKUP_EXCLUDES = ()
+    # Seconds one backup or restore may take, waiting for a busy repository included (up to 30 minutes).
+    BACKUP_TIMEOUT = 3600
 
     @cached_property
     def client(self):
@@ -64,6 +78,9 @@ class ContainerProvisioner(BaseProvisioner):
     def memory(self, shop):
         """The container's memory limit, e.g. "512m"."""
         return container_memory(shop)
+
+    def after_restore(self, shop):
+        """Bring what lives outside the shop's files and database (e.g. its search index) in line with them."""
 
     # --- steps every platform has ---
 
@@ -198,6 +215,96 @@ class ContainerProvisioner(BaseProvisioner):
         """Point the platform at `relay` ({host, port, sender}); see mail_relay."""
         raise NotImplementedError
 
+    # --- backups: a throwaway container of infra/shops/backup does the work, next to the shop's volume ---
+
+    def can_back_up(self):
+        return bool(settings.SHOPS_BACKUP_PASSWORD)
+
+    def backup(self, shop, tag):
+        # Mounting a volume that isn't there would create an empty one.
+        if not self._volume_exists(shop):
+            raise NothingToBackUp()
+        output = self._backup_tool(["backup", tag, *self.BACKUP_EXCLUDES], shop=shop, files="ro")
+        summary = backup_summary(output)
+        return Backup(snapshot_id=summary["snapshot_id"], size=summary["total_bytes_processed"])
+
+    def restore_backup(self, shop, snapshot_id):
+        container = self._find_container(shop)
+        if container is not None:
+            container.stop()
+        # A deleted shop being brought back has no database or database user any more.
+        self.step_create_database(shop)
+        self._backup_tool(["restore", snapshot_id], shop=shop, files="rw")
+        self.step_start_container(shop)
+        self.after_restore(shop)
+        # The backup may be from before the shop moved to another domain, got another mail relay or a new password.
+        self.update_address(shop)
+        self.configure_mail(shop)
+        password = self._credentials(shop).admin_password
+        if password:
+            self.set_admin_password(shop, password)
+
+    def list_backups(self):
+        # Runs every night, so it also clears containers left behind by a worker that died waiting for one.
+        for leftover in self.client.containers.list(all=True, filters={"label": BACKUP_LABEL, "status": "exited"}):
+            leftover.remove(force=True)
+        return [snapshot_of(item) for item in json.loads(self._backup_tool(["snapshots"]) or "[]")]
+
+    def forget_backups(self, snapshot_ids):
+        snapshot_ids = list(snapshot_ids)
+        for start in range(0, len(snapshot_ids), 100):
+            self._backup_tool(["forget", *snapshot_ids[start:start + 100]])
+
+    def prune_backups(self):
+        self._backup_tool(["prune"])
+
+    def _volume_exists(self, shop):
+        try:
+            self.client.volumes.get(container_name(shop))
+        except NotFound:
+            return False
+        return True
+
+    def _backup_tool(self, command, shop=None, files=None):
+        """
+        Runs shop-backup `command` in a throwaway container and returns what it printed. With `shop` it reaches
+        the shop's database, and with `files` ("ro" or "rw") the shop's volume too.
+        """
+        if not settings.SHOPS_BACKUP_PASSWORD:
+            raise CommandError("SHOPS_BACKUP_PASSWORD is not set")
+        environment = {
+            "RESTIC_REPOSITORY": BACKUP_REPOSITORY,
+            "RESTIC_PASSWORD": settings.SHOPS_BACKUP_PASSWORD,
+            "RESTIC_CACHE_DIR": BACKUP_CACHE,
+        }
+        volumes = {
+            settings.SHOPS_BACKUP_VOLUME: {"bind": BACKUP_REPOSITORY, "mode": "rw"},
+            settings.SHOPS_BACKUP_CACHE_VOLUME: {"bind": BACKUP_CACHE, "mode": "rw"},
+        }
+        if shop is not None:
+            environment.update(
+                SHOP=container_name(shop), SHOP_DB=db_name(shop), DB_HOST=settings.SHOPS_DB_CONTAINER,
+                MYSQL_PWD=settings.SHOPS_DB_ROOT_PASSWORD,
+            )
+            if files:
+                volumes[container_name(shop)] = {"bind": BACKUP_FILES, "mode": files}
+        container = self.client.containers.run(
+            settings.SHOPS_BACKUP_IMAGE, command, detach=True, network=settings.SHOPS_NETWORK,
+            environment=environment, volumes=volumes, labels={BACKUP_LABEL: str(shop.pk) if shop else ""},
+        )
+        try:
+            try:
+                exit_code = container.wait(timeout=self.BACKUP_TIMEOUT)["StatusCode"]
+            except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError):
+                container.kill()
+                raise CommandError(f"shop-backup {command[0]} took longer than {self.BACKUP_TIMEOUT} s") from None
+            if exit_code != 0:
+                errors = container.logs(stdout=False, stderr=True).decode(errors="replace").strip()
+                raise CommandError(f"shop-backup {command[0]} exited with {exit_code}: {errors[-3000:]}")
+            return container.logs(stdout=True, stderr=False).decode(errors="replace")
+        finally:
+            container.remove(force=True)
+
     # --- helpers ---
 
     def _credentials(self, shop):
@@ -270,6 +377,26 @@ def container_name(shop):
 
 def db_name(shop):
     return f"shop_{shop.pk}"
+
+
+def backup_summary(output):
+    """restic's summary of a backup, from the JSON lines shop-backup printed."""
+    for line in reversed(output.splitlines()):
+        try:
+            data = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(data, dict) and data.get("message_type") == "summary":
+            return data
+    raise CommandError("shop-backup backup printed no summary")
+
+
+def snapshot_of(item):
+    """A Snapshot from one item of `restic snapshots --json`."""
+    return Snapshot(
+        id=item["id"], host=item.get("hostname", ""), time=parse_datetime(item["time"]),
+        tags=tuple(item.get("tags") or ()), size=(item.get("summary") or {}).get("total_bytes_processed"),
+    )
 
 
 def mail_relay(shop):

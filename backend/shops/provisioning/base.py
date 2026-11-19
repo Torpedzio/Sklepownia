@@ -1,8 +1,32 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 
 
 class ProvisioningError(Exception):
     pass
+
+
+class NothingToBackUp(Exception):
+    """The shop has no files on the shop node (e.g. its setup failed early, or it was torn down)."""
+
+
+@dataclass(frozen=True)
+class Backup:
+    """A copy just made: its snapshot in the repository and how many bytes of files and database it holds."""
+
+    snapshot_id: str
+    size: int
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    """A snapshot in the backup repository; `host` names the shop (shop-<id>), `tags` the kind of backup."""
+
+    id: str
+    host: str
+    time: datetime
+    tags: tuple = field(default=())
+    size: int | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +103,10 @@ class BaseProvisioner:
         """Give the shop administrator a new password and store it in the shop's credentials."""
         raise NotImplementedError
 
+    def set_admin_password(self, shop, password):
+        """Make `password` the shop administrator's password in the shop, logging out whoever is signed in."""
+        raise NotImplementedError
+
     def remove_sample_products(self, shop):
         """Delete the sample products added at provisioning. Returns how many were removed."""
         raise NotImplementedError
@@ -92,4 +120,36 @@ class BaseProvisioner:
         Orders changed at or after `since` (an aware datetime), the oldest change first, at most `limit` of them,
         as shops.orders.Order. Read-only: the shop is not changed.
         """
+        raise NotImplementedError
+
+    # --- backups (see shops/backups.py) ---
+
+    def can_back_up(self):
+        """Whether backups are set up at all."""
+        return False
+
+    def backup(self, shop, tag):
+        """
+        Copy the shop's files and database into the backup repository, as a snapshot tagged `tag`, without stopping
+        the shop. Returns a Backup; raises NothingToBackUp when the shop has no files.
+        """
+        raise NotImplementedError
+
+    def restore_backup(self, shop, snapshot_id):
+        """
+        Replace the shop's files and database with those of the snapshot and leave the shop running at its current
+        address, mail relay and admin password. Also brings back a deleted shop, whose files and database are gone.
+        """
+        raise NotImplementedError
+
+    def list_backups(self):
+        """Every snapshot in the repository, as Snapshot."""
+        raise NotImplementedError
+
+    def forget_backups(self, snapshot_ids):
+        """Remove snapshots from the repository; ids it doesn't have are skipped. The space is freed by prune."""
+        raise NotImplementedError
+
+    def prune_backups(self):
+        """Free the space of removed snapshots."""
         raise NotImplementedError

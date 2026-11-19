@@ -70,7 +70,10 @@ jedna naraz. Gdy sklep nie działa albo wykonuje poprzednią operację, odpowied
 | `POST shops/{id}/reset-admin-password/` | Nowe hasło administratora, `202` z operacją. Po zakończeniu hasło przychodzi e-mailem. |
 | `POST shops/{id}/remove-sample-products/` | Usunięcie produktów przykładowych, `202` z operacją; `result.removed` to ich liczba |
 | `GET shops/{id}/operations/` | 20 ostatnich operacji, od najnowszej |
-| `GET shops/{id}/operations/{operation_id}/` | Jedna operacja: `kind`, `status`, `changes`, `changed_fields` (etykiety zmienionych pól), `result`, `error`, czasy |
+| `GET shops/{id}/operations/{operation_id}/` | Jedna operacja: `kind`, `status`, `changes`, `changed_fields` (etykiety zmienionych pól), `result`, `error`, `backup_created_at` (czas kopii zrobionej albo przywracanej; `null` dla innych operacji), czasy |
+| `GET shops/{id}/backups/` | `{enabled, backups, manual_left, manual_per_day, keep_daily, keep_weekly, nightly_at}`: czy kopie działają (`false` bez `SHOPS_BACKUP_PASSWORD`), kopie do przywrócenia od najnowszej (`{id, kind, kind_display, created_at, size}`, rozmiar w bajtach albo `null`; `kind`: `nightly`, `manual`, `before_restore`, `before_delete`), ile kopii właściciel zrobi jeszcze dziś i ile dziennie, ile dni i tygodni zostaje po kopii, kiedy następna kopia nocna. Działa też dla zawieszonego sklepu. |
+| `POST shops/{id}/backups/` | Kopia teraz, `202` z operacją `create_backup`. `409`, gdy kopie są wyłączone; `429` z `detail`, gdy dzisiejsze kopie się skończyły (nieudane się nie liczą). |
+| `POST shops/{id}/backups/{backup_id}/restore/` | Przywrócenie kopii, `202` z operacją `restore_backup`; `result.before` to numer kopii stanu sprzed przywrócenia. Sklep jest nieczynny przez około minutę. Gdy przywrócenie się nie uda, sklep wraca do stanu sprzed próby, a operacja kończy się błędem z `error`. `404` dla kopii spoza listy sklepu. |
 
 ### Sprzedaż
 

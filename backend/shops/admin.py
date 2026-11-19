@@ -1,6 +1,9 @@
 from django.contrib import admin
+from django.template.defaultfilters import filesizeformat
 
-from .models import ProvisioningJob, ProvisioningStep, Server, Shop, ShopConfig, ShopOperation, ShopTemplate
+from .models import (
+    ProvisioningJob, ProvisioningStep, Server, Shop, ShopBackup, ShopConfig, ShopOperation, ShopTemplate,
+)
 
 
 @admin.register(Server)
@@ -56,3 +59,27 @@ class ShopOperationAdmin(admin.ModelAdmin):
     readonly_fields = [
         "shop", "kind", "status", "changes", "result", "error", "requested_by", "created_at", "started_at", "finished_at",
     ]
+
+
+@admin.register(ShopBackup)
+class ShopBackupAdmin(admin.ModelAdmin):
+    """The index of the backup repository; the worker makes and restores backups (python manage.py restore_shop)."""
+
+    list_display = ["id", "shop", "kind", "status", "created_at", "size_display"]
+    list_filter = ["status", "kind", "shop__platform"]
+    search_fields = ["shop__name", "shop__slug", "snapshot_id"]
+    readonly_fields = ["shop", "kind", "status", "snapshot_id", "size", "error", "created_at"]
+
+    @admin.display(description="Rozmiar", ordering="size")
+    def size_display(self, backup):
+        return filesizeformat(backup.size) if backup.size is not None else "—"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        # The snapshot would stay in the repository, and the nightly run would list it again.
+        return False

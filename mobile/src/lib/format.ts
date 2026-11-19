@@ -41,3 +41,16 @@ export function panelLocative(panelName: string | undefined) {
 export function panelTitle(panelName: string) {
   return panelName.charAt(0).toUpperCase() + panelName.slice(1);
 }
+
+/** "980 kB", "48 MB", "1,2 GB". */
+export function formatSize(bytes: number) {
+  const units = ['B', 'kB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  const digits = value < 10 && unit > 0 ? 1 : 0;
+  return `${value.toLocaleString('pl-PL', { maximumFractionDigits: digits })} ${units[unit]}`;
+}

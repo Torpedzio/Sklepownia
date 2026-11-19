@@ -40,6 +40,12 @@ def _test_settings(settings, tmp_path, monkeypatch):
     # Plugins for shops are never fetched from their makers; tests that install one give the archive themselves.
     settings.SHOPS_PACKAGE_CACHE = str(tmp_path / "packages")
     monkeypatch.setattr("shops.provisioning.packages._download", _no_downloads)
+    # The simulated backup repository starts empty, and never the real one from .env is used.
+    from shops.provisioning.fake import FakeProvisioner
+
+    monkeypatch.setattr(FakeProvisioner, "snapshots", {})
+    monkeypatch.setattr(FakeProvisioner, "restored", [])
+    settings.SHOPS_BACKUP_PASSWORD = "backup-secret"
     # Throttle counters live in the cache; keep tests independent.
     cache.clear()
 

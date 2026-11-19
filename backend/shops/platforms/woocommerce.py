@@ -460,6 +460,8 @@ class WooCommerceProvisioner(ContainerProvisioner):
 
     ENV_KEYS = WORDPRESS_ENV_KEYS
     START_FAILED = "WordPress nie wystartował."
+    # Page caches of caching plugins, and WordPress's own leftovers from updates.
+    BACKUP_EXCLUDES = ("wp-content/cache", "wp-content/upgrade")
 
     def image(self):
         return settings.SHOPS_WORDPRESS_IMAGE
@@ -788,10 +790,13 @@ class WooCommerceProvisioner(ContainerProvisioner):
     def reset_admin_password(self, shop):
         credentials = self._credentials(shop)
         password = secrets.token_urlsafe(18)
-        username = credentials.admin_login
-        self._wp(shop, "user", "update", username, f"--user_pass={password}", "--skip-email")
+        self.set_admin_password(shop, password)
         credentials.admin_password = password
         credentials.save(update_fields=["admin_password", "updated_at"])
+
+    def set_admin_password(self, shop, password):
+        username = self._credentials(shop).admin_login
+        self._wp(shop, "user", "update", username, f"--user_pass={password}", "--skip-email")
         # Whoever was logged in with the old password is logged out.
         self._wp_succeeds(shop, "user", "session", "destroy", username, "--all")
 

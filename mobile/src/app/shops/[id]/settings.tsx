@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { backArrowOptions } from '@/components/back-link';
+import { backupName, BackupsSettings, backupsDescription } from '@/components/backups-settings';
 import { DocumentsSettings } from '@/components/documents-settings';
 import { Icon } from '@/components/icon';
 import { OnlinePayment } from '@/components/online-payment';
@@ -36,6 +37,8 @@ import {
 } from '@/lib/settings-form';
 import type {
   SettingsSection as Section,
+  ShopBackup,
+  ShopBackups,
   ShopDocument,
   ShopOperation,
   ShopSettings,
@@ -52,7 +55,7 @@ const SLOW_SECTIONS: Partial<Record<Section, string>> = {
   appearance: 'Zmiana motywu potrwa do minuty i zmieni układ stron sklepu.',
 };
 
-type MenuKey = Section | 'security' | 'manual' | 'history';
+type MenuKey = Section | 'security' | 'backups' | 'manual' | 'history';
 
 // Menu order; `slug` is what the address shows (?section=platnosci).
 const MENU: (SettingsMenuItem<MenuKey> & { slug: string })[] = [
@@ -66,6 +69,7 @@ const MENU: (SettingsMenuItem<MenuKey> & { slug: string })[] = [
   { key: 'region', slug: 'region', title: 'Region', icon: 'globe' },
   { key: 'appearance', slug: 'wyglad', title: 'Wygląd', icon: 'palette' },
   { key: 'security', slug: 'bezpieczenstwo', title: 'Bezpieczeństwo', icon: 'shield' },
+  { key: 'backups', slug: 'kopie', title: 'Kopie zapasowe', icon: 'backup' },
   { key: 'manual', slug: 'reczne', title: 'Ustawienia ręczne', icon: 'admin' },
   { key: 'history', slug: 'historia', title: 'Ostatnie zmiany', icon: 'history' },
 ];
@@ -106,9 +110,12 @@ export default function ShopSettingsScreen() {
   const active = (menu.find((item) => item.slug === sectionSlug) ?? menu[0]).key;
   const select = (key: MenuKey) => router.setParams({ section: MENU.find((item) => item.key === key)!.slug });
   const { data: history, refresh: refreshHistory } = useApiQuery<ShopOperation[]>(`/shops/${id}/operations/`);
+  const { data: backups, refresh: refreshBackups } = useApiQuery<ShopBackups>(`/shops/${id}/backups/`, {
+    enabled: active === 'backups',
+  });
   const [drafts, setDrafts] = useState<Drafts>({});
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [saving, setSaving] = useState<Section | 'security' | null>(null);
+  const [saving, setSaving] = useState<Section | 'security' | 'backups' | null>(null);
   // The operation whose end this screen reports; operations finished before it opened stay quiet.
   const [watched, setWatched] = useState<number | null>(null);
   const announced = useRef(new Set<number>());
@@ -150,6 +157,7 @@ export default function ShopSettingsScreen() {
     if (announced.current.has(operation.id)) return;
     announced.current.add(operation.id);
     refreshHistory();
+    if (operation.kind === 'create_backup' || operation.kind === 'restore_backup') refreshBackups();
     if (operation.status === 'failed') {
       notify.error(operation.error || 'Nie udało się wprowadzić zmian w sklepie.');
       return;
@@ -162,13 +170,18 @@ export default function ShopSettingsScreen() {
       notify.success('Regulamin i polityka prywatności w sklepie mają nową wersję.');
     } else if (operation.kind === 'reset_admin_password') {
       notify.success('Nowe hasło administratora wysłaliśmy na Twój adres e-mail.');
+    } else if (operation.kind === 'create_backup') {
+      notify.success('Kopia zapasowa jest gotowa.');
+    } else if (operation.kind === 'restore_backup') {
+      const restored = operation.backup_created_at ? backupName(operation.backup_created_at) : 'kopię';
+      notify.success(`Przywróciliśmy ${restored}. Stan sprzed przywrócenia jest na liście kopii.`);
     } else if (operation.kind === 'remove_sample_products') {
       const removed = operation.result.removed ?? 0;
       notify.success(
         removed ? `Usunięto przykładowe produkty (${removed}).` : 'W sklepie nie było przykładowych produktów.',
       );
     }
-  }, [operation, watched, notify, refreshHistory]);
+  }, [operation, watched, notify, refreshHistory, refreshBackups]);
 
   if (!settings) {
     return (
@@ -260,9 +273,8 @@ export default function ShopSettingsScreen() {
     }
   }
 
-  async function runOperation(path: string, title: string, message: string, confirmLabel: string) {
-    if (!(await confirm(title, message, confirmLabel))) return;
-    setSaving('security');
+  async function startOperation(path: string, key: 'security' | 'backups') {
+    setSaving(key);
     try {
       const started = await api<ShopOperation>(`/shops/${id}/${path}/`, { method: 'POST' });
       setWatched(started.id);
@@ -272,6 +284,21 @@ export default function ShopSettingsScreen() {
     } finally {
       setSaving(null);
     }
+  }
+
+  async function runOperation(path: string, title: string, message: string, confirmLabel: string) {
+    if (await confirm(title, message, confirmLabel)) await startOperation(path, 'security');
+  }
+
+  async function restoreBackup(backup: ShopBackup) {
+    const confirmed = await confirm(
+      `Przywrócić ${backupName(backup.created_at)}?`,
+      'Pliki, produkty, zamówienia i ustawienia sklepu wrócą do stanu z tej kopii, a zamówienia i zmiany zrobione ' +
+        'później znikną ze sklepu. Przez kilka minut sklep będzie nieczynny. Najpierw zapiszemy obecny stan jako ' +
+        'kopię, więc to też da się cofnąć.',
+      'Przywróć',
+    );
+    if (confirmed) await startOperation(`backups/${backup.id}/restore`, 'backups');
   }
 
   const section = (key: Section) => ({
@@ -702,6 +729,17 @@ export default function ShopSettingsScreen() {
                 </View>
               </SettingsSection>
             ) : null}
+            {active === 'backups' ? (
+              <SettingsSection title="Kopie zapasowe" description={backupsDescription(backups)}>
+                <BackupsSettings
+                  backups={backups}
+                  busy={busy}
+                  starting={saving === 'backups'}
+                  onBackup={() => startOperation('backups', 'backups')}
+                  onRestore={restoreBackup}
+                />
+              </SettingsSection>
+            ) : null}
             {active === 'history' ? <History operations={history} /> : null}
           </SettingsPane>
         </View>
@@ -714,12 +752,16 @@ function StatusBar({ settings, onRefresh }: { settings: ShopSettings; onRefresh:
   const theme = useTheme();
   const operation = settings.operation;
   if (settings.busy) {
-    const reading = operation?.kind === 'sync_settings';
+    const message = {
+      sync_settings: 'Sprawdzamy aktualne ustawienia w sklepie…',
+      create_backup: 'Robimy kopię zapasową sklepu…',
+      restore_backup: 'Przywracamy sklep z kopii. Przez kilka minut będzie nieczynny…',
+    }[operation?.kind as string];
     return (
       <View style={[styles.status, { backgroundColor: theme.primaryMuted, borderColor: theme.primary }]}>
         <ActivityIndicator color={theme.primary} />
         <ThemedText type="smallBold" themeColor="primary" style={styles.flex}>
-          {reading ? 'Sprawdzamy aktualne ustawienia w sklepie…' : 'Wprowadzamy zmiany w sklepie…'}
+          {message ?? 'Wprowadzamy zmiany w sklepie…'}
         </ThemedText>
       </View>
     );

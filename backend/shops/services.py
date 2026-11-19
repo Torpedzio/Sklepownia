@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from accounts.models import User
 
-from . import shop_settings
+from . import backups, shop_settings
 from .choices import COUNTRY_TIMEZONES
 from .models import (
     InvalidTransition,
@@ -64,6 +64,14 @@ class ShopNotActive(Exception):
 
 class OperationInProgress(Exception):
     pass
+
+
+class BackupsDisabled(Exception):
+    """Backups aren't set up on this platform (SHOPS_BACKUP_PASSWORD)."""
+
+
+class BackupLimitReached(Exception):
+    """The owner made as many backups today as SHOPS_BACKUP_MANUAL_PER_DAY allows."""
 
 
 def create_shop(owner, *, name, slug, platform=None, **config):
@@ -301,7 +309,24 @@ def update_settings(shop, user, changes):
     )
 
 
-def start_operation(shop, user, kind, changes=None, secrets=None):
+def start_backup(shop, user):
+    """Queues a backup the owner asked for."""
+    if not backups.enabled():
+        raise BackupsDisabled()
+    # Checked before the lock: a second request at the same moment stops at the operation already running.
+    if backups.manual_left(shop) <= 0:
+        raise BackupLimitReached()
+    return start_operation(shop, user, ShopOperation.Kind.CREATE_BACKUP)
+
+
+def start_restore(shop, user, backup):
+    """Queues bringing the shop back to `backup` (one of its restorable backups)."""
+    if not backups.enabled():
+        raise BackupsDisabled()
+    return start_operation(shop, user, ShopOperation.Kind.RESTORE_BACKUP, backup=backup)
+
+
+def start_operation(shop, user, kind, changes=None, secrets=None, backup=None):
     with transaction.atomic():
         # Locks the shop, so two requests can't both pass the checks below.
         shop = Shop.objects.select_for_update().get(pk=shop.pk)
@@ -313,7 +338,7 @@ def start_operation(shop, user, kind, changes=None, secrets=None):
         shop.operations.filter(created_at__lt=timezone.now() - OPERATION_TIMEOUT).exclude(secrets="").update(secrets="")
         operation = ShopOperation.objects.create(
             shop=shop, kind=kind, changes=changes or {}, secrets=json.dumps(secrets) if secrets else "",
-            requested_by=user,
+            backup=backup, requested_by=user,
         )
         transaction.on_commit(lambda: run_shop_operation.delay(operation.pk))
     return operation

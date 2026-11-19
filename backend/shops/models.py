@@ -4,6 +4,7 @@ from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
 from .fields import EncryptedTextField
@@ -229,6 +230,8 @@ class ShopOperation(models.Model):
         RESET_ADMIN_PASSWORD = "reset_admin_password", "Nowe hasło administratora"
         REMOVE_SAMPLE_PRODUCTS = "remove_sample_products", "Usunięcie przykładowych produktów"
         PUBLISH_DOCUMENTS = "publish_documents", "Nowa wersja regulaminu i polityki prywatności"
+        CREATE_BACKUP = "create_backup", "Kopia zapasowa"
+        RESTORE_BACKUP = "restore_backup", "Przywrócenie kopii zapasowej"
 
     class Status(models.TextChoices):
         QUEUED = "queued", "W kolejce"
@@ -245,6 +248,8 @@ class ShopOperation(models.Model):
     secrets = EncryptedTextField(blank=True)
     # What came out of it, e.g. {"removed": 6} for removed sample products.
     result = models.JSONField(default=dict, blank=True)
+    # The backup the operation made (create_backup) or brought the shop back to (restore_backup).
+    backup = models.ForeignKey("ShopBackup", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     error = models.TextField(blank=True)
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
@@ -262,6 +267,46 @@ class ShopOperation(models.Model):
     @property
     def secret_values(self):
         return json.loads(self.secrets) if self.secrets else {}
+
+
+class ShopBackup(models.Model):
+    """
+    A copy of the shop's files and database: a snapshot in the backup repository on the shop node
+    (shops/backups.py). Made every night, at the owner's request, before restoring another one and before the shop
+    is deleted. The repository holds the data; this is its index, with what the owner sees.
+    """
+
+    class Kind(models.TextChoices):
+        NIGHTLY = "nightly", "Kopia nocna"
+        MANUAL = "manual", "Kopia na żądanie"
+        BEFORE_RESTORE = "before_restore", "Stan sprzed przywrócenia kopii"
+        BEFORE_DELETE = "before_delete", "Stan sprzed usunięcia sklepu"
+
+    class Status(models.TextChoices):
+        SUCCEEDED = "succeeded", "Gotowa"
+        FAILED = "failed", "Błąd"
+
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="backups")
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUCCEEDED)
+    # The snapshot in the repository; empty when the backup failed.
+    snapshot_id = models.CharField(max_length=64, blank=True)
+    # Bytes of files and database the backup holds, before deduplication and compression.
+    size = models.PositiveBigIntegerField(null=True, blank=True)
+    # What went wrong, for the admin only: it may name internals.
+    error = models.TextField(blank=True)
+    # When the copy was taken: restoring it brings the shop back to that moment.
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["snapshot_id"], condition=~Q(snapshot_id=""), name="unique_backup_snapshot"),
+        ]
+        indexes = [models.Index(fields=["shop", "created_at"])]
+
+    def __str__(self):
+        return f"{self.shop} – {self.get_kind_display()} {self.created_at:%Y-%m-%d %H:%M}"
 
 
 class ShopOrder(models.Model):
