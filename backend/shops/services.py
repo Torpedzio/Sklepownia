@@ -33,7 +33,6 @@ class ShopLimitReached(Exception):
 
 
 class PlatformLimitReached(Exception):
-    """The plan allows only `limit` shops on `platform` (none at all when 0)."""
 
     def __init__(self, plan, platform, limit):
         super().__init__(platform, limit)
@@ -43,11 +42,10 @@ class PlatformLimitReached(Exception):
 
 
 class PlanRequired(Exception):
-    """Creating shops needs an active paid plan."""
+    pass
 
 
 class ShopBeingSetUp(Exception):
-    """A shop is being set up right now, so it can't be removed yet."""
 
     def __init__(self, shop):
         super().__init__(shop.pk)
@@ -67,15 +65,15 @@ class OperationInProgress(Exception):
 
 
 class BackupsDisabled(Exception):
-    """Backups aren't set up on this platform (SHOPS_BACKUP_PASSWORD)."""
+    """SHOPS_BACKUP_PASSWORD is not set."""
 
 
 class BackupLimitReached(Exception):
-    """The owner made as many backups today as SHOPS_BACKUP_MANUAL_PER_DAY allows."""
+    """SHOPS_BACKUP_MANUAL_PER_DAY reached."""
 
 
 def create_shop(owner, *, name, slug, platform=None, **config):
-    """`platform` defaults to the template's; the serializer makes sure they match."""
+    """`platform` defaults to the template's; the serializer ensures they match."""
     platform = platform or config["template"].platform
     try:
         with transaction.atomic():
@@ -96,7 +94,6 @@ def create_shop(owner, *, name, slug, platform=None, **config):
 
 
 def active_plan(user):
-    """The plan that lets the user create shops now, or None."""
     from billing.models import Subscription
 
     subscription = Subscription.objects.select_related("plan").filter(user=user).first()
@@ -104,7 +101,7 @@ def active_plan(user):
 
 
 def counted_shops(user):
-    """Shops that take up the plan's limit: not deleted, not suspended, not test shops from before paid plans."""
+    """Shops that count against the plan: not deleted, suspended or test shops (from before paid plans)."""
     return (
         user.shops.exclude(status__in=[Shop.Status.DELETED, Shop.Status.SUSPENDED])
         .filter(is_test=False)
@@ -116,18 +113,18 @@ def paid_shop_count(user):
     return counted_shops(user).count()
 
 
-# Platforms that plans allow only a few shops on, and the plan field with that number.
+# Platforms with their own per-plan limit, and the plan field holding it.
 PLATFORM_LIMIT_FIELDS = {Platform.MAGENTO: "max_magento_shops"}
 
 
 def platform_limit(plan, platform):
-    """How many shops on `platform` the plan allows, or None when only its total limit counts."""
+    """None when only the plan's total limit applies."""
     field = PLATFORM_LIMIT_FIELDS.get(platform)
     return getattr(plan, field) if field else None
 
 
 def platform_usage(user, plan, platform):
-    """(shops on `platform` that count, the plan's limit for it), or None when the platform has no own limit."""
+    """(counted shops on `platform`, limit), or None when the platform has no own limit."""
     limit = platform_limit(plan, platform)
     if limit is None:
         return None
@@ -144,8 +141,8 @@ def _check_room(user, plan, platform):
 
 def shops_that_fit(plan, shops, kept=()):
     """
-    `shops` in their order, as many as fit in the plan next to the `kept` ones: within its total limit and the
-    limits for single platforms (e.g. Magento). A shop that doesn't fit is skipped, so a later one may still fit.
+    `shops` (in order) that fit in the plan next to `kept`, within the total and per-platform limits.
+    A shop that doesn't fit is skipped, so a later one may still fit.
     """
     total = len(kept)
     per_platform = Counter(shop.platform for shop in kept)
@@ -163,7 +160,7 @@ def shops_that_fit(plan, shops, kept=()):
 
 
 def suspend_shops(shops):
-    """Takes shops beyond the plan's limit offline. Their files and data stay; resume_shop brings them back."""
+    """Files and data stay; resume_shop brings them back."""
     for shop in shops:
         with transaction.atomic():
             shop = Shop.objects.select_for_update().get(pk=shop.pk)
@@ -174,7 +171,6 @@ def suspend_shops(shops):
 
 
 def resume_shop(shop):
-    """Brings a suspended shop back when the plan has room for it."""
     with transaction.atomic():
         User.objects.select_for_update().get(pk=shop.owner_id)
         shop = Shop.objects.select_for_update().get(pk=shop.pk)
@@ -193,7 +189,7 @@ def suspended_shops(user):
 
 
 def resume_up_to_limit(user, plan):
-    """After a plan change gives room: brings back suspended shops, oldest first, as far as the plan allows."""
+    """Oldest first, as far as the plan allows."""
     resumed = []
     for shop in shops_that_fit(plan, suspended_shops(user), kept=list(counted_shops(user))):
         with transaction.atomic():
@@ -205,7 +201,7 @@ def resume_up_to_limit(user, plan):
 
 
 def _bring_back(shop):
-    # A shop whose setup never finished comes back as failed, so it can be retried; others come back running.
+    # A shop whose setup never finished comes back as failed, so it can be retried.
     job = shop.provisioning_jobs.first()
     finished = job is not None and job.status == ProvisioningJob.Status.SUCCEEDED
     shop.transition_to(Shop.Status.ACTIVE if finished else Shop.Status.FAILED)
@@ -232,12 +228,12 @@ def delete_shop(shop):
 
 def delete_all_shops(user):
     """
-    For a deleted account: every shop of the user is torn down and then removed from the database too
-    (teardown_shop does that for owners without an account). Returns the names of shops that were still live.
-    Shops deleted earlier are torn down again, which is harmless, so nothing is left behind if that failed.
+    For a deleted account, inside the caller's transaction; teardown_shop then also deletes the rows.
+    Returns the names of shops still live.
+    Already-deleted shops are torn down again (harmless), in case that failed before.
     """
     shops = list(Shop.objects.select_for_update().filter(owner=user).order_by("created_at", "pk"))
-    # A queued shop would be picked up by the worker after its row is gone, so it has to finish like one being set up.
+    # A queued shop would be picked up by the worker after its row is gone, so it has to finish first.
     setting_up = (Shop.Status.PENDING, Shop.Status.PROVISIONING)
     busy = next((shop for shop in shops if shop.status in setting_up), None)
     if busy is not None:
@@ -262,7 +258,7 @@ def _enqueue_provisioning(shop):
 
 
 def get_settings(shop):
-    """The shop's settings, every section and field present."""
+    """Fills in missing sections/fields and saves them."""
     stored, _ = ShopSettings.objects.get_or_create(shop=shop)
     defaults = shop_settings.default_settings(shop)
     complete = shop_settings.complete(stored.values, defaults)
@@ -273,7 +269,6 @@ def get_settings(shop):
 
 
 def current_operation(shop):
-    """The operation that is queued or running and still blocks new ones, or None."""
     return (
         shop.operations.filter(
             status__in=[ShopOperation.Status.QUEUED, ShopOperation.Status.RUNNING],
@@ -285,10 +280,7 @@ def current_operation(shop):
 
 
 def update_settings(shop, user, changes):
-    """
-    Queues applying `changes` (validated input of SettingsUpdateSerializer) to the shop.
-    Returns the operation, or None when nothing would change.
-    """
+    """`changes` is SettingsUpdateSerializer's validated data. Returns None when nothing would change."""
     current = get_settings(shop).values
     # Payment keys travel with the operation, not in its changes: see ShopOperation.secrets.
     changes, keys = shop_settings.split_secrets(shop_settings.normalize(changes))
@@ -310,17 +302,15 @@ def update_settings(shop, user, changes):
 
 
 def start_backup(shop, user):
-    """Queues a backup the owner asked for."""
     if not backups.enabled():
         raise BackupsDisabled()
-    # Checked before the lock: a second request at the same moment stops at the operation already running.
+    # Racy before the lock, but a concurrent request stops at OperationInProgress.
     if backups.manual_left(shop) <= 0:
         raise BackupLimitReached()
     return start_operation(shop, user, ShopOperation.Kind.CREATE_BACKUP)
 
 
 def start_restore(shop, user, backup):
-    """Queues bringing the shop back to `backup` (one of its restorable backups)."""
     if not backups.enabled():
         raise BackupsDisabled()
     return start_operation(shop, user, ShopOperation.Kind.RESTORE_BACKUP, backup=backup)
@@ -328,13 +318,12 @@ def start_restore(shop, user, backup):
 
 def start_operation(shop, user, kind, changes=None, secrets=None, backup=None):
     with transaction.atomic():
-        # Locks the shop, so two requests can't both pass the checks below.
         shop = Shop.objects.select_for_update().get(pk=shop.pk)
         if shop.status != Shop.Status.ACTIVE:
             raise ShopNotActive()
         if current_operation(shop) is not None:
             raise OperationInProgress()
-        # Keys of an operation that never finished (the worker died) don't stay around either.
+        # Drop keys left by operations that never finished (the worker died).
         shop.operations.filter(created_at__lt=timezone.now() - OPERATION_TIMEOUT).exclude(secrets="").update(secrets="")
         operation = ShopOperation.objects.create(
             shop=shop, kind=kind, changes=changes or {}, secrets=json.dumps(secrets) if secrets else "",

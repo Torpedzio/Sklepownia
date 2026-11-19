@@ -2,10 +2,7 @@ from .base import DEVICE_NOT_REGISTERED, BaseSender, Ticket
 
 
 class MemorySender(BaseSender):
-    """
-    For tests: what was sent lands in `outbox`. Tokens in `unregistered` are refused at once, tokens in
-    `unregistered_later` get the same news in their receipt. `reset()` empties it all.
-    """
+    """For tests: sent messages land in `outbox`; `unregistered` tokens fail at once, `unregistered_later` later."""
 
     outbox = []
     unregistered = set()

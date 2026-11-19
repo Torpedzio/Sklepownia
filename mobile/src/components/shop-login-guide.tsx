@@ -10,10 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { api, ApiError } from '@/lib/api';
 import type { ShopAdminAccess } from '@/lib/types';
 
-/**
- * Step-by-step sign-in to the shop's admin panel (WordPress, PrestaShop or Magento). The login and password are never shown here:
- * they go to the owner's e-mail, and this offers to send them again.
- */
+/** Sign-in steps for the admin panel. Credentials are never shown here: they go by e-mail, which this can resend. */
 export function ShopLoginSteps({ shopId }: { shopId: number }) {
   const theme = useTheme();
   const notify = useNotify();

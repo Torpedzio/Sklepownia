@@ -1,6 +1,6 @@
 /**
- * Tips for running a shop, for each platform. The menu names are the Polish ones of each admin panel: WordPress
- * and WooCommerce, PrestaShop 9 (its Polish language pack) and Magento (community-engineering/language-pl_pl).
+ * Menu names are the Polish ones of each admin panel: WordPress and WooCommerce, PrestaShop 9 (its Polish
+ * language pack) and Magento (community-engineering/language-pl_pl).
  */
 
 import type { IconName } from '@/components/icon';
@@ -9,12 +9,8 @@ import type { Platform } from '@/lib/types';
 export type ShopTip = {
   title: string;
   text: string;
-  /** Where to click in the shop's admin panel. */
   menu: string;
-  /**
-   * The page of the panel, relative to its address (WooCommerce: /wp-admin/). PrestaShop and Magento pages need
-   * a key from the signed-in session, so their tips open the panel's start page instead.
-   */
+  /** Relative to the panel (WooCommerce: /wp-admin/). PrestaShop/Magento pages need a session key, so they have none. */
   adminPath?: string;
 };
 
@@ -23,7 +19,7 @@ export type ShopGuide = {
   label: string;
   icon: IconName;
   intro: string;
-  /** Steps meant to be done in this order, shown numbered. */
+  /** Shown numbered, to be done in this order. */
   ordered: boolean;
   tips: ShopTip[];
 };

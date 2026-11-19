@@ -1,7 +1,4 @@
-"""
-MagentoProvisioner without Docker: commands it would run inside containers go to a fake shell,
-which records them and answers with scripted output. The real setup is checked by hand on a live shop.
-"""
+"""MagentoProvisioner against a fake `docker exec` shell with scripted answers; real setups are checked by hand."""
 
 import base64
 import json
@@ -378,9 +375,6 @@ def test_teardown_removes_the_search_indexes(provisioner, shell, shop, settings)
     assert delete["command"][-1] == f"http://localhost:9200/shop_{shop.pk}_*"
 
 
-# --- orders for the sales overview ---
-
-
 def test_orders_are_read_from_magento_s_database(provisioner, shell, shop):
     from datetime import UTC, datetime
     from decimal import Decimal
@@ -420,9 +414,6 @@ def test_products_are_counted_in_magento_s_database(provisioner, shell, shop):
     [call] = [call for call in shell.calls if call["command"][0] == "mariadb"]
     assert call["command"][call["command"].index("-e") - 1] == f"shop_{shop.pk}"
     assert "sklepownia/samples/ids" in call["command"][-1]
-
-
-# --- terms and privacy policy ---
 
 
 def test_documents_become_cms_pages_and_the_checkout_agreement(provisioner, shell, shop, monkeypatch):

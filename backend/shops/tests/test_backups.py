@@ -32,14 +32,14 @@ def shop(auth_client, django_capture_on_commit_callbacks):
 
 
 def other_shop(owner, slug, status=Shop.Status.ACTIVE):
-    """A shop of `owner` with something to copy (the simulated backup needs its credentials)."""
+    """The simulated backup needs credentials."""
     shop = Shop.objects.create(owner=owner, name=slug.title(), slug=slug, status=status)
     ShopCredentials.objects.create(shop=shop, admin_login="admin")
     return shop
 
 
 def backup_at(shop, when, kind=Kind.NIGHTLY):
-    """A backup taken at `when`, in the index and in the simulated repository."""
+    """In both the index and the simulated repository."""
     snapshot_id = FakeProvisioner().backup(shop, kind).snapshot_id
     FakeProvisioner.snapshots[snapshot_id] = Snapshot(
         id=snapshot_id, host=f"shop-{shop.pk}", time=when, tags=(kind,), size=1000,
@@ -56,7 +56,7 @@ def url(shop, suffix=""):
 
 
 def run(client, captured, path, method="post"):
-    """Calls the API and runs the operation it queued, as the worker would."""
+    """Also runs the queued operation, as the worker would."""
     with captured(execute=True):
         response = getattr(client, method)(path)
     return response
@@ -67,11 +67,7 @@ def operation(client, shop, response):
 
 
 def restore(client, captured, shop, backup):
-    """Restores `backup` through the API; returns the finished operation."""
     return operation(client, shop, run(client, captured, url(shop, f"{backup.pk}/restore/")))
-
-
-# --- the owner in the app ---
 
 
 def test_a_new_shop_waits_for_its_first_nightly_backup(auth_client, shop, settings):
@@ -126,7 +122,6 @@ def test_a_failed_backup_says_so_and_does_not_use_up_the_day(
     listed = auth_client.get(url(shop)).data
     assert listed["backups"] == []
     assert listed["manual_left"] == 3
-    # The admin sees what went wrong.
     assert ShopBackup.objects.get(shop=shop).status == ShopBackup.Status.FAILED
 
 
@@ -134,7 +129,7 @@ def test_restoring_brings_the_shop_back_and_keeps_how_it_was_before(
     auth_client, shop, django_capture_on_commit_callbacks,
 ):
     old = backup_at(shop, timezone.now() - timedelta(days=2))
-    # Things the platform keeps about the shop as it is now.
+    # Platform-side state that the restore must reset.
     SalesSync.objects.create(shop=shop, synced_at=timezone.now())
     ShopOrder.objects.create(
         shop=shop, external_id="9999", number="9999", status="new", total=10, currency="PLN",
@@ -152,11 +147,9 @@ def test_restoring_brings_the_shop_back_and_keeps_how_it_was_before(
     assert done["kind_display"] == "Przywrócenie kopii zapasowej"
     assert parse_datetime(done["backup_created_at"]) == old.created_at
     assert FakeProvisioner.restored == [old.snapshot_id]
-    # The state from before is the newest backup, so the owner can go back to it.
     before = ShopBackup.objects.get(pk=done["result"]["before"])
     assert before.kind == Kind.BEFORE_RESTORE
     assert [item["id"] for item in auth_client.get(url(shop)).data["backups"]] == [before.pk, old.pk]
-    # The copy of the orders is read again from the restored shop; products are counted again.
     assert not ShopOrder.objects.filter(shop=shop, external_id="9999").exists()
     assert ShopOrder.objects.filter(shop=shop).exists()
     checklist = ShopChecklist.objects.get(shop=shop)
@@ -170,7 +163,7 @@ def test_after_a_restore_the_app_has_the_name_and_language_of_the_backup(
     read_settings = FakeProvisioner.read_settings
 
     def as_in_the_backup(self, shop):
-        # The shop had another name and language when the backup was made; they were changed after it.
+        # The shop had another name and language when the backup was made.
         values = read_settings(self, shop)
         values["general"]["name"] = "Sklep z kopii"
         values["region"]["language"] = "en_US"
@@ -280,9 +273,6 @@ def test_other_owners_backups_are_hidden(api_client, shop):
     api_client.force_authenticate(stranger)
 
     assert api_client.get(url(shop)).status_code == 404
-
-
-# --- every night ---
 
 
 def test_every_night_running_and_suspended_shops_are_copied(shop, verified_user):
@@ -407,9 +397,6 @@ def test_old_failures_are_cleared(shop):
     assert list(ShopBackup.objects.all()) == [recent]
 
 
-# --- deleting ---
-
-
 def test_a_deleted_shop_is_copied_once_more(auth_client, shop, django_capture_on_commit_callbacks):
     with django_capture_on_commit_callbacks(execute=True):
         assert auth_client.delete(f"/api/shops/{shop.pk}/").status_code == 204
@@ -431,16 +418,13 @@ def test_a_deleted_account_leaves_no_backups(auth_client, shop, django_capture_o
 
 
 def test_the_data_of_forgotten_backups_leaves_the_repository_the_next_night(monkeypatch):
-    # Nothing to remove tonight, but the backups of an account deleted during the day are only forgotten so far.
+    # Nothing to forget tonight, but forget_all() during the day left data to prune.
     pruned = []
     monkeypatch.setattr(FakeProvisioner, "prune_backups", lambda self: pruned.append(True))
 
     assert backups.maintain() == 0
 
     assert pruned == [True]
-
-
-# --- support ---
 
 
 def test_backup_shops_copies_shops_now(shop, verified_user, capsys):
@@ -490,9 +474,6 @@ def test_a_deleted_shop_whose_address_is_taken_stays_deleted(
     with pytest.raises(CommandError, match="ma już inny sklep"):
         call_command("restore_shop", str(shop.pk), "--backup", str(last.pk))
     assert FakeProvisioner.restored == []
-
-
-# --- on the shop node ---
 
 
 @pytest.fixture

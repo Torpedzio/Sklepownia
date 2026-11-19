@@ -16,11 +16,9 @@ class InvalidTransition(Exception):
 
 
 class Server(models.Model):
-    """Host that runs shop containers."""
-
     name = models.CharField(max_length=100, unique=True)
     hostname = models.CharField(max_length=255)
-    # The address the shops' requests come from, e.g. to payment operators; Przelewy24 only answers listed ones.
+    # Outgoing address of the shops; Przelewy24 only answers whitelisted IPs.
     public_ip = models.GenericIPAddressField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     max_shops = models.PositiveIntegerField(default=50)
@@ -31,14 +29,11 @@ class Server(models.Model):
 
 
 class ShopTemplate(models.Model):
-    """A theme a shop can start with. Each belongs to one platform."""
-
     slug = models.SlugField(unique=True)
     platform = models.CharField(max_length=20, choices=Platform.choices, default=Platform.WOOCOMMERCE)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
-    # The platform's name for the theme: a WordPress theme slug (`wp theme activate`), a PrestaShop theme
-    # directory or a Magento theme path (Magento/luma).
+    # WordPress theme slug, PrestaShop theme directory or Magento theme path (Magento/luma).
     theme = models.CharField(max_length=100)
     preview_image_url = models.URLField(blank=True)
     is_active = models.BooleanField(default=True)
@@ -64,7 +59,6 @@ class Shop(models.Model):
         Status.PENDING: {Status.PROVISIONING, Status.FAILED, Status.DELETED},
         Status.PROVISIONING: {Status.ACTIVE, Status.FAILED},
         Status.ACTIVE: {Status.SUSPENDED, Status.DELETED},
-        # A shop beyond the plan's limit is suspended: stopped, with its data kept.
         Status.FAILED: {Status.PENDING, Status.SUSPENDED, Status.DELETED},
         Status.SUSPENDED: {Status.ACTIVE, Status.FAILED, Status.DELETED},
         Status.DELETED: set(),
@@ -75,10 +69,10 @@ class Shop(models.Model):
     slug = models.CharField(max_length=30)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     platform = models.CharField(max_length=20, choices=Platform.choices, default=Platform.WOOCOMMERCE)
-    # Where the admin panel is, relative to the shop's address. PrestaShop picks a random one at installation.
+    # Relative to the shop URL; PrestaShop picks a random one at installation.
     admin_path = models.CharField(max_length=64, blank=True)
     server = models.ForeignKey(Server, on_delete=models.PROTECT, null=True, blank=True, related_name="shops")
-    # Shops from before paid plans: they don't need a plan and don't count towards its shop limit.
+    # From before paid plans: need no plan and don't count towards its limit.
     is_test = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -108,7 +102,7 @@ class Shop(models.Model):
 
     @property
     def mail_sender(self) -> str:
-        """The address the shop's e-mail comes from; replies go to the shop's contact address."""
+        """Replies go to the shop's contact address."""
         return f"{self.slug}@{settings.SHOPS_MAIL_DOMAIN}"
 
     @property
@@ -127,10 +121,7 @@ class Shop(models.Model):
 
 
 class ShopConfig(models.Model):
-    """
-    What the user chose in the creation form; input for provisioning. Settings changed in the app
-    (name, contact e-mail, language, currency, country, theme) are written back here.
-    """
+    """Creation form input for provisioning; settings changed in the app are written back here."""
 
     shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="config")
     industry = models.CharField(max_length=30, choices=Industry.choices)
@@ -147,14 +138,14 @@ class ShopConfig(models.Model):
 
 
 class ShopCredentials(models.Model):
-    """Secrets of one shop. Each is saved before it's used, so a retried provisioning reuses it."""
+    """Each secret is saved before it's used, so a retried provisioning reuses it."""
 
     shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="credentials")
     db_password = EncryptedTextField(blank=True)
-    # What the owner types to sign in to the admin panel: a username (WordPress) or an e-mail (PrestaShop).
+    # A username (WordPress) or an e-mail (PrestaShop).
     admin_login = models.CharField(max_length=254)
     admin_password = EncryptedTextField(blank=True)
-    # WooCommerce only: Application Password for the WordPress/WooCommerce REST API (Basic Auth).
+    # WooCommerce only: Application Password for the REST API (Basic Auth).
     wp_application_password = EncryptedTextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -205,15 +196,10 @@ class ProvisioningStep(models.Model):
 
 
 class ShopSettings(models.Model):
-    """
-    The shop's settings as last read from the shop or saved by the app, grouped in sections
-    (see shops/shop_settings.py). WordPress is the source of truth: the owner can change things in wp-admin,
-    so the worker reads them back from the shop whenever the settings screen opens and after every change.
-    """
+    """Cache of the shop's settings; the shop is the source of truth, re-read on opening and after every change."""
 
     shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="store_settings")
     values = models.JSONField(default=dict)
-    # When the values were last read from the shop; None until the first read.
     synced_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -222,7 +208,7 @@ class ShopSettings(models.Model):
 
 
 class ShopOperation(models.Model):
-    """Work the worker does on a running shop at the owner's request, one at a time per shop."""
+    """Owner-requested work on a running shop, one at a time per shop."""
 
     class Kind(models.TextChoices):
         UPDATE_SETTINGS = "update_settings", "Zmiana ustawień"
@@ -242,13 +228,13 @@ class ShopOperation(models.Model):
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="operations")
     kind = models.CharField(max_length=30, choices=Kind.choices)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
-    # For settings changes: only the changed fields, {section: {field: new value}}; keys as SECRET_PLACEHOLDER.
+    # Settings changes: {section: {field: new value}}, keys as SECRET_PLACEHOLDER.
     changes = models.JSONField(default=dict, blank=True)
-    # The keys of a settings change (JSON like `changes`), until the operation ends: they're kept only in the shop.
+    # Keys of a settings change (JSON like `changes`), cleared when the operation ends; only the shop keeps them.
     secrets = EncryptedTextField(blank=True)
-    # What came out of it, e.g. {"removed": 6} for removed sample products.
+    # E.g. {"removed": 6} for removed sample products.
     result = models.JSONField(default=dict, blank=True)
-    # The backup the operation made (create_backup) or brought the shop back to (restore_backup).
+    # Made (create_backup) or restored (restore_backup).
     backup = models.ForeignKey("ShopBackup", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     error = models.TextField(blank=True)
     requested_by = models.ForeignKey(
@@ -270,11 +256,7 @@ class ShopOperation(models.Model):
 
 
 class ShopBackup(models.Model):
-    """
-    A copy of the shop's files and database: a snapshot in the backup repository on the shop node
-    (shops/backups.py). Made every night, at the owner's request, before restoring another one and before the shop
-    is deleted. The repository holds the data; this is its index, with what the owner sees.
-    """
+    """Index entry for a restic snapshot of the shop's files and database (see shops/backups.py)."""
 
     class Kind(models.TextChoices):
         NIGHTLY = "nightly", "Kopia nocna"
@@ -289,13 +271,11 @@ class ShopBackup(models.Model):
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="backups")
     kind = models.CharField(max_length=20, choices=Kind.choices)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUCCEEDED)
-    # The snapshot in the repository; empty when the backup failed.
     snapshot_id = models.CharField(max_length=64, blank=True)
-    # Bytes of files and database the backup holds, before deduplication and compression.
+    # Bytes, before deduplication and compression.
     size = models.PositiveBigIntegerField(null=True, blank=True)
-    # What went wrong, for the admin only: it may name internals.
+    # Admin only: may name internals.
     error = models.TextField(blank=True)
-    # When the copy was taken: restoring it brings the shop back to that moment.
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -310,21 +290,18 @@ class ShopBackup(models.Model):
 
 
 class ShopOrder(models.Model):
-    """
-    An order from the shop, copied for the sales overview in the app (shops/sales.py). Only recent orders are kept,
-    and of the customer only the first name and the initial of the last name.
-    """
+    """Recent orders copied for shops/sales.py; of the customer only the first name and last-name initial."""
 
     class Status(models.TextChoices):
         NEW = "new", "Nowe"
         PROCESSING = "processing", "W realizacji"
         COMPLETED = "completed", "Zrealizowane"
         CANCELLED = "cancelled", "Anulowane"
-        # Checkout started but not paid for (e.g. an online payment abandoned); not a sale.
+        # Checkout started but not paid (e.g. abandoned online payment); not a sale.
         UNFINISHED = "unfinished", "Nieopłacone"
 
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="orders")
-    # The platform's own id, and the number the shop shows its customers.
+    # The platform's id, and the number shown to customers.
     external_id = models.CharField(max_length=40)
     number = models.CharField(max_length=40)
     status = models.CharField(max_length=20, choices=Status.choices)
@@ -345,15 +322,13 @@ class ShopOrder(models.Model):
 
 
 class SalesSync(models.Model):
-    """How far the shop's orders have been copied: the latest change read, and when."""
-
     shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="sales_sync")
-    # The newest order change read so far; the next read starts a little before it.
+    # Newest order change read; the next read starts a little before it.
     cursor = models.DateTimeField(null=True, blank=True)
-    # The last read that worked, and the last read at all (also one that failed).
+    # Last successful read, and last attempt (also failed).
     synced_at = models.DateTimeField(null=True, blank=True)
     attempted_at = models.DateTimeField(null=True, blank=True)
-    # When the owner opened the overview with old data and a read was queued.
+    # When opening the overview with stale data queued a read.
     requested_at = models.DateTimeField(null=True, blank=True)
     error = models.CharField(max_length=300, blank=True)
 
@@ -362,13 +337,10 @@ class SalesSync(models.Model):
 
 
 class ShopChecklist(models.Model):
-    """
-    The start checklist on the shop screen (shops/checklist.py): the products counted in the shop for it, and
-    whether the owner hid it. The other steps are worked out from what the platform already knows.
-    """
+    """Start checklist state (shops/checklist.py): product counts and hiding; other steps are derived."""
 
     class Step(models.TextChoices):
-        """In the order the app shows them."""
+        """Order matters: the app shows them in this order."""
 
         PAYMENTS = "payments", "Płatności"
         SHIPPING = "shipping", "Wysyłka"
@@ -379,13 +351,12 @@ class ShopChecklist(models.Model):
         TEST_ORDER = "test_order", "Próbne zamówienie"
 
     shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="checklist")
-    # Products in the shop: the owner's own and the samples added at setup; None until counted.
+    # The owner's own products and the samples from setup; None until counted.
     products = models.PositiveIntegerField(null=True, blank=True)
     sample_products = models.PositiveIntegerField(null=True, blank=True)
-    # The last count that worked, and the last count at all (also one that failed).
+    # Last successful count, and last attempt (also failed).
     counted_at = models.DateTimeField(null=True, blank=True)
     attempted_at = models.DateTimeField(null=True, blank=True)
-    # When opening the shop screen queued a count.
     requested_at = models.DateTimeField(null=True, blank=True)
     hidden_at = models.DateTimeField(null=True, blank=True)
 

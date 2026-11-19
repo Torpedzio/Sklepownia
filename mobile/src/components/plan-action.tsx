@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/auth';
 import type { Plan } from '@/lib/types';
 
-/** The next step under a plan card, depending on who looks: sign up, confirm the e-mail, choose, or manage. */
+/** Depends on who looks: sign up, confirm the e-mail, choose, or manage. */
 export function PlanAction({ plan }: { plan: Plan }) {
   const { user } = useAuth();
   if (!user) {

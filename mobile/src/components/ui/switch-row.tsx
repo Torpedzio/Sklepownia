@@ -6,7 +6,6 @@ import { useTheme } from '@/hooks/use-theme';
 
 type SwitchRowProps = {
   label: string;
-  /** What turning it on means for the customer, in a sentence. */
   description?: string;
   value: boolean;
   onChange: (value: boolean) => void;
@@ -14,7 +13,7 @@ type SwitchRowProps = {
   error?: string;
 };
 
-/** An on/off setting: the whole row toggles it, not only the switch. */
+/** The whole row toggles it, not only the switch. */
 export function SwitchRow({ label, description, value, onChange, disabled, error }: SwitchRowProps) {
   const theme = useTheme();
   return (

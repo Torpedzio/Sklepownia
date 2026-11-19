@@ -1,15 +1,12 @@
 """Expo's push service: one API for iOS and Android, used with tokens from expo-notifications."""
 
 import json
-import logging
 import urllib.error
 import urllib.request
 
 from django.conf import settings
 
 from .base import BaseSender, PushError, PushUnavailable, Ticket
-
-logger = logging.getLogger(__name__)
 
 SEND_URL = "https://exp.host/--/api/v2/push/send"
 RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"

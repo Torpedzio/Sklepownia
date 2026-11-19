@@ -4,10 +4,7 @@ import { AppState } from 'react-native';
 
 import { enablePush, getPushPermission, pushBlocker, type PushPermission } from '@/lib/push';
 
-/**
- * Whether this phone may show notifications, read again on focus and on coming back from the phone's settings.
- * `permission` is undefined while unknown and on devices that can't get them (`blocker`).
- */
+/** Re-read on focus and on return from the phone's settings. `permission` is undefined while unknown or `blocker` is set. */
 export function usePushPermission() {
   const blocker = pushBlocker();
   const [state, setState] = useState<{ permission: PushPermission; canAskAgain: boolean }>();

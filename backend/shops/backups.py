@@ -1,10 +1,6 @@
 """
-Backups of the shops. Every night the worker copies each shop's files and database into the backup repository on
-the shop node (one restic snapshot per shop and backup, made by the provisioner, see infra/shops/backup), and the
-owner can make one and bring the shop back to any of them in the app.
-
-ShopBackup rows are the index of the repository: what the owner sees and what the retention below decides on.
-maintain() keeps the two in step every night.
+Shop backups: one restic snapshot per shop and backup on the shop node (see infra/shops/backup).
+ShopBackup rows index the repository; maintain() keeps the two in step every night.
 """
 
 import logging
@@ -31,14 +27,11 @@ RESTORE_BROKEN = (
     "Nie udało się przywrócić kopii zapasowej ani wrócić do stanu sprzed próby. Już to sprawdzamy. "
     "Jeśli sklep nie zacznie działać w ciągu godziny, napisz do nas."
 )
-# Shops copied every night: a suspended shop keeps its data, so it is copied too.
+# A suspended shop keeps its data, so it is copied too.
 BACKED_UP = (Shop.Status.ACTIVE, Shop.Status.SUSPENDED)
-# Everything from the last day stays, whatever else the retention says.
 KEEP_ALL_FOR = timedelta(days=1)
-# Failed backups stay listed for the admin this long.
 FAILURES_KEPT_FOR = timedelta(days=7)
-# A snapshot the index doesn't know is taken in only when it is this old, so a backup that is being saved right
-# now isn't counted twice.
+# Unindexed snapshots are adopted only when this old, so a backup being saved right now isn't counted twice.
 ADOPT_AFTER = timedelta(hours=1)
 SHOP_HOST = re.compile(r"^shop-(\d+)$")
 
@@ -48,15 +41,11 @@ def enabled():
 
 
 def restorable(shop):
-    """The shop's backups the owner can go back to, newest first."""
     return shop.backups.filter(status=Status.SUCCEEDED).order_by("-created_at", "-id")
 
 
 def back_up(shop, kind):
-    """
-    Copies the shop now and returns its ShopBackup. Raises NothingToBackUp when the shop has no files, and
-    ProvisioningError (for the owner) when copying failed; the failure is recorded for the admin.
-    """
+    """Raises NothingToBackUp (no files) or ProvisioningError (failure, recorded as a FAILED row)."""
     started = timezone.now()
     try:
         made = get_provisioner(shop.platform).backup(shop, kind)
@@ -72,10 +61,7 @@ def back_up(shop, kind):
 
 
 def restore(shop, backup):
-    """
-    Brings the shop back to `backup`. How the shop is now is backed up first, so the owner can go back to it; when
-    restoring fails part-way, the shop gets that state back. Returns the backup made first.
-    """
+    """Backs up the current state first and rolls back to it if restoring fails. Returns that backup."""
     provisioner = get_provisioner(shop.platform)
     before = back_up(shop, Kind.BEFORE_RESTORE)
     try:
@@ -94,27 +80,20 @@ def restore(shop, backup):
 
 
 def read_again(shop):
-    """
-    After a restore: what the platform keeps of the shop is read from it again. The shop itself works by then,
-    so a failure here is only logged.
-    """
+    """After a restore: re-reads the shop's platform state. The shop works by then, so failures are only logged."""
     from . import tasks
     from .provisioning.operations import read_back
 
     read_back(shop)
-    # The copy of the orders starts over; its first read announces nothing, as the orders aren't new.
+    # The order copy starts over; its first read announces nothing.
     ShopOrder.objects.filter(shop=shop).delete()
     SalesSync.objects.filter(shop=shop).delete()
-    # Products are counted again when the checklist is next opened.
     ShopChecklist.objects.filter(shop=shop).update(products=None, sample_products=None, counted_at=None)
     transaction.on_commit(lambda: tasks.sync_shop_orders.delay(shop.pk))
 
 
 def back_up_before_delete(shop):
-    """
-    The last copy of a shop being deleted, kept SHOPS_BACKUP_DELETED_DAYS days so it can still be brought back.
-    Deleting goes on without it; then the latest nightly backup is kept instead. Returns the backup or None.
-    """
+    """Best effort: returns None on failure and deletion goes on (the latest nightly is kept instead)."""
     if not enabled():
         return None
     try:
@@ -124,28 +103,26 @@ def back_up_before_delete(shop):
 
 
 def forget_all(shop):
-    """
-    For a deleted account: the shop's backups go at once. Their data leaves the repository the next night (maintain).
-    """
+    """For a deleted account; the data leaves the repository on the next maintain() prune."""
     snapshot_ids = list(shop.backups.exclude(snapshot_id="").values_list("snapshot_id", flat=True))
     if snapshot_ids and enabled():
         try:
             get_provisioner(shop.platform).forget_backups(snapshot_ids)
         except Exception:
-            # maintain() removes snapshots of shops that are gone, so nothing stays for long.
+            # maintain() removes snapshots of shops that are gone.
             logger.exception("Removing the backups of shop %s failed", shop.pk)
     shop.backups.all().delete()
 
 
 def back_up_all():
-    """Every night: copies each running or suspended shop, then maintain(). Returns the shops left without a copy."""
+    """Returns the shops whose backup failed."""
     if not enabled():
         logger.warning("Shop backups are off: SHOPS_BACKUP_PASSWORD is not set")
         return []
     failed = []
     for shop in Shop.objects.filter(status__in=BACKED_UP).order_by("pk"):
         if _busy(shop):
-            # E.g. a restore under way: a copy of a half-restored shop would be worse than none.
+            # E.g. a restore under way: a copy of a half-restored shop is worse than none.
             logger.info("Shop %s is busy, its nightly backup is skipped", shop.pk)
             continue
         try:
@@ -159,10 +136,7 @@ def back_up_all():
 
 
 def maintain(now=None):
-    """
-    Makes the index match the repository, then removes the backups beyond those kept (see kept) and frees their
-    space. Returns how many snapshots were removed.
-    """
+    """Syncs the index with the repository and applies retention. Returns how many snapshots were removed."""
     now = now or timezone.now()
     provisioner = get_provisioner()
     snapshots = {snapshot.id: snapshot for snapshot in provisioner.list_backups()}
@@ -170,7 +144,7 @@ def maintain(now=None):
     rows = list(ShopBackup.objects.filter(status=Status.SUCCEEDED).select_related("shop"))
     missing = [row.pk for row in rows if row.snapshot_id not in snapshots]
     if missing:
-        # The repository lost them (or was replaced): they can't be restored, so the owner shouldn't see them.
+        # The repository lost them (or was replaced): they can't be restored.
         logger.warning("Backups %s are not in the repository any more", missing)
         ShopBackup.objects.filter(pk__in=missing).delete()
 
@@ -183,10 +157,10 @@ def maintain(now=None):
             continue
         shop = shops.get(shop_id)
         if shop is None:
-            # Its account was deleted: nothing of the shop stays.
+            # Account deleted.
             forget.append(snapshot.id)
         elif now - snapshot.time >= ADOPT_AFTER:
-            # Made but never recorded (e.g. the worker stopped in between), or the index is older than the repository.
+            # Never recorded (e.g. the worker stopped in between), or the index is older than the repository.
             ShopBackup.objects.create(
                 shop=shop, kind=_kind(snapshot.tags), snapshot_id=snapshot.id, size=snapshot.size,
                 created_at=snapshot.time,
@@ -207,8 +181,7 @@ def maintain(now=None):
     if forget:
         provisioner.forget_backups(forget)
         ShopBackup.objects.filter(pk__in=[backup.pk for backup in removed]).delete()
-    # Every night, also when nothing was removed now: the backups of an account deleted during the day are only
-    # forgotten, and their data leaves the repository here.
+    # Also when nothing was forgotten now: forget_all() during the day only forgets, the data goes here.
     provisioner.prune_backups()
     ShopBackup.objects.filter(status=Status.FAILED, created_at__lt=now - FAILURES_KEPT_FOR).delete()
     return len(forget)
@@ -216,9 +189,8 @@ def maintain(now=None):
 
 def kept(shop, backups, now):
     """
-    Ids of the shop's `backups` (successful ones) that stay. For a live shop: everything from the last day, and the
-    newest backup of each of the SHOPS_BACKUP_KEEP_DAILY latest days and SHOPS_BACKUP_KEEP_WEEKLY latest weeks that
-    have one. For a deleted shop: its newest backup, for SHOPS_BACKUP_DELETED_DAYS days after it was made.
+    Ids of successful `backups` that stay: the last day, plus the newest of each of the latest KEEP_DAILY days and
+    KEEP_WEEKLY weeks. A deleted shop keeps only its newest one, for SHOPS_BACKUP_DELETED_DAYS.
     """
     newest_first = sorted(backups, key=lambda backup: backup.created_at, reverse=True)
     if not newest_first:
@@ -242,7 +214,6 @@ def kept(shop, backups, now):
 
 
 def manual_left(shop, now=None):
-    """How many more backups the owner can make today, on top of the nightly ones."""
     today = timezone.localtime(now or timezone.now()).replace(hour=0, minute=0, second=0, microsecond=0)
     made = (
         shop.operations.filter(kind=ShopOperation.Kind.CREATE_BACKUP, created_at__gte=today)
@@ -253,14 +224,12 @@ def manual_left(shop, now=None):
 
 
 def next_nightly(now=None):
-    """When the next nightly backups start (SHOPS_BACKUP_HOUR, local time)."""
     local = timezone.localtime(now or timezone.now())
     day = local.date() if local.hour < settings.SHOPS_BACKUP_HOUR else local.date() + timedelta(days=1)
     return timezone.make_aware(datetime.combine(day, time(settings.SHOPS_BACKUP_HOUR)))
 
 
 def overview(shop):
-    """The backups section of the app."""
     return {
         "enabled": enabled(),
         "backups": list(restorable(shop)),

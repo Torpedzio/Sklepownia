@@ -1,14 +1,11 @@
-"""
-A payment gateway takes the first payment on its own page (saving the card) and charges the saved card later.
-Card numbers never reach the platform: it only keeps the gateway's token.
-"""
+"""Gateways take the first payment on their page, then charge the saved card; card numbers never reach us."""
 
 from dataclasses import dataclass
 from decimal import Decimal
 
 
 class GatewayError(Exception):
-    """The gateway refused or failed a request. The message is for logs; customers get a plain one."""
+    """The message is for logs; customers get a plain one."""
 
 
 class InvalidNotification(Exception):
@@ -28,8 +25,6 @@ class Payer:
 
 @dataclass(frozen=True)
 class Checkout:
-    """A payment started on the gateway; the payer goes to `redirect_url`."""
-
     gateway_id: str
     title: str
     redirect_url: str
@@ -45,7 +40,7 @@ class SavedCard:
 
 @dataclass(frozen=True)
 class PaymentResult:
-    """What the gateway says about a payment: paid, failed, or not decided yet (status None)."""
+    """`paid` is None while the gateway hasn't decided yet."""
 
     reference: str
     paid: bool | None
@@ -58,7 +53,7 @@ class PaymentResult:
 
 class BaseGateway:
     name = ""
-    # The body the gateway expects back after a notification it may stop resending.
+    # Response body that stops the gateway resending a notification.
     notification_ack = "TRUE"
 
     def start_payment(self, payment, payer: Payer, *, return_url: str, site_url: str) -> Checkout:
@@ -66,13 +61,13 @@ class BaseGateway:
         raise NotImplementedError
 
     def charge_saved_card(self, payment, payer: Payer, card_token: str) -> PaymentResult:
-        """Charges a saved card without the payer. The result may still be pending."""
+        """Charges without the payer; the result may still be pending."""
         raise NotImplementedError
 
     def parse_notification(self, request) -> PaymentResult:
-        """Verifies a notification from the gateway and reads it. Raises InvalidNotification."""
+        """Verifies and reads a notification; raises InvalidNotification."""
         raise InvalidNotification("This gateway sends no notifications.")
 
     def fetch_result(self, payment) -> PaymentResult | None:
-        """Asks the gateway about a payment, for when notifications can't reach the platform."""
+        """Polls the gateway, for when notifications can't reach the platform."""
         return None

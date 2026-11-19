@@ -13,7 +13,6 @@ const BAR_MAX_WIDTH = 24;
 
 type Mode = 'chart' | 'table';
 
-/** Daily revenue as thin bars, with the same numbers as a table one switch away. */
 export function SalesChart({ days, currency }: { days: SalesDay[]; currency: string }) {
   const [view, setView] = useState<Mode>('chart');
 

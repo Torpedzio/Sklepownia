@@ -100,7 +100,7 @@ class DeleteAccountView(APIView):
 
     @extend_schema(request=DeleteAccountSerializer, responses={204: None})
     def post(self, request):
-        """Deletes the account, its shops and plan for good; the password confirms it's the owner."""
+        """Deletes the account, its shops and plan for good; needs the password."""
         serializer = DeleteAccountSerializer(data=request.data, context={"user": request.user})
         serializer.is_valid(raise_exception=True)
         try:
@@ -126,7 +126,7 @@ class PasswordResetRequestView(APIView):
 
     @extend_schema(request=PasswordResetRequestSerializer, responses={204: None})
     def post(self, request):
-        """E-mails a code for a new password. The answer is the same whether the address has an account or not."""
+        """E-mails a reset code; the answer is the same whether the address has an account or not."""
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         services.request_password_reset(serializer.validated_data["email"])
@@ -141,7 +141,7 @@ class PasswordResetView(APIView):
 
     @extend_schema(request=PasswordResetSerializer, responses={200: AuthTokensSerializer})
     def post(self, request):
-        """Sets the new password with the code from the e-mail and signs in; other devices are signed out."""
+        """Sets the new password with the e-mailed code and signs in; other devices are signed out."""
         serializer = PasswordResetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -163,7 +163,7 @@ class MeView(generics.RetrieveUpdateAPIView):
 
 
 class AvatarView(APIView):
-    """The signed-in user's profile picture: PUT a new one (multipart, field `avatar`) or DELETE it."""
+    """PUT a new profile picture (multipart, field `avatar`) or DELETE it."""
 
     parser_classes = [MultiPartParser, FormParser]
     throttle_classes = [ScopedRateThrottle]
@@ -204,7 +204,7 @@ AVATAR_NAME = re.compile(r"^[0-9a-f]{32}\.webp$")
 
 @require_safe
 def avatar_file(request, name):
-    """Serves a profile picture. Every upload gets a new random name, so it can be cached for good."""
+    """Every upload gets a new random name, so it can be cached forever."""
     path = f"avatars/{name}"
     if not AVATAR_NAME.match(name) or not default_storage.exists(path):
         raise Http404

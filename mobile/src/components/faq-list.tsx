@@ -12,7 +12,6 @@ type FaqListProps = { items: FaqItem[] };
 
 const EXPAND_MS = 260;
 
-/** Questions that open one at a time, the answer sliding open below the question. */
 export function FaqList({ items }: FaqListProps) {
   const [open, setOpen] = useState<number | null>(null);
   return (

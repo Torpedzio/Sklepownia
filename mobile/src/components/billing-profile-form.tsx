@@ -36,7 +36,6 @@ type BillingProfileFormProps = {
   errors?: Record<string, string>;
 };
 
-/** Who pays: a person or a company with its tax ID, and the address for invoices. */
 export function BillingProfileForm({ value, onChange, errors = {} }: BillingProfileFormProps) {
   const company = value.kind === 'company';
   const polish = value.country === 'PL';

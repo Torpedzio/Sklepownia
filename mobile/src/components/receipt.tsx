@@ -18,17 +18,16 @@ type ReceiptProps = {
   rows: ReceiptRow[];
   total?: { label: string; value: string };
   stamp?: { text: string; tone: 'success' | 'danger' };
-  /** Print rows one by one, like a till. Used once, on the landing page. */
+  /** Print rows one by one, like a till. */
   animated?: boolean;
 };
 
 const MARKS = { done: '✓', running: '…', pending: '·', failed: '✕' };
 const PRINT_DELAY = 140;
-// Picked up from the counter: a bit bigger and turned to the left.
+// Picked up from the counter: a bit bigger and turned left.
 const LIFT_SCALE = 1.04;
 const LIFT_ROTATION = -3;
 
-/** Progress shown as till receipt: the one place the app uses a typewriter face. */
 export function Receipt({ title, subtitle, rows, total, stamp, animated = false }: ReceiptProps) {
   const theme = useTheme();
   const ink = { color: theme.receiptInk };

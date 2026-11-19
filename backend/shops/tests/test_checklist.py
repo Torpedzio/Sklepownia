@@ -17,7 +17,7 @@ ALL_STEPS = ["payments", "shipping", "documents", "products", "sample_products",
 
 @pytest.fixture(autouse=True)
 def no_orders(monkeypatch):
-    """The fake shop makes up orders; these tests place them themselves."""
+    """The fake shop invents orders; these tests place their own."""
     monkeypatch.setattr("shops.provisioning.fake.FakeProvisioner.read_orders", lambda self, shop, since, limit: [])
 
 
@@ -42,7 +42,7 @@ def shop(new_shop):
 
 
 class Counts:
-    """Stands in for count_products: answers with what a test sets and records the calls."""
+    """Fake count_products: returns (or raises) `answer` and counts calls."""
 
     def __init__(self):
         self.answer = ProductCount(products=0, samples=6)
@@ -102,7 +102,6 @@ def test_a_new_shop_starts_with_every_step_open_and_its_products_counted(auth_cl
     assert (stored.products, stored.sample_products) == (0, 6)
     assert stored.counted_at is not None
 
-    # The count is there on the next look.
     data = get_checklist(auth_client, shop, django_capture_on_commit_callbacks)
     assert (data["products"], data["sample_products"]) == (0, 6)
     assert data["counted_at"] is not None
@@ -113,7 +112,7 @@ def test_a_count_on_its_way_is_reported_and_not_queued_twice(auth_client, shop, 
     second = auth_client.get(f"/api/shops/{shop.pk}/checklist/").data
 
     assert first["refreshing"] and second["refreshing"]
-    # Queued on commit, which the test never reaches: nothing was counted yet.
+    # Queued on commit, which this test never reaches.
     assert counts.calls == 0
     assert ShopChecklist.objects.get(shop=shop).requested_at is not None
 
@@ -146,7 +145,6 @@ def test_own_products_and_removed_samples_stop_the_counting(auth_client, shop, c
     assert steps(data)["products"] and steps(data)["sample_products"]
     assert data["refreshing"] is False
 
-    # Both product steps are done, so the shop isn't counted again, however long it's been.
     counted_long_ago(shop, timedelta(hours=1))
     assert get_checklist(auth_client, shop, django_capture_on_commit_callbacks)["refreshing"] is False
     assert counts.calls == 1

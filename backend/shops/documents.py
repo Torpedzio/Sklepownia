@@ -1,10 +1,8 @@
 """
-The shop's terms of sale and privacy policy, written from our templates with the shop's settings and published as
-pages in the shop (each platform's publish_documents).
+Terms of sale and privacy policy rendered from templates/shops/documents/ and published in the shop.
 
-The templates (templates/shops/documents/) follow Polish law: consumer rights, electronic services, GDPR. They are
-a starting point checked by a lawyer, not legal advice for a particular shop. After changing them, raise VERSION and
-run `publish_shop_documents`, so every shop that has them gets the new text.
+The templates follow Polish law (consumer rights, electronic services, GDPR): a lawyer-checked starting point, not
+legal advice. After changing them, raise VERSION and run `publish_shop_documents`.
 """
 
 from dataclasses import dataclass, field
@@ -18,7 +16,7 @@ from .shop_settings import OPERATORS
 
 VERSION = "2026-11-18"
 
-# Sections whose values the documents describe: a change in any of them publishes the documents again.
+# A change in any of these republishes the documents.
 INPUT_SECTIONS = ("general", "shopping", "payments", "shipping", "region", "documents")
 
 MONTHS = (
@@ -29,7 +27,7 @@ MONTHS = (
 CURRENCY_NAMES = {"PLN": "złotych polskich", "EUR": "euro", "USD": "dolarach amerykańskich",
                   "GBP": "funtach brytyjskich"}
 
-# Who runs online payments: named in the terms and among the recipients in the privacy policy.
+# Named in the terms and among the data recipients in the privacy policy.
 OPERATOR_COMPANIES = {
     "przelewy24": "PayPro S.A. z siedzibą w Poznaniu",
     "payu": "PayU S.A. z siedzibą w Poznaniu",
@@ -40,19 +38,18 @@ OPERATOR_COMPANIES = {
 class Document:
     key: str
     title: str
-    # The page's address in the shop, where the platform lets us choose it.
+    # Used where the platform lets us choose the page address.
     slug: str
     html: str
     blocks: list = field(default_factory=list)
 
 
 def should_publish(changes, values):
-    """Whether a settings change touches documents the app keeps in the shop."""
     return values["documents"]["managed"] and any(section in changes for section in INPUT_SECTIONS)
 
 
 def render(values, url, today=None):
-    """[terms, privacy policy] for the shop's settings `values`; `url` is the shop's address."""
+    """Returns [terms, privacy policy]; `url` is the shop's address."""
     context = {**_context(values, today or date.today()), "url": url}
     documents = []
     for key, title, slug in (
@@ -77,7 +74,7 @@ def _context(values, today):
     ]
     free_from = shipping["free_shipping_min_amount"]
     reviews = values["shopping"]["reviews"]
-    # Paragraph numbers, as the optional ones come and go.
+    # Paragraph numbers shift as optional ones come and go.
     paragraphs = ["general", "definitions", "services", "orders", "payments", "delivery", "withdrawal", "complaints"]
     paragraphs += ["reviews"] if reviews else []
     paragraphs += ["disputes", "data", "final"]
@@ -111,7 +108,7 @@ def _working_days(days):
 
 
 def _hosting():
-    """The platform, which hosts the shop for its owner: a processor of the customers' data."""
+    """We host the shop, so we're a processor of the customers' data (GDPR)."""
     seller = settings.INVOICE_SELLER
     if not seller["name"]:
         return None
@@ -120,12 +117,11 @@ def _hosting():
 
 
 def _compact(html):
-    """The rendered template without the blank lines its tags leave."""
     return "\n".join(line.strip() for line in html.splitlines() if line.strip())
 
 
 class _Blocks(HTMLParser):
-    """Headings, paragraphs and lists (one level deep) of the documents' HTML, as plain text for the app."""
+    """Documents' HTML as plain-text blocks for the app: headings, paragraphs, lists (one level of nesting)."""
 
     def __init__(self):
         super().__init__()
@@ -139,7 +135,6 @@ class _Blocks(HTMLParser):
         elif tag in ("ol", "ul"):
             items = []
             if self.lists:
-                # A list inside an item: kept under that item.
                 self._flush_item()
                 self.lists[-1][-1]["items"] = items
             else:

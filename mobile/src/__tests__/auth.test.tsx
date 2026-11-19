@@ -99,7 +99,7 @@ test('signing out forgets the session on the server and here', async () => {
   await act(() => auth().signOut());
 
   expect(api.sent('POST /auth/logout/')).toEqual([{ refresh: 'r' }]);
-  // The phone stops getting the account's notifications while the session still lets it say so.
+  // Forgets the phone while the session can still say so.
   expect(forgetDevice).toHaveBeenCalled();
   expect(screen.getByText('wylogowany')).toBeTruthy();
 });
@@ -122,7 +122,7 @@ test('a new password keeps this device signed in with fresh tokens', async () =>
   ]);
   expect(setTokens).toHaveBeenCalledWith({ access: 'a2', refresh: 'r2' });
   expect(screen.getByText('anna@example.com')).toBeTruthy();
-  // The new password signed out every phone; this one asks for its notifications back.
+  // The new password signed out every phone; this one registers again.
   expect(registerDevice).toHaveBeenCalledWith({ force: true });
 
   await act(() => auth().signOutEverywhere());

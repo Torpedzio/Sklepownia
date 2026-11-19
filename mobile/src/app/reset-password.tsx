@@ -11,7 +11,6 @@ import { ApiError } from '@/lib/api';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
-/** Forgotten password: the address first, then the code from the e-mail and a new password. */
 export default function ResetPasswordScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
   const { requestPasswordReset, resetPassword } = useAuth();

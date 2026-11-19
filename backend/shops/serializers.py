@@ -134,7 +134,7 @@ class ShopDetailSerializer(ShopSerializer):
 
 
 class ShopAdminAccessSerializer(serializers.Serializer):
-    """Where the admin panel is. The login and password are only ever sent by e-mail, to `sent_to`."""
+    """The login and password are only ever sent by e-mail, to `sent_to`."""
 
     admin_url = serializers.URLField()
     sent_to = serializers.EmailField(help_text="Adres, na który wysyłamy dane logowania (e-mail konta).")
@@ -197,8 +197,6 @@ class ShopOperationSerializer(serializers.ModelSerializer):
 
 
 class ShopSettingsValuesSerializer(serializers.Serializer):
-    """The full settings, every section and field present."""
-
     def get_fields(self):
         return {name: section() for name, section in SECTIONS.items()}
 

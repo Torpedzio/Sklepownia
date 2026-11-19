@@ -1,16 +1,12 @@
 import { Brand } from '@/constants/brand';
 
-/**
- * Pages anyone can open, signed in or not. The server draws them without waiting for the account check, so
- * search engines and link previews see their content, and describes them in <head> (+html.tsx).
- */
+/** Pages anyone can open; the server renders them without the account check, for search engines and link previews. */
 export type PublicPage = {
   path: string;
-  /** Shown in the browser tab and search results, followed by the site's name (the home page has a full title). */
+  /** Followed by the site's name (the home page has a full title). */
   title: string;
-  /** The snippet under the title in search results and link previews. */
   description: string;
-  /** Listed in sitemap.xml and open to search engines; forms for signing in are not. */
+  /** In sitemap.xml and open to search engines; sign-in forms are not. */
   indexed: boolean;
 };
 
@@ -67,13 +63,13 @@ export const PublicPages: PublicPage[] = [
   },
 ];
 
-/** The public page at `pathname` ("/pricing", "/pricing/"), if it is one. */
+/** Matches "/pricing" and "/pricing/". */
 export function publicPage(pathname: string) {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   return PublicPages.find((page) => page.path === path);
 }
 
-/** The browser tab's title on `pathname`: the page's own on public pages, the site's name elsewhere. */
+/** The page's own on public pages, the site's name elsewhere. */
 export function documentTitle(pathname: string) {
   const page = publicPage(pathname);
   if (!page) return Brand.name;

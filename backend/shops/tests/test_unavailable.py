@@ -17,7 +17,7 @@ def shop(auth_client, django_capture_on_commit_callbacks):
 
 
 def visit(client, host, method="get"):
-    """What the shops' proxy sends for a visitor of `host` when no shop container answers."""
+    """As Traefik forwards a request for `host` with no answering container."""
     return getattr(client, method)(PAGE, HTTP_X_FORWARDED_HOST=host)
 
 

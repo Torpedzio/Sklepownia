@@ -1,9 +1,6 @@
 """
-Magento (the Mage-OS distribution): every shop is its own container of the image from infra/shops/magento.
-The code, compiled classes and static files are in the image; the shop's volume holds only its own data
-(settings, product images, cache). Products are searched with the shared OpenSearch, each shop with its
-own indexes. Everything inside the shop goes through `bin/magento`, mostly the `sklepownia:run` command
-of our module (infra/shops/magento/Sklepownia).
+Magento (Mage-OS), image from infra/shops/magento: code and static files are in the image, the volume holds only the
+shop's data. Own indexes in the shared OpenSearch. Most work goes through our module's `bin/magento sklepownia:run`.
 """
 
 import base64
@@ -18,7 +15,7 @@ from django.conf import settings
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..orders import Order, Status as OrderStatus, customer_label, from_timestamp
-from ..provisioning.base import ProductCount, ProvisioningError
+from ..provisioning.base import ProductCount
 from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_memory, container_name, db_name, mail_relay,
     memory_bytes,
@@ -34,7 +31,7 @@ ADMIN_USERNAME = "admin"
 # Output after this marker is the result, so notices Magento might print before it don't break parsing.
 OUTPUT_MARKER = "@@sklepownia@@"
 
-# Titles customers see, in the shop's language. Magento keeps them as settings, untranslated.
+# Titles customers see, per language: Magento keeps them as untranslated settings.
 TITLES = {
     "pl_PL": {
         "flatrate": "Kurier", "freeshipping": "Darmowa dostawa", "sklepowniapickup": "Odbiór osobisty",
@@ -53,15 +50,14 @@ TITLES = {
     },
 }
 
-# The address the shop's e-mail goes out from (see infra/shops/magento/Sklepownia/Provisioning/Plugin/MailSender.php).
+# The shop's e-mail sender address (read by Sklepownia/Provisioning/Plugin/MailSender.php).
 MAIL_SENDER_PATH = "sklepownia/mail/sender"
 
-# Where the bank details the owner typed are kept, so the app can show them again (Magento itself only
-# has the instructions text made from them).
+# Bank details as typed, so the app can show them again (Magento keeps only the instructions text made from them).
 BANK_PATH = "sklepownia/bank/"
 CARRIERS = ("flatrate", "freeshipping", "sklepowniapickup")
 
-# The home page: the newest products, under the shop's description.
+# Home page: the newest products, under the shop's description.
 PRODUCTS_WIDGET = (
     '{{widget type="Magento\\CatalogWidget\\Block\\Product\\ProductsList" show_pager="0" products_count="8"'
     ' template="Magento_CatalogWidget::product/widget/content/grid.phtml"'
@@ -70,21 +66,21 @@ PRODUCTS_WIDGET = (
 )
 
 
-# Orders straight from the database: timestamps are compared as Unix time, so the session's time zone doesn't matter.
+# Timestamps compared as Unix time, so the DB session's time zone doesn't matter.
 READ_ORDERS_SQL = (
     "SELECT JSON_OBJECT('id', entity_id, 'number', increment_id, 'state', state, 'total', grand_total,"
     " 'currency', order_currency_code, 'items', total_qty_ordered, 'first_name', customer_firstname,"
     " 'last_name', customer_lastname, 'created', UNIX_TIMESTAMP(created_at), 'modified', UNIX_TIMESTAMP(updated_at))"
     " FROM sales_order WHERE updated_at >= FROM_UNIXTIME({since}) ORDER BY updated_at, entity_id LIMIT {limit}"
 )
-# Straight from the database too, as Magento's console takes seconds to start. The samples are the products whose
-# ids the module kept at setup (sklepownia/samples/ids, see RunCommand.php) and that still exist.
+# Straight from the DB, as Magento's console takes seconds to start. Samples: products whose ids the module kept at
+# setup (sklepownia/samples/ids, see RunCommand.php) that still exist.
 COUNT_PRODUCTS_SQL = (
     "SELECT COUNT(*), COALESCE(SUM(JSON_CONTAINS(c.value, CAST(e.entity_id AS CHAR))), 0)"
     " FROM catalog_product_entity e LEFT JOIN core_config_data c"
     " ON c.path = 'sklepownia/samples/ids' AND c.scope = 'default' AND c.scope_id = 0"
 )
-# Magento's order states; "pending_payment" waits for an online payment.
+# "pending_payment" waits for an online payment.
 ORDER_STATES = {
     "new": OrderStatus.NEW,
     "holded": OrderStatus.NEW,
@@ -100,7 +96,7 @@ ORDER_STATES = {
 class MagentoProvisioner(ContainerProvisioner):
     START_FAILED = "Magento nie wystartował."
     VOLUME_PATH = DATA_PATH
-    # Caches and sessions in var/; logs and the shop's settings (env.php) and images (media/) are kept.
+    # Caches and sessions; logs, env.php and media/ are kept.
     BACKUP_EXCLUDES = ("var/cache", "var/page_cache", "var/session", "var/view_preprocessed")
 
     def image(self):
@@ -121,8 +117,6 @@ class MagentoProvisioner(ContainerProvisioner):
         plan, minimum = container_memory(shop), settings.SHOPS_MAGENTO_MEMORY
         return plan if memory_bytes(plan) >= memory_bytes(minimum) else minimum
 
-    # --- steps ---
-
     def step_install_magento(self, shop):
         config = shop.config
         credentials = self._credentials(shop)
@@ -130,7 +124,7 @@ class MagentoProvisioner(ContainerProvisioner):
             credentials.admin_login = ADMIN_USERNAME
             credentials.admin_password = _password()
             credentials.save(update_fields=["admin_login", "admin_password", "updated_at"])
-        # The panel's address is random, which keeps it hidden from bots.
+        # A random panel address keeps it hidden from bots.
         if not shop.admin_path:
             shop.admin_path = f"admin_{secrets.token_hex(4)}"
             shop.save(update_fields=["admin_path", "updated_at"])
@@ -167,10 +161,9 @@ class MagentoProvisioner(ContainerProvisioner):
             ])
             # The code is compiled in the image already; only the mode is switched.
             self._magento(shop, ["deploy:mode:set", "production", "--skip-compilation"])
-        # The web server still remembers the shop from before the installation (no env.php) and would send
-        # visitors to /setup/; a graceful restart lets it read the shop afresh.
+        # The web server still sees the shop as uninstalled (no env.php) and would send visitors to /setup/.
         self._exec(container_name(shop), ["apachectl", "-k", "graceful"])
-        # Also covers an installation from an earlier attempt: the login is always what we stored.
+        # Also for an install from an earlier attempt: the login is always what we stored.
         self._set_admin(shop, credentials.admin_password)
 
     def step_configure_shop(self, shop):
@@ -190,7 +183,6 @@ class MagentoProvisioner(ContainerProvisioner):
             "carriers/flatrate/active": "0",
             "carriers/freeshipping/active": "0",
             "carriers/sklepowniapickup/active": "0",
-            # Guests can buy without an account, stock is tracked.
             "checkout/options/guest_checkout": "1",
             "cataloginventory/item_options/manage_stock": "1",
             **_email_values(shop.name, config.contact_email),
@@ -198,7 +190,7 @@ class MagentoProvisioner(ContainerProvisioner):
         }
         self._run(shop, "config", values)
         self._run(shop, "home", {"title": shop.name, "content": _home_content(config.description)})
-        # Order confirmations and the copies of them for the owner.
+        # For order confirmations and the owner's copies.
         relay = mail_relay(shop)
         if relay is not None:
             self._configure_mail(shop, relay)
@@ -341,12 +333,12 @@ class MagentoProvisioner(ContainerProvisioner):
         self._set_admin(shop, password)
 
     def after_restore(self, shop):
-        # The search engine still has the products as they were before; the restored database rebuilds them.
+        # The search indexes still have the products from before the restore.
         self._magento(shop, ["indexer:reindex"])
         self._magento(shop, ["cache:flush"])
 
     def publish_documents(self, shop, documents):
-        # The action is newer than some shops' containers: one from an older image is replaced first.
+        # Containers from older images lack this action, so they are replaced first.
         self.step_start_container(shop)
         pages = self._run(shop, "documents", {
             "documents": [
@@ -415,10 +407,8 @@ class MagentoProvisioner(ContainerProvisioner):
             ))
         return orders
 
-    # --- helpers ---
-
     def _installed(self, shop):
-        """The installation finished: it writes the installation date into env.php last."""
+        """The installation writes its date into env.php last."""
         try:
             self._exec(container_name(shop), ["grep", "-q", "'date'", f"{DATA_PATH}/env.php"])
         except CommandError:
@@ -469,7 +459,7 @@ def _password():
 
 
 def _name_values(name):
-    """Where the shop's name shows: page titles, the logo's text, the footer. Also drops Luma's "Default welcome msg!"."""
+    """Page titles, logo text, footer. Also drops Luma's "Default welcome msg!"."""
     return {
         "general/store_information/name": name,
         "design/head/default_title": name,
@@ -481,10 +471,7 @@ def _name_values(name):
 
 
 def _email_values(name, email):
-    """
-    Every sender address Magento has (general, sales, support and the two custom ones), where the contact form
-    goes, and who gets a copy of every order confirmation: the owner, like WooCommerce's new-order alert.
-    """
+    """All sender addresses, the contact form's recipient, and a BCC of every order confirmation to the owner."""
     values = {
         "contact/email/recipient_email": email,
         "sales_email/order/copy_to": email,

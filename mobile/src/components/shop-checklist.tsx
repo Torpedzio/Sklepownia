@@ -25,14 +25,11 @@ type Step = {
 
 type Props = {
   shop: ShopDetail;
-  /** Opens a section of the shop's settings (as in the address: ?section=…). */
+  /** `section` as in the address: ?section=…. */
   onOpenSettings: (section: string) => void;
 };
 
-/**
- * The start checklist on a new shop's screen: what's left before the shop sells. The platform ticks the steps off
- * from what it sees in the shop, so the list has no checkboxes of its own. One step is open at a time.
- */
+/** What's left before a new shop sells; steps tick off from the shop itself (no checkboxes), one open at a time. */
 export function ShopChecklist({ shop, onOpenSettings }: Props) {
   const theme = useTheme();
   const notify = useNotify();
@@ -249,7 +246,6 @@ function StepRow({ step, done, expanded, first, busy, onOpen }: StepRowProps) {
   );
 }
 
-/** A filled circle with a tick once the step is done; an empty ring before. */
 function Check({ done = false }: { done?: boolean }) {
   const theme = useTheme();
   if (!done) return <View style={[styles.check, { borderColor: theme.textSecondary }]} />;

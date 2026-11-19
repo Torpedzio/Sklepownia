@@ -2,7 +2,7 @@ import type { ThemeColor } from '@/constants/theme';
 import { plural } from '@/lib/plural';
 import type { OrderStatus, SalesPeriod } from '@/lib/types';
 
-// While the platform reads the shop, the app asks again this often.
+// Poll interval while the platform reads the shop.
 export const SALES_POLL_MS = 2500;
 
 /** "1 zamówienie", "3 zamówienia", "5 zamówień". */
@@ -12,7 +12,7 @@ export function ordersLabel(count: number) {
 
 export type RevenueChange = { direction: 'up' | 'down' | 'same'; text: string };
 
-/** How the last 30 days compare with the 30 before, or null when neither had sales. */
+/** Last 30 days vs the 30 before; null when neither had sales. */
 export function revenueChange(current: SalesPeriod, previous: SalesPeriod): RevenueChange | null {
   const now = Number(current.revenue);
   const before = Number(previous.revenue);
@@ -24,10 +24,7 @@ export function revenueChange(current: SalesPeriod, previous: SalesPeriod): Reve
   return { direction: percent > 0 ? 'up' : 'down', text: `${signed} względem poprzednich 30 dni` };
 }
 
-/**
- * The top of the chart's scale: the biggest day rounded up to 1, 2, 2.5 or 5 times a power of ten,
- * so its label is a round number.
- */
+/** The biggest day rounded up to 1, 2, 2.5 or 5 × a power of ten, so the scale's top label is round. */
 export function scaleTop(max: number) {
   if (max <= 0) return 0;
   const magnitude = 10 ** Math.floor(Math.log10(max));
@@ -35,7 +32,7 @@ export function scaleTop(max: number) {
   return step * magnitude;
 }
 
-/** Orders waiting for the owner come first in the eye: the rest recede. */
+/** Orders waiting for the owner stand out; the rest recede. */
 export const ORDER_STATUS_COLORS = {
   new: ['warning', 'accentMuted'],
   processing: ['primary', 'primaryMuted'],

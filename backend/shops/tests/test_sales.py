@@ -26,7 +26,7 @@ def shop(auth_client, django_capture_on_commit_callbacks):
 
 
 def placed(days_ago, hour=0, minute=5):
-    """A moment `days_ago` days before today, local time."""
+    """Local time."""
     return timezone.make_aware(datetime.combine(timezone.localdate() - timedelta(days=days_ago), time(hour, minute)))
 
 
@@ -37,7 +37,7 @@ def order(number, days_ago, status="completed", total="100.00", currency="PLN", 
 
 
 class Orders:
-    """Stands in for read_orders: hands over the orders a test sets and records what was asked."""
+    """Fake read_orders: returns the orders a test sets and records the calls."""
 
     def __init__(self, orders=()):
         self.orders = list(orders)
@@ -58,9 +58,6 @@ def orders(monkeypatch):
 def get_sales(client, shop, captured):
     with captured(execute=True):
         return client.get(f"/api/shops/{shop.pk}/sales/")
-
-
-# --- reading the shop ---
 
 
 def test_opening_the_overview_reads_the_shop_and_counts_sales(auth_client, shop, orders,
@@ -168,9 +165,6 @@ def test_a_failed_read_keeps_the_last_copy_and_says_so(auth_client, shop, orders
     assert "Reading the orders of shop" in caplog.text
 
 
-# --- when the shop is read ---
-
-
 def test_a_fresh_copy_is_not_read_again(auth_client, shop, orders, django_capture_on_commit_callbacks):
     sales.sync(shop.pk)
     calls = len(orders.calls)
@@ -229,9 +223,6 @@ def test_the_scheduled_round_reads_shops_with_an_old_copy(shop, orders, django_c
     sales.sync_all()
     assert len(orders.calls) == 2
     assert not SalesSync.objects.filter(shop=stopped).exists()
-
-
-# --- who sees it, and what happens to it ---
 
 
 def test_only_the_owner_sees_the_sales(api_client, shop):

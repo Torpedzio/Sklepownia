@@ -37,11 +37,10 @@ export default function ShopScreen() {
     isStale,
     refresh,
   } = useApiQuery<ShopDetail>(`/shops/${id}/`, {
-    // While the shop doesn't answer, the screen shows by itself when it works again.
+    // While the shop is down, poll so the screen updates once it's back.
     refetchInterval: (data) =>
       data && IN_PROGRESS.includes(data.status) ? 1500 : data?.down_since ? DOWN_REFRESH : false,
   });
-  // The overview of a running shop shows its settings as last read from the shop.
   const { data: settings } = useApiQuery<ShopSettings>(`/shops/${id}/settings/`, {
     enabled: shop?.status === 'active',
   });
@@ -52,8 +51,7 @@ export default function ShopScreen() {
   const notify = useNotify();
   const [busy, setBusy] = useState(false);
 
-  // Announce the end of setup only when it happens on screen, not for shops that were done already (a copy kept
-  // from an earlier visit may still show the setup).
+  // Announce the end of setup only when it happens on screen (a cached copy may still show the setup).
   const status = shop?.status;
   const name = shop?.name;
   const previousStatus = useRef<ShopStatus>(undefined);
@@ -247,7 +245,7 @@ export default function ShopScreen() {
         </View>
       ) : null}
 
-      {/* The receipt sits beside the overview on wide screens; alone it is centered under the cards. */}
+      {/* Wide screens: the receipt beside the overview; alone, centered under the cards. */}
       <View style={[styles.columns, wide && settings && active && styles.columnsWide]}>
         {active && settings ? (
           <View style={[styles.overview, wide && styles.flex]}>

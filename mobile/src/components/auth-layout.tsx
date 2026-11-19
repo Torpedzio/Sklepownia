@@ -15,7 +15,6 @@ import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
 type AuthLayoutProps = PropsWithChildren<{ title: string; subtitle?: string }>;
 
-/** Sign-in, sign-up and verification: brand panel on the left on wide screens, form on the right. */
 export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
   const theme = useTheme();
   const { width } = useWindowDimensions();

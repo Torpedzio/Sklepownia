@@ -18,35 +18,27 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
-// Scrolling this far inside the section moves on to the next item.
+// Scroll distance per item.
 const STEP = 500;
-// The switch happens this early into a step, so about one turn of a mouse wheel is enough.
+// Switch a quarter into a step: about one turn of a mouse wheel.
 const SWITCH_AT = 0.25;
-// How far an item travels as it jumps in, and how long it takes.
 const ENTER_OFFSET = 80;
 const ENTER_MS = 420;
 const HEADER_GAP = Spacing.four;
-// Used until the header has been measured.
 const HEADER_ESTIMATE = 120;
 
 type PinnedSequenceProps = {
   header: ReactNode;
   count: number;
   page: PageScroll;
-  /** Height of the stage, given the room left on the screen below the pinned header. */
+  /** `room`: screen height left below the pinned header. */
   stageHeight: (room: number) => number;
-  /** The stage, given the index of the item to show and the stage height. */
   children: (active: number, height: number) => ReactNode;
 };
 
 /**
- * A section that pins its header and stage to the top of the screen while the page scrolls through it,
- * swapping the stage to the next item every short scroll; after the last item the section scrolls away.
- *
- * The web pins with CSS `sticky`, which the browser keeps exactly in place. Native has no sticky views,
- * so there the section is moved by exactly the scroll offset, from a position measured before it pinned.
- * On native one swipe also moves by one item at most: the page stops on the next item even when the
- * swipe's momentum would carry further, and settles on the shown item when it comes to rest.
+ * Pins its header and stage while the page scrolls through, showing the next item every short scroll. Web uses
+ * CSS `sticky`; native (no sticky views) offsets the section by the scroll and limits a swipe to one item.
  */
 export function PinnedSequence({ header, count, page, stageHeight, children }: PinnedSequenceProps) {
   const { height: windowHeight } = useWindowDimensions();
@@ -54,7 +46,6 @@ export function PinnedSequence({ header, count, page, stageHeight, children }: P
   const [headerHeight, setHeaderHeight] = useState(HEADER_ESTIMATE);
   const [active, setActive] = useState(0);
 
-  // Where the section pins: just below the top edge of the screen.
   const pinTop = insets.top + Spacing.four;
   const height = stageHeight(windowHeight - pinTop - headerHeight - HEADER_GAP - Spacing.four);
   const distance = STEP * (count - 1);
@@ -62,15 +53,15 @@ export function PinnedSequence({ header, count, page, stageHeight, children }: P
   const { scrollY, scrollRef, dragging, rests, jumping } = page;
 
   const section = useAnimatedRef<Animated.View>();
-  // Top of the section in screen coordinates with the page scrolled to 0; -1 until measured.
+  // Section top in screen coordinates at scroll 0; -1 until measured.
   const anchor = useSharedValue(-1);
-  // How far the page has scrolled past the pinning point; below 0 before the section, above `distance` after it.
+  // Scroll past the pinning point: below 0 before the section, above `distance` after it.
   const travel = useSharedValue(0);
   const shown = useSharedValue(0);
-  // Positions one swipe may reach: -1 is "before the section", `count` is "after it".
+  // Positions one swipe may reach: -1 is before the section, `count` after it.
   const lowest = useSharedValue(-1);
   const highest = useSharedValue(count);
-  // Scroll position the page is being moved to, so the same stop isn't requested every frame.
+  // Target scroll offset, so the same stop isn't requested every frame.
   const stoppingAt = useSharedValue(-1);
 
   useAnimatedReaction(
@@ -78,8 +69,7 @@ export function PinnedSequence({ header, count, page, stageHeight, children }: P
     (scroll) => {
       let top = anchor.get();
       const pinned = top >= 0 && pinTop - (top - scroll) > 0 && pinTop - (top - scroll) < distance;
-      // Measured only while not pinned: a measurement can lag a frame behind the scroll, which would make
-      // the pinned stage shake. While pinned the stage moves by the scroll offset alone.
+      // Measured only while not pinned: a measurement can lag a frame behind the scroll and shake the stage.
       if (!pinned) {
         const box = measure(section);
         if (box) {
@@ -109,7 +99,6 @@ export function PinnedSequence({ header, count, page, stageHeight, children }: P
     },
   );
 
-  // A new swipe may go one item either way from where it started.
   useAnimatedReaction(
     () => dragging.get(),
     (isDragging, wasDragging) => {
@@ -122,7 +111,7 @@ export function PinnedSequence({ header, count, page, stageHeight, children }: P
     },
   );
 
-  // Coming to rest between two items, the page settles on the one on the stage.
+  // Coming to rest between two items, settle on the one on the stage.
   useAnimatedReaction(
     () => rests.get(),
     (restCount, previous) => {
@@ -152,10 +141,7 @@ export function PinnedSequence({ header, count, page, stageHeight, children }: P
 
 type SwapLayerProps = { index: number; active: number; children: ReactNode };
 
-/**
- * One item on a PinnedSequence stage. All items stay mounted on top of each other; the active one
- * fades in from the direction of the scroll and the others fade out the opposite way.
- */
+/** All items stay mounted, stacked; the active one fades in from the scroll direction, the rest fade out. */
 export function SwapLayer({ index, active, children }: SwapLayerProps) {
   const theme = useTheme();
   const offset = index === active ? 0 : index > active ? ENTER_OFFSET : -ENTER_OFFSET;
@@ -176,7 +162,6 @@ export function SwapLayer({ index, active, children }: SwapLayerProps) {
   );
 }
 
-/** Title and lead of a home page section. */
 export function SectionHeader({ title, text }: { title: string; text?: string }) {
   return (
     <View style={styles.header}>

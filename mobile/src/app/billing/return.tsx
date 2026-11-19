@@ -20,7 +20,6 @@ const POLL_MS = 2000;
 const toShops = () => router.dismissTo('/shops');
 const screenOptions = { title: 'Płatność', ...exitArrowOptions('/shops', 'Przejdź do sklepów') };
 
-/** Where the payment gateway sends the payer back. Waits for the payment's outcome. */
 export default function PaymentReturnScreen() {
   const { payment: paymentId } = useLocalSearchParams<{ payment?: string }>();
   if (!paymentId || !/^\d+$/.test(paymentId)) return <Redirect href="/billing" />;

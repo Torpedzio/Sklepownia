@@ -1,7 +1,4 @@
-/**
- * Design tokens. The look borrows from a street-level shop: a striped awning (accent),
- * a green "open" sign (primary) and receipt paper for anything that records progress.
- */
+/** Design tokens: a street shop's striped awning (accent), green "open" sign (primary) and receipt paper. */
 
 import { Platform } from 'react-native';
 
@@ -24,7 +21,6 @@ export const Colors = {
     dangerMuted: '#F8E4E1',
     success: '#0F7B5F',
     warning: '#A86B00',
-    // Bars of the sales chart.
     chart: '#0F7B5F',
     // Receipts stay paper-white in dark mode too.
     receipt: '#FFFFFF',
@@ -62,32 +58,23 @@ export type ThemeColors = Record<ThemeColor, string>;
 
 const variable = (name: ThemeColor) => `--color-${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
 
-/**
- * The web's colors are CSS variables that the page's stylesheet sets for the visitor's light or dark mode
- * (`colorVariablesCss`). The server doesn't know the mode, so the page it sends must not depend on it: with the
- * variables it doesn't, and the browser paints the right colors before any JS runs.
- */
+/** CSS variables set per light/dark mode by `colorVariablesCss`: the server doesn't know the mode, so HTML mustn't depend on it. */
 export const WebColors = Object.fromEntries(
   (Object.keys(Colors.light) as ThemeColor[]).map((name) => [name, `var(${variable(name)})`]),
 ) as ThemeColors;
 
-/** `:root` rules defining WebColors for both modes. */
 export function colorVariablesCss() {
   const rules = (scheme: 'light' | 'dark') =>
     (Object.keys(Colors[scheme]) as ThemeColor[]).map((name) => `${variable(name)}:${Colors[scheme][name]}`).join(';');
   return `:root{color-scheme:light dark;${rules('light')}}@media (prefers-color-scheme:dark){:root{${rules('dark')}}}`;
 }
 
-/**
- * The color fully transparent, to fade into it. A hex color keeps its hue (a native gradient to plain
- * `transparent` passes through grey); browsers blend gradients without that, so a CSS variable fades to
- * `transparent`.
- */
+/** `color` fully transparent, to fade into: hex keeps the hue (a native gradient to `transparent` goes grey). */
 export function clearOf(color: string) {
   return color.startsWith('var(') ? 'transparent' : `${color}00`;
 }
 
-// On the web the page shows before the fonts arrive (font-display: swap), in the system font meanwhile.
+// The web shows the system font until the fonts arrive (font-display: swap).
 const withFallback = (font: string) =>
   Platform.OS === 'web' ? `${font}, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` : font;
 
@@ -111,7 +98,6 @@ export const Spacing = {
   six: 64,
 } as const;
 
-/** Small things are rounder than big ones: chips are pills, sections are nearly square. */
 export const Radius = {
   small: 8,
   medium: 14,
@@ -121,5 +107,4 @@ export const Radius = {
 
 export const MaxContentWidth = 1080;
 export const ReadableWidth = 640;
-/** Screen width from which layouts switch to two columns. */
 export const WideBreakpoint = 900;

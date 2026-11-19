@@ -34,7 +34,7 @@ def shop(auth_client, verified_user, django_capture_on_commit_callbacks, mailout
     payload = {"name": "Mój Sklep", "slug": "moj-sklep", "industry": "fashion", "template": "storefront"}
     with django_capture_on_commit_callbacks(execute=True):
         shop_id = auth_client.post("/api/shops/", payload, format="json").data["id"]
-    # Not the e-mail with the shop's admin login.
+    # Drop the admin-login e-mail from setup.
     mailoutbox.clear()
     PushDevice.objects.create(user=verified_user, token=TOKEN, platform="android", name="Pixel 8")
     return Shop.objects.get(pk=shop_id)
@@ -42,7 +42,7 @@ def shop(auth_client, verified_user, django_capture_on_commit_callbacks, mailout
 
 @pytest.fixture
 def round_(django_capture_on_commit_callbacks, mailoutbox, push_outbox):
-    """Runs a round of checks, and what it queued (repairs, e-mails, notifications) as the worker would."""
+    """Runs a round plus what it queued (repairs, e-mails, pushes), as the worker would."""
 
     def run(**kwargs):
         with django_capture_on_commit_callbacks(execute=True):
@@ -61,9 +61,6 @@ def owner(mailoutbox, shop):
 
 def health(shop):
     return ShopHealth.objects.get(shop=shop)
-
-
-# --- shops ---
 
 
 def test_a_working_shop_is_noted(shop, round_, mailoutbox, push_outbox):
@@ -207,7 +204,6 @@ def test_the_platforms_fallback_page_means_the_proxy_skips_the_shop(shop, round_
     round_()
     assert health(shop).problem == "Proxy nie kieruje ruchu do kontenera (healthcheck: unhealthy)."
 
-    # After the restart the monitor says what it sees then.
     round_()
     assert FakeProvisioner.repairs == [(shop.pk, "restart")]
     assert health(shop).problem == "Proxy nie kieruje ruchu do kontenera (healthcheck: unhealthy)."
@@ -248,9 +244,6 @@ def test_only_the_shops_asked_for(shop, verified_user, round_):
     round_(slugs=["drugi"])
 
     assert list(ShopHealth.objects.values_list("shop", flat=True)) == [other.pk]
-
-
-# --- the shop node ---
 
 
 def test_without_the_proxy_shops_are_not_judged_and_the_staff_hears_at_the_second_check(
@@ -323,9 +316,6 @@ def test_a_nearly_full_server_is_reported(verified_user, round_, mailoutbox, set
     assert "Serwer node-1 ma 9 z 10 sklepów" in mailoutbox[0].subject
 
 
-# --- nightly backups ---
-
-
 def test_backups_that_didnt_run_last_night_are_reported_at_once(round_, mailoutbox, django_capture_on_commit_callbacks):
     Heartbeat.objects.update_or_create(
         name=alerts.NIGHTLY_BACKUPS, defaults={"beat_at": timezone.now() - timedelta(hours=27)},
@@ -366,9 +356,6 @@ def test_failed_nightly_backups_are_reported(shop, verified_user, mailoutbox, mo
     with django_capture_on_commit_callbacks(execute=True):
         back_up_all_shops()
     assert Incident.objects.get().resolved_at is not None
-
-
-# --- the monitor itself ---
 
 
 def test_each_round_pings_the_outside_watcher(round_, settings, monkeypatch):

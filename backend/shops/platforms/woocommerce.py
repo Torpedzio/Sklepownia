@@ -1,6 +1,5 @@
 import base64
 import json
-import logging
 import re
 import secrets
 from dataclasses import dataclass
@@ -18,11 +17,10 @@ from . import Platform
 from ..provisioning import packages
 from ..provisioning.base import ProductCount
 from ..provisioning.container import (
-    FILES_PATH, CommandError, ContainerProvisioner, container_env, container_name, db_name, mail_relay,
+    FILES_PATH, CommandError, ContainerProvisioner, container_name, db_name, mail_relay,
 )
 from ..provisioning.packages import Package
 
-logger = logging.getLogger(__name__)
 
 WP_PATH = FILES_PATH
 ADMIN_USERNAME = "admin"
@@ -39,18 +37,17 @@ MAIL_PLUGIN = Path(__file__).parent / "files" / "woocommerce" / "sklepownia-mail
 MAIL_PLUGIN_PATH = f"{WP_PATH}/wp-content/mu-plugins/sklepownia-mail.php"
 MAIL_OPTION = "sklepownia_mail"
 
-# Links to the published terms and privacy policy under every theme's footer; the pages are in DOCUMENTS_OPTION.
+# Links the published terms and privacy policy under every theme's footer; the pages are in DOCUMENTS_OPTION.
 DOCUMENTS_PLUGIN = Path(__file__).parent / "files" / "woocommerce" / "sklepownia-documents.php"
 DOCUMENTS_PLUGIN_PATH = f"{WP_PATH}/wp-content/mu-plugins/sklepownia-documents.php"
 DOCUMENTS_OPTION = "sklepownia_documents"
 # WordPress options naming the shop's terms (WooCommerce links them at checkout) and privacy policy pages.
 DOCUMENT_PAGE_OPTIONS = {"terms": "woocommerce_terms_page_id", "privacy": "wp_page_for_privacy_policy"}
 
-# Where the settings keep track of the shipping zone and VAT rate they manage.
+# The shipping zone and VAT rate the app manages.
 SHIPPING_ZONE_OPTION = "sklepownia_shipping_zone_id"
 TAX_RATE_OPTION = "sklepownia_tax_rate_id"
 
-# WordPress options read back into the settings (see read_settings).
 SETTINGS_OPTIONS = [
     "blogname", "blogdescription", "admin_email", "WPLANG", "timezone_string", "stylesheet",
     "woocommerce_email_from_address", "woocommerce_coming_soon",
@@ -73,15 +70,14 @@ SHOP_PAGE_TITLES = {
 }
 
 
-
 @dataclass(frozen=True)
 class GatewayPlugin:
-    """An online payment operator's plugin, installed the first time the owner turns the operator on."""
+    """An operator's plugin, installed the first time the owner turns the operator on."""
 
     package: Package
     # The plugin's main file, as WordPress names active plugins.
     file: str
-    # Every payment gateway of the plugin has an id starting with this.
+    # Id prefix of all the plugin's gateways.
     prefix: str
     # The gateway the app turns on: a redirect to the operator's page with all its methods (BLIK, transfers, cards).
     main: str
@@ -115,8 +111,7 @@ ONLINE_PAYMENTS = {
     ),
 }
 
-# PHP run by `wp eval`. `$d` holds the data passed in (see _php). Output after OUTPUT_MARKER is the result,
-# so notices WordPress might print before it don't break parsing.
+# Output of `wp eval` after this marker is the result (see _php), so notices WordPress prints first don't break parsing.
 OUTPUT_MARKER = "@@sklepownia@@"
 
 READ_SETTINGS_PHP = """
@@ -200,8 +195,8 @@ $methods = 'WC_P24\\Utilities\\Payment_Methods';
 if (class_exists($methods)) { $methods::clear_payment_methods_cache(); }
 """
 
-# Written after activating, which adds PayU's defaults first. The installments widget asks PayU for every product
-# list shown, so a new installation has it off; the owner can turn it on in the panel.
+# Written after activating, which adds PayU's defaults first. A new install turns off the installments widget: it
+# asks PayU for every product list shown.
 PAYU_ACCOUNT_PHP = """
 $settings = get_option('payu_settings_option_name', array());
 if (!is_array($settings)) { $settings = array(); }
@@ -220,8 +215,8 @@ if ($d['fresh']) {
 update_option('payu_settings_option_name', $settings);
 """
 
-# Turns the plugin's main gateway on or off. Its other gateways go off with it and are left as the owner set them
-# otherwise, except right after installing, when the ones the plugin turns on by itself go off.
+# Toggles the main gateway. The others go off with it, else stay as the owner set them, except right after
+# installing, when the ones the plugin turned on by itself go off.
 ONLINE_GATEWAYS_PHP = """
 foreach (WC()->payment_gateways()->payment_gateways() as $id => $gateway) {
     if (strpos($id, $d['prefix']) !== 0) { continue; }
@@ -233,8 +228,8 @@ foreach (WC()->payment_gateways()->payment_gateways() as $id => $gateway) {
 
 SET_OPTIONS_PHP = "foreach ($d as $name => $value) { update_option($name, $value); }"
 
-# The pages the shop names as its terms and privacy policy get the new text (WordPress's own privacy policy draft
-# included); missing ones are created. Without a user, WordPress filters the HTML as for an author, which keeps ours.
+# Updates the shop's terms and privacy policy pages (WordPress's own privacy draft too), creating missing ones.
+# Without a user, WordPress filters the HTML as for an author, which keeps ours.
 DOCUMENTS_PHP = """
 $admins = get_users(array('role' => 'administrator', 'number' => 1, 'fields' => 'ID'));
 $ids = array();
@@ -327,8 +322,7 @@ foreach ($d['methods'] as $method_id => $wanted) {
 WC_Cache_Helper::get_transient_version('shipping', true);
 """ % {"zone": SHIPPING_ZONE_OPTION}
 
-# Orders through WooCommerce's own API, so it works with both order storages (HPOS and posts). Refunds are separate
-# objects (shop_order_refund) and are not listed.
+# WooCommerce's API works with both order storages (HPOS and posts). Refunds (shop_order_refund) are not listed.
 READ_ORDERS_PHP = """
 $orders = wc_get_orders(array(
     'type' => 'shop_order',
@@ -358,8 +352,8 @@ foreach ($orders as $order) {
 echo "\n%(marker)s" . wp_json_encode($rows);
 """ % {"marker": OUTPUT_MARKER}
 
-# WooCommerce's order statuses (without "wc-"). "pending" waits for an online payment; "on-hold" is placed but not
-# paid yet (e.g. bank transfer). Drafts of the block checkout are not orders yet and are skipped.
+# Without "wc-". "pending" waits for an online payment; "on-hold" is placed but unpaid (e.g. bank transfer).
+# Block checkout drafts are not orders yet.
 ORDER_STATUSES = {
     "pending": OrderStatus.UNFINISHED,
     "on-hold": OrderStatus.NEW,
@@ -384,8 +378,7 @@ foreach ($products as $product) {
 echo "\n%(marker)s" . $removed;
 """ % {"meta": SAMPLE_PRODUCT_META, "marker": OUTPUT_MARKER}
 
-# Counted in the database, as loading every product would be slow in a big catalogue. The samples are found like in
-# REMOVE_SAMPLE_PRODUCTS_PHP: marked, or (in older shops) named like a sample.
+# Counted in SQL, as loading every product is slow in a big catalogue. Samples as in REMOVE_SAMPLE_PRODUCTS_PHP.
 COUNT_PRODUCTS_PHP = """
 global $wpdb;
 $statuses = "'publish', 'draft', 'pending', 'private', 'future'";
@@ -409,8 +402,7 @@ echo "\\n%(marker)s" . json_encode(array('products' => $total - $samples, 'sampl
 # Currencies written like "1 234,56 zł" rather than "$1,234.56".
 COMMA_DECIMAL_CURRENCIES = {"PLN", "EUR"}
 
-# How each theme shows the shop sidebar. `options` are PHP statements turning the sidebar on
-# for the product archive, on the left; `search` is False where the header already has one.
+# `options`: PHP putting the shop sidebar left of the product archive; `search` is False where the header has one.
 THEME_NAVIGATION = {
     "storefront": {
         "sidebar": "sidebar-1",
@@ -446,21 +438,17 @@ NAVIGATION_TITLES = {
               "price": "Preis", "rating": "Bewertung"},
 }
 
-# Environment of the WordPress image; a change means the container gets replaced.
 WORDPRESS_ENV_KEYS = (
     "WORDPRESS_DB_HOST", "WORDPRESS_DB_NAME", "WORDPRESS_DB_USER", "WORDPRESS_DB_PASSWORD", "WORDPRESS_CONFIG_EXTRA",
 )
 
 
 class WooCommerceProvisioner(ContainerProvisioner):
-    """
-    WooCommerce: every shop is its own WordPress container (see ContainerProvisioner).
-    Mirrors infra/shops/woocommerce/provision-shop.sh step by step.
-    """
+    """WordPress with WooCommerce; mirrors infra/shops/woocommerce/provision-shop.sh step by step."""
 
     ENV_KEYS = WORDPRESS_ENV_KEYS
     START_FAILED = "WordPress nie wystartował."
-    # Page caches of caching plugins, and WordPress's own leftovers from updates.
+    # Caching plugins' page caches and WordPress's update leftovers.
     BACKUP_EXCLUDES = ("wp-content/cache", "wp-content/upgrade")
 
     def image(self):
@@ -484,8 +472,6 @@ class WooCommerceProvisioner(ContainerProvisioner):
 
     def default_admin_login(self, shop):
         return ADMIN_USERNAME
-
-    # --- steps ---
 
     def step_install_wordpress(self, shop):
         credentials = self._credentials(shop)
@@ -557,7 +543,7 @@ class WooCommerceProvisioner(ContainerProvisioner):
         self._wp(shop, "option", "update", "show_on_front", "page")
         shop_page = self._wp(shop, "option", "get", "woocommerce_shop_page_id")
         self._wp(shop, "option", "update", "page_on_front", shop_page)
-        # Order confirmations and the owner's new-order alerts.
+        # For order confirmations and the owner's new-order alerts.
         relay = mail_relay(shop)
         if relay is not None:
             self._configure_mail(shop, relay)
@@ -834,7 +820,7 @@ class WooCommerceProvisioner(ContainerProvisioner):
         self._set_options(shop, {MAIL_OPTION: relay})
 
     def _apply_online_payments(self, shop, changed, payments):
-        """Install, configure and turn on or off the operators whose fields are in `changed`."""
+        """Install, configure and toggle the operators whose fields are in `changed`."""
         for key, plugin in ONLINE_PAYMENTS.items():
             if not any(field.startswith(f"{key}_") for field in changed):
                 continue
@@ -878,7 +864,7 @@ class WooCommerceProvisioner(ContainerProvisioner):
         ]}))
 
     def _install_plugin(self, shop, package):
-        """Install the plugin from its checked archive, without activating it."""
+        """From the checked archive, without activating it."""
         path = f"/tmp/{package.filename}"
         self._upload(shop, path, packages.fetch(package))
         try:
@@ -923,8 +909,6 @@ class WooCommerceProvisioner(ContainerProvisioner):
             },
         })
 
-    # --- lifecycle ---
-
     def update_address(self, shop):
         if self._find_container(shop) is None:
             return None
@@ -935,8 +919,6 @@ class WooCommerceProvisioner(ContainerProvisioner):
             self._wp(shop, "search-replace", previous, shop.url, "--all-tables-with-prefix", "--skip-columns=guid")
             self._wp(shop, "cache", "flush")
         return previous
-
-    # --- helpers ---
 
     def _wp(self, shop, *args):
         return self._exec(container_name(shop), ["wp", f"--path={WP_PATH}", *args], user="www-data")
@@ -964,10 +946,6 @@ class WooCommerceProvisioner(ContainerProvisioner):
         self._php(shop, SET_OPTIONS_PHP, options)
 
 
-def _env(container):
-    return container_env(container, WORDPRESS_ENV_KEYS)
-
-
 def _currency_options(currency):
     comma_decimal = currency in COMMA_DECIMAL_CURRENCIES
     return {
@@ -983,7 +961,7 @@ def _yes_no(value):
 
 
 def _int(value, fallback):
-    """A whole number from a WordPress option; a missing option comes back as False, which isn't 0."""
+    """A missing WordPress option comes back as False, which isn't 0."""
     if isinstance(value, bool):
         return fallback
     try:
@@ -1000,7 +978,7 @@ def _order_total(value):
 
 
 def _money(value):
-    """A price from WooCommerce settings as "15.00"; costs typed in wp-admin may use a comma. Not a number: "0.00"."""
+    """A price as "15.00"; costs typed in wp-admin may use a comma. Not a number: "0.00"."""
     try:
         return str(Decimal(str(value).replace(",", ".").replace(" ", "")).quantize(Decimal("0.01")))
     except (InvalidOperation, ValueError):

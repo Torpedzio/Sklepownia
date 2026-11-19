@@ -1,5 +1,3 @@
-/** Copy shared by several screens. */
-
 import type { IconName } from '@/components/icon';
 
 export const SetupSteps = [
@@ -20,15 +18,14 @@ export type Feature = {
   icon: IconName;
   title: string;
   text: string;
-  /** Photo for the home page slideshow; features without one get a drawn slide. */
+  /** Features without one get a drawn slide. */
   image?: {
     source: number;
-    /** Width divided by height of the file. */
     aspectRatio: number;
-    /** Which side of the photo to keep when a narrow screen crops it. */
+    /** Side kept when a narrow screen crops it. */
     focus?: 'left' | 'center' | 'right';
   };
-  /** Set to false to list the feature on the about page only. */
+  /** false: listed on the about page only. */
   homeSlide?: boolean;
 };
 
@@ -43,7 +40,7 @@ export const Features: Feature[] = [
     icon: 'cart',
     title: 'Trzy systemy do wyboru',
     text: 'WooCommerce z tysiącami wtyczek, PrestaShop popularny w Polsce albo Magento dla dużych katalogów (w planach Standard i Biznes). Wybierasz przy zakładaniu sklepu.',
-    // The home page has a section of its own about the systems.
+    // The home page has its own section about the systems.
     homeSlide: false,
   },
   {
@@ -78,20 +75,16 @@ export const Features: Feature[] = [
   },
 ];
 
-/** One band of a Showcase: a screenshot fading into the page, with a description next to it. */
 export type ShowcaseItem = {
   name: string;
-  /** Short line above the name. */
   label: string;
   text: string;
-  /** Smaller line under the text. */
   details?: string;
   preview: number;
-  /** What the screenshot shows, for screen readers. */
   alt: string;
 };
 
-// Previews are screenshots of shops set up by the app, so they show what a new shop really looks like.
+// Screenshots of shops set up by the app, so they show what a new shop really looks like.
 export const Platforms: ShowcaseItem[] = [
   {
     name: 'WooCommerce',
@@ -119,10 +112,9 @@ export const Platforms: ShowcaseItem[] = [
   },
 ];
 
-/** Width divided by height of the preview screenshots. */
 export const PreviewAspectRatio = 1200 / 750;
 
-/** Colours of every theme a shop can start with, for the swatches in the new shop form. */
+/** Per shop theme, for the swatches in the new shop form. */
 export const ThemeColors: Record<string, string[]> = {
   Storefront: ['#333333', '#96588A', '#F8F8F8'],
   Astra: ['#0170B9', '#1E293B', '#F1F5F9'],
@@ -132,7 +124,7 @@ export const ThemeColors: Record<string, string[]> = {
   Luma: ['#1979C3', '#333333', '#F0F0F0'],
 };
 
-/** About the shops themselves; plans and payments are in PricingFaq. */
+/** About the shops; plans and payments are in PricingFaq. */
 export const Faq = [
   {
     question: 'Ile trwa założenie sklepu?',
@@ -185,7 +177,7 @@ export const Faq = [
   },
 ];
 
-/** Plans and paying for them: on the pricing page, and after the shop questions elsewhere. */
+/** On the pricing page, and after Faq elsewhere. */
 export const PricingFaq = [
   {
     question: 'Ile to kosztuje?',

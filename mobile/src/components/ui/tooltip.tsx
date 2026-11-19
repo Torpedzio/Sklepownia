@@ -22,7 +22,6 @@ export type TooltipProps = {
   children: ReactNode;
 };
 
-/** Shows `text` next to `children` on hover, keyboard focus or tap. */
 export function Tooltip({ text, accessibilityLabel, side = 'below', children }: TooltipProps) {
   const theme = useTheme();
   const { width: windowWidth } = useWindowDimensions();

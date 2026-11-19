@@ -64,7 +64,6 @@ def _join(names):
 
 
 def _plans_with(platform, more_than=0):
-    """Names of the plans that allow more than `more_than` shops on `platform`."""
     plans = Plan.objects.filter(is_active=True).order_by("sort_order", "price")
     names = [plan.name for plan in plans if (services.platform_limit(plan, platform) or 0) > more_than]
     return list(dict.fromkeys(names))
@@ -105,7 +104,6 @@ def _platform_options(user):
     for platform, info in PLATFORMS.items():
         available, note = True, ""
         if plan is None:
-            # No plan yet: say which plans have the platform.
             note = _in_plans(platform)
         else:
             usage = services.platform_usage(user, plan, platform)
@@ -181,7 +179,7 @@ class ShopViewSet(
     viewsets.GenericViewSet,
 ):
     queryset = Shop.objects.none()
-    # Set per action (send_admin_access); without a scope ScopedRateThrottle lets everything through.
+    # Set per action; without a scope ScopedRateThrottle lets everything through.
     throttle_scope = None
 
     def get_queryset(self):
@@ -260,7 +258,7 @@ class ShopViewSet(
     )
     @action(detail=True, methods=["post"])
     def resume(self, request, pk=None):
-        """Brings back a shop suspended because it didn't fit the plan, when the plan has room now."""
+        """Brings back a shop suspended for not fitting the plan."""
         try:
             services.resume_shop(self.get_object())
         except services.PlanRequired:
@@ -283,7 +281,7 @@ class ShopViewSet(
     @extend_schema(responses={200: ShopAdminAccessSerializer})
     @action(detail=True, methods=["get"], url_path="admin-access")
     def admin_access(self, request, pk=None):
-        """Where the admin panel is and where its login went. Never the login itself."""
+        """Never returns the login itself, only where it was sent."""
         shop = self.get_object()
         if not _panel_ready(shop):
             return Response({"detail": PANEL_NOT_READY}, status=status.HTTP_409_CONFLICT)
@@ -298,7 +296,7 @@ class ShopViewSet(
         throttle_classes=[ScopedRateThrottle], throttle_scope="admin_access_email",
     )
     def send_admin_access(self, request, pk=None):
-        """E-mails the shop's details and admin login to the account address again."""
+        """Re-sends the admin login to the account e-mail."""
         shop = self.get_object()
         if not _panel_ready(shop):
             return Response({"detail": PANEL_NOT_READY}, status=status.HTTP_409_CONFLICT)
@@ -333,8 +331,6 @@ class ShopViewSet(
             },
             "base_domain": settings.SHOPS_BASE_DOMAIN,
         })
-
-    # --- settings and operations on a running shop ---
 
     @extend_schema(methods=["GET"], responses={200: ShopSettingsSerializer})
     @extend_schema(
@@ -376,7 +372,7 @@ class ShopViewSet(
     )
     @action(detail=True, methods=["post"], url_path="documents/preview")
     def preview_documents(self, request, pk=None):
-        """The terms and privacy policy as the shop would get them with the given seller's details. Changes nothing."""
+        """Renders the documents with the given seller's details; saves nothing."""
         shop = self.get_object()
         section = DocumentsSection(data=request.data.get("documents") or {}, partial=True)
         if not section.is_valid():
@@ -398,7 +394,7 @@ class ShopViewSet(
     )
     @action(detail=True, methods=["post"], url_path="settings/refresh")
     def refresh_settings(self, request, pk=None):
-        """Reads the settings from the shop again, e.g. after changes made in the admin panel."""
+        """Re-reads the settings from the shop, e.g. after changes in its admin panel."""
         shop = self.get_object()
         services.get_settings(shop)
         try:
@@ -413,7 +409,7 @@ class ShopViewSet(
     )
     @action(detail=True, methods=["post"], url_path="reset-admin-password")
     def reset_admin_password(self, request, pk=None):
-        """New password for the shop administrator, e-mailed to the owner once the operation succeeds."""
+        """E-mailed to the owner once the operation succeeds."""
         return self._start(ShopOperation.Kind.RESET_ADMIN_PASSWORD)
 
     @extend_schema(
@@ -422,13 +418,12 @@ class ShopViewSet(
     )
     @action(detail=True, methods=["post"], url_path="remove-sample-products")
     def remove_sample_products(self, request, pk=None):
-        """Deletes the sample products added when the shop was created; the result says how many."""
+        """The operation result says how many were removed."""
         return self._start(ShopOperation.Kind.REMOVE_SAMPLE_PRODUCTS)
 
     @extend_schema(responses={200: ShopOperationSerializer(many=True)})
     @action(detail=True, methods=["get"])
     def operations(self, request, pk=None):
-        """The most recent operations on the shop, newest first."""
         shop = self.get_object()
         operations = shop.operations.all()[:OPERATION_HISTORY_LENGTH]
         return Response(ShopOperationSerializer(operations, many=True).data)
@@ -448,17 +443,14 @@ class ShopViewSet(
     @extend_schema(responses={200: ShopSalesSerializer})
     @action(detail=True, methods=["get"], url_path="sales")
     def shop_sales(self, request, pk=None):
-        """
-        Sales and recent orders, counted from the copy of the shop's orders. When the copy is a few minutes old,
-        the shop is read again in the background and `refreshing` is true.
-        """
+        """Counted from the local order copy; when it's a few minutes old, a background read sets `refreshing`."""
         shop = self.get_object()
         return Response(_sales_payload(shop, sales.request_refresh(shop)))
 
     @extend_schema(request=None, responses={202: ShopSalesSerializer})
     @action(detail=True, methods=["post"], url_path="sales/refresh")
     def refresh_sales(self, request, pk=None):
-        """Reads the shop's orders again now (unless that happened half a minute ago)."""
+        """No-op if the orders were read in the last half minute."""
         shop = self.get_object()
         return Response(_sales_payload(shop, sales.request_refresh(shop, force=True)), status=status.HTTP_202_ACCEPTED)
 
@@ -466,10 +458,7 @@ class ShopViewSet(
     @extend_schema(methods=["PATCH"], request=ChecklistUpdateSerializer, responses={200: ShopChecklistSerializer})
     @action(detail=True, methods=["get", "patch"], url_path="checklist")
     def shop_checklist(self, request, pk=None):
-        """
-        The start checklist: what a new shop still needs before it sells, each step ticked off on its own.
-        Opening it counts the shop's products in the background when needed; then `refreshing` is true.
-        """
+        """Opening it counts the products in the background when needed; then `refreshing` is true."""
         shop = self.get_object()
         if request.method == "PATCH":
             serializer = ChecklistUpdateSerializer(data=request.data)
@@ -488,10 +477,7 @@ class ShopViewSet(
     )
     @action(detail=True, methods=["get", "post"], url_path="backups")
     def shop_backups(self, request, pk=None):
-        """
-        Backups of the shop: made every night and on request (POST, a few a day), kept for the last days and weeks.
-        A POST queues a backup as an operation; its end shows in the settings like other operations.
-        """
+        """POST queues a manual backup as an operation (a few per day)."""
         shop = self.get_object()
         if request.method == "POST":
             try:
@@ -516,10 +502,7 @@ class ShopViewSet(
     )
     @action(detail=True, methods=["post"], url_path=r"backups/(?P<backup_id>[0-9]+)/restore")
     def restore_backup(self, request, pk=None, backup_id=None):
-        """
-        Brings the shop back to the backup: its files, settings, products and orders as they were then. How the shop
-        is now is backed up first, so this can be undone. The shop is closed for the few minutes it takes.
-        """
+        """The current state is backed up first, so this can be undone. The shop is closed for a few minutes."""
         shop = self.get_object()
         backup = backups.restorable(shop).filter(pk=backup_id).first()
         if backup is None:

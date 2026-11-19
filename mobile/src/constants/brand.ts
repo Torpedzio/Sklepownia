@@ -1,4 +1,4 @@
-/** Brand and contact details shown across the app. Replace the placeholders before launch. */
+/** Replace the placeholders before launch. */
 export const Brand = {
   name: 'Sklepownia',
   tagline: 'Sklep internetowy gotowy w dwie minuty',

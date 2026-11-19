@@ -1,5 +1,4 @@
-"""Magento needs about three times the memory of other shops, so plans allow only a few: none in Start,
-1 of 3 shops in Standard, 5 of 10 in Biznes."""
+"""Magento limits per plan: none in Start, 1 of 3 shops in Standard, 5 of 10 in Biznes."""
 
 from datetime import timedelta
 
@@ -66,7 +65,6 @@ def test_standard_allows_one_magento_shop(auth_client, verified_user, plans, dja
     assert response.data["platform"] == [
         "Masz już 1 sklep Magento, tyle ile pozwala plan Standard. Usuń go albo przejdź na plan Biznes.",
     ]
-    # Other systems still fit in the plan.
     make_shop(verified_user, "Kawiarnia")
     assert auth_client.get("/api/auth/me/").data["can_create_shops"] is True
 

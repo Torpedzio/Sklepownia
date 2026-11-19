@@ -1,6 +1,6 @@
 """
-Invoices issued in Fakturownia (fakturownia.pl, API: github.com/fakturownia/api). Fakturownia numbers them, sends
-company invoices to KSeF (with FAKTUROWNIA_KSEF) and renders the PDF, with the KSeF code once KSeF accepts it.
+Fakturownia (API: github.com/fakturownia/api) numbers invoices, renders the PDF and, with FAKTUROWNIA_KSEF,
+sends company invoices to KSeF (the PDF shows the KSeF code once accepted).
 """
 
 import json
@@ -66,7 +66,7 @@ class FakturowniaIssuer(BaseIssuer):
         was_accepted = invoice.ksef_status == Invoice.Ksef.ACCEPTED
         self._apply_ksef(invoice, data)
         if invoice.ksef_status == Invoice.Ksef.ACCEPTED and not was_accepted:
-            # With the KSeF number and the verification QR code now.
+            # Now with the KSeF number and the verification QR code.
             invoice.pdf = self._pdf(invoice)
 
     def payload(self, invoice):

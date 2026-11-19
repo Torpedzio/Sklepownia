@@ -9,7 +9,6 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Shop } from '@/lib/types';
 
-/** A shop on the dashboard, drawn as a small shopfront with its own awning. */
 export function ShopSign({ shop }: { shop: Shop }) {
   const theme = useTheme();
 
@@ -45,7 +44,6 @@ export function ShopSign({ shop }: { shop: Shop }) {
   );
 }
 
-/** Marks shops from before paid plans: they work without a plan and don't count towards it. */
 export function TestBadge() {
   const theme = useTheme();
   return (

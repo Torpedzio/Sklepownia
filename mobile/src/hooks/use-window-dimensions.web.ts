@@ -10,11 +10,7 @@ function subscribe(onChange: () => void) {
 
 const currentWindow = () => Dimensions.get('window');
 
-/**
- * The window's size, like React Native's hook, except while the page from the server comes to life: then it is
- * the size the server drew the page for (`assumedWindow`), so React can reuse that page, and the real size
- * follows in the next render.
- */
+/** Like React Native's, but during hydration the size the server rendered for (`assumedWindow`). */
 export function useWindowDimensions(): ScaledSize {
   return useSyncExternalStore(subscribe, currentWindow, assumedWindow);
 }

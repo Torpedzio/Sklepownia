@@ -71,7 +71,7 @@ test('a change that ended while the screen was closed is not announced on coming
   expect(await screen.findByText('Wprowadzamy zmiany w sklepie…')).toBeTruthy();
   await screen.unmount();
 
-  // Back later: the copy from the last visit shows until the shop's settings arrive.
+  // Back later: the cached copy shows until the shop's settings arrive.
   let answer!: (settings: ShopSettings) => void;
   const { api } = await open(undefined, {
     [SETTINGS]: () => new Promise<ShopSettings>((resolve) => (answer = resolve)),
@@ -408,7 +408,7 @@ test('the terms are published after a warning that they replace the shop’s own
     [SAVE]: shopSettings({}, { ...fresh, busy: true, operation: operation() }),
   });
 
-  // The seller's details come filled in from the billing profile.
+  // Seller details come from the billing profile.
   expect(await screen.findByDisplayValue('Palarnia Jan Kowalski')).toBeTruthy();
   await fireEvent.press(screen.getByRole('switch', { name: 'Regulamin i polityka prywatności z aplikacji' }));
   expect(screen.getByText(/Obecny regulamin i politykę prywatności sklepu zastąpimy nowymi/)).toBeTruthy();

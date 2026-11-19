@@ -1,10 +1,6 @@
 """
-Plugins and modules from their makers that a shop gets only once the owner turns on what needs them,
-e.g. an online payment operator. Each is pinned: a shop gets the version checked here, and the download
-must match its SHA-256, so a file changed at the source never reaches a shop.
-
-The worker downloads a package once and keeps it in SHOPS_PACKAGE_CACHE; shops get it from the worker,
-so they don't need to reach the maker's site themselves.
+Third-party plugins/modules installed on demand (e.g. a payment operator), pinned by version and SHA-256 so a file
+changed at the source never reaches a shop. Cached by the worker in SHOPS_PACKAGE_CACHE; shops get them from it.
 """
 
 import hashlib
@@ -26,7 +22,7 @@ USER_AGENT = "Sklepownia-provisioner"
 
 @dataclass(frozen=True)
 class Package:
-    # What it is, in the genitive, for messages: "wtyczki Przelewy24", "modułu PayU".
+    # In the genitive, for messages: "wtyczki Przelewy24", "modułu PayU".
     title: str
     # The archive's top folder: the plugin's or module's name in the shop.
     folder: str
@@ -40,7 +36,7 @@ class Package:
 
 
 def fetch(package):
-    """The package's zip archive (bytes), checked against its SHA-256."""
+    """The zip archive (bytes), checked against its SHA-256."""
     cached = Path(settings.SHOPS_PACKAGE_CACHE) / package.filename
     if cached.is_file():
         data = cached.read_bytes()

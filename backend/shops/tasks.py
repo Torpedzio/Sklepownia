@@ -33,14 +33,14 @@ def teardown_shop(shop_id):
         return
     account_deleted = shop.owner.deleted_at is not None
     if not account_deleted:
-        # Kept for a while, so a shop deleted by mistake can still be brought back (python manage.py restore_shop).
+        # So a shop deleted by mistake can be brought back (manage.py restore_shop).
         backups.back_up_before_delete(shop)
     get_provisioner(shop.platform).teardown(shop)
-    # The copy of its orders goes with the shop: it holds customers' names.
+    # The order copy holds customers' names.
     ShopOrder.objects.filter(shop=shop).delete()
     SalesSync.objects.filter(shop=shop).delete()
     if account_deleted:
-        # The owner deleted the account: nothing of the shop is kept, its backups, settings and history included.
+        # Nothing of the shop is kept, backups, settings and history included.
         backups.forget_all(shop)
         shop.delete()
 
@@ -59,7 +59,7 @@ def resume_shop_container(shop_id):
 
 @shared_task
 def refresh_shop_resources(shop_id):
-    """After a plan change: e.g. a new memory limit for the shop's container."""
+    """After a plan change, e.g. a new container memory limit."""
     shop = Shop.objects.get(pk=shop_id)
     if shop.status == Shop.Status.ACTIVE:
         get_provisioner(shop.platform).refresh_resources(shop)
@@ -79,7 +79,6 @@ def run_shop_operation(operation_id):
 # A mail server that is briefly down shouldn't lose the only copy of the admin password.
 @shared_task(autoretry_for=(OSError, SMTPException), retry_backoff=True, max_retries=5)
 def send_admin_access_email(shop_id, reason):
-    """Sends the owner the shop's details and admin login (see shops/emails.py)."""
     shop = (
         Shop.objects.select_related("owner", "config__template", "credentials")
         .exclude(status=Shop.Status.DELETED)
@@ -98,7 +97,7 @@ def sync_shop_orders(shop_id):
 
 @shared_task
 def count_shop_products(shop_id):
-    """For the start checklist. Imported here: the checklist uses services, which import these tasks."""
+    """Imported here: the checklist uses services, which import these tasks."""
     from . import checklist
 
     checklist.count(shop_id)
@@ -106,17 +105,15 @@ def count_shop_products(shop_id):
 
 @shared_task
 def sync_all_shop_orders():
-    """Scheduled by Celery beat (SHOP_ORDERS_SYNC_MINUTES)."""
     sales.sync_all()
 
 
 @shared_task
 def back_up_all_shops():
-    """Scheduled by Celery beat every night (SHOPS_BACKUP_HOUR)."""
     from monitoring import alerts
 
     started = timezone.now()
     failed = backups.back_up_all()
     if backups.enabled():
-        # The monitor raises the alarm when this stops happening, and the staff hears about the failures.
+        # Heartbeat for the monitor's late-backup check; also reports the failures.
         alerts.nightly_backups_done(failed, started)

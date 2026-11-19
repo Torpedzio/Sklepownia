@@ -1,7 +1,6 @@
 """
-The billing cycle. The gateway takes the first payment and saves the card; renewals are charged by the platform
-(Tpay has no built-in subscriptions). A payment's outcome may arrive more than once, from a notification and from
-asking the gateway, so applying it is idempotent.
+The gateway takes the first payment and saves the card; renewals are charged here (Tpay has no subscriptions).
+An outcome may arrive twice (notification and polling), so applying it is idempotent.
 """
 
 import logging
@@ -26,9 +25,9 @@ logger = logging.getLogger(__name__)
 
 # After a failed renewal, try again after these many days; then the plan expires.
 RETRY_AFTER_DAYS = (1, 3, 5)
-# A first payment nobody finished within this time is given up on.
+# Pending payments older than this are given up on.
 PENDING_EXPIRES_AFTER = timedelta(days=1)
-# How often a pending payment may be checked with the gateway when the owner waits on the return screen.
+# Minimum gap between gateway checks of a pending payment (the return screen polls).
 CHECK_INTERVAL = timedelta(seconds=5)
 GATEWAY_UNAVAILABLE = "Nie udało się połączyć z operatorem płatności. Spróbuj ponownie za chwilę."
 
@@ -61,7 +60,6 @@ def payer_for(user):
 
 
 def start_checkout(user, plan, *, return_url, site_url, immediate_start_consent):
-    """Creates the first payment for `plan` and starts it on the gateway. Returns the payment."""
     try:
         profile = user.billing_profile
     except BillingProfile.DoesNotExist:
@@ -111,7 +109,7 @@ def start_checkout(user, plan, *, return_url, site_url, immediate_start_consent)
 
 
 def apply_result(result: PaymentResult):
-    """Applies what the gateway says about a payment. Safe to call again with the same result."""
+    """Idempotent: safe to call again with the same result."""
     payment_id = result.reference.removeprefix("payment-")
     if not payment_id.isdigit():
         logger.warning("Payment result for an unknown reference %r", result.reference)
@@ -140,10 +138,7 @@ def apply_result(result: PaymentResult):
 
 
 def check_with_gateway(payment):
-    """
-    Asks the gateway about a pending payment, at most every few seconds. Covers notifications that can't
-    reach the platform, e.g. a local backend behind a home router.
-    """
+    """At most every CHECK_INTERVAL; covers notifications that can't reach us (e.g. a local backend behind NAT)."""
     now = timezone.now()
     if payment.status != Payment.Status.PENDING or (payment.checked_at and now - payment.checked_at < CHECK_INTERVAL):
         return payment
@@ -160,10 +155,7 @@ def check_with_gateway(payment):
 
 
 def reconcile_pending():
-    """
-    Run regularly (Celery beat). Asks the gateway about payments still pending, for when its notification never
-    arrived and the payer never came back to the app; gives up on payments nobody finished within a day.
-    """
+    """Celery beat: polls pending payments whose notification never arrived; fails those older than a day."""
     now = timezone.now()
     for payment in Payment.objects.filter(status=Payment.Status.PENDING).exclude(gateway_id="").order_by("pk"):
         try:
@@ -180,13 +172,11 @@ def reconcile_pending():
 
 
 def latest_pending(user):
-    """The user's most recent payment still waiting for its outcome, checked with the gateway."""
     payment = Payment.objects.filter(user=user, status=Payment.Status.PENDING).exclude(gateway_id="").first()
     return check_with_gateway(payment) if payment else None
 
 
 def cancel(subscription):
-    """The plan works until the period ends and then isn't renewed."""
     if subscription.status not in (Subscription.Status.ACTIVE, Subscription.Status.PAST_DUE):
         raise BillingError("Nie ma aktywnego planu do anulowania.")
     subscription.cancel_at_period_end = True
@@ -194,11 +184,7 @@ def cancel(subscription):
 
 
 def close_account(user):
-    """
-    The owner deleted the account: the plan ends now and the saved card is forgotten, so nothing is charged again,
-    and payments still waiting are dropped. Paid payments stay, with the invoice details they were made with,
-    because tax law requires keeping them.
-    """
+    """Ends the plan now, forgets the card and drops pending payments; paid ones stay, as tax law requires."""
     now = timezone.now()
     subscription = Subscription.objects.select_for_update().filter(user=user).first()
     if subscription is not None:
@@ -225,10 +211,7 @@ def resume(subscription):
 
 
 def renew_due():
-    """
-    Run regularly (Celery beat). Charges the saved card of plans whose period has ended, retries failed
-    renewals, and ends plans that were cancelled or couldn't be paid.
-    """
+    """Celery beat: charges due plans, retries failed renewals, ends cancelled or unpaid plans."""
     now = timezone.now()
     due = Subscription.objects.filter(
         status=Subscription.Status.ACTIVE, current_period_end__lte=now,
@@ -256,7 +239,6 @@ def renew(subscription_id):
         if subscription.payments.filter(kind=Payment.Kind.RENEWAL, status=Payment.Status.PENDING).exists():
             return None
         plan = subscription.plan
-        # The balance (e.g. from a cheaper plan chosen mid-period) pays first.
         credit_used = min(subscription.credit, plan.price)
         amount = plan.price - credit_used
         if amount and not subscription.card_token:
@@ -318,7 +300,7 @@ def _complete(payment, result):
 
 
 def _complete_upgrade(payment, subscription, result, now):
-    """The surcharge for a better plan is paid: the plan changes now, the billing date stays."""
+    """The plan changes now, the billing date stays."""
     old_plan = subscription.plan
     subscription.plan = payment.plan
     subscription.credit -= payment.credit_used
@@ -398,10 +380,6 @@ def _billing_details(user):
     return profile.snapshot() if profile else {}
 
 
-def default_plan():
-    return Plan.objects.filter(is_active=True).first()
-
-
 def _with_payment(url, payment_id):
     separator = "&" if "?" in url else "?"
     return f"{url}{separator}payment={payment_id}"
@@ -420,7 +398,7 @@ CENT = Decimal("0.01")
 
 @dataclass
 class PlanChange:
-    """What moving to `plan` means now: money and shops. `blocked` says why it can't happen."""
+    """Money and shops affected by moving to `plan`; `blocked` says why it can't happen."""
 
     plan: Plan
     direction: str = ""
@@ -438,11 +416,9 @@ class PlanChange:
 
 def preview_change(subscription, plan, keep_ids=None, now=None):
     """
-    Moving to a dearer plan costs the price difference for the rest of the paid period (from the balance first,
-    nothing below MIN_SURCHARGE). Moving to a cheaper one adds the unused difference to the balance. Either way
-    the plan changes now and the billing date stays. Shops beyond the new plan's limits (all shops, and shops on
-    a platform it limits, like Magento) are suspended (`keep_ids` chooses which stay; by default the oldest that
-    fit); with room to spare, suspended shops that fit come back.
+    Upgrades cost the price difference for the rest of the period (balance first, waived below MIN_SURCHARGE);
+    downgrades add it to the balance. Shops over the new limits (also per platform, e.g. Magento) are suspended:
+    `keep_ids` picks which stay, by default the oldest that fit. With room to spare, suspended shops that fit return.
     """
     from shops.models import Shop
     from shops.services import counted_shops, shops_that_fit, suspended_shops
@@ -490,10 +466,7 @@ def preview_change(subscription, plan, keep_ids=None, now=None):
 
 
 def change_plan(user, plan, *, keep_ids=None, return_url="", site_url=""):
-    """
-    Moves to `plan`. Returns (change, payment): a payment when a surcharge has to be paid first (the plan changes
-    once it is paid), otherwise None and the change is done.
-    """
+    """Returns (change, payment); with a surcharge the plan changes once `payment` is paid, otherwise it's None."""
     with transaction.atomic():
         subscription = Subscription.objects.select_for_update().select_related("plan", "user").filter(user=user).first()
         change = preview_change(subscription, plan, keep_ids)
@@ -542,7 +515,7 @@ def change_plan(user, plan, *, keep_ids=None, return_url="", site_url=""):
 
 
 def _after_plan_change(subscription_id, old_plan_id, charged, credit_added, suspend_ids):
-    """Shops follow the new plan: those beyond its limit stop, suspended ones come back when there is room."""
+    """Applies the new plan to the shops (suspend, resume, memory) and e-mails the owner."""
     from shops.models import Shop
     from shops.services import counted_shops, resume_up_to_limit, suspend_shops
     from shops.tasks import refresh_shop_resources

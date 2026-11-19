@@ -1,13 +1,12 @@
 /**
- * What `useApiQuery` loaded, kept between screens by path: a screen opened again shows its last data at once and
- * refreshes it in the background. Changing the session (signing in or out) empties it, so one account never sees
- * what another loaded, and answers to requests sent before that are dropped.
+ * `useApiQuery` data kept between screens by path: a reopened screen shows its last data and refreshes it.
+ * A session change empties it (one account never sees another's data) and drops answers to earlier requests.
  */
 import type { ApiError } from './api';
 
 export type QueryEntry = {
   data?: unknown;
-  /** The last request's error; the data stays from the last success. */
+  /** The last request's error; data stays from the last success. */
   error: ApiError | null;
 };
 
@@ -19,7 +18,7 @@ const listeners = new Map<string, Set<() => void>>();
 const requests = new Map<string, { id: number; promise: Promise<void>; done: boolean }>();
 let lastId = 0;
 
-/** The entry for `key`; the same object until it changes, as `useSyncExternalStore` needs. */
+/** Same object until it changes, as `useSyncExternalStore` needs. */
 export function readQuery(key: string): QueryEntry {
   return entries.get(key) ?? EMPTY;
 }
@@ -39,10 +38,7 @@ function write(key: string, entry: QueryEntry) {
   listeners.get(key)?.forEach((listener) => listener());
 }
 
-/**
- * Loads `key` with `load` (which throws `ApiError`s). Joins a request for the same key that is still on its way,
- * unless `force`: after a change the answer must come from a request sent after it.
- */
+/** `load` throws `ApiError`s. Joins a pending request unless `force` (after a change the answer must be newer). */
 export function fetchQuery(key: string, load: () => Promise<unknown>, { force = false } = {}): Promise<void> {
   const running = requests.get(key);
   if (running && !running.done && !force) return running.promise;
@@ -65,7 +61,7 @@ export function fetchQuery(key: string, load: () => Promise<unknown>, { force = 
   return promise;
 }
 
-/** Forgets everything, e.g. when the session changes; screens still open start loading again. */
+/** E.g. on a session change; screens still open load again. */
 export function clearQueryCache() {
   const keys = [...entries.keys()];
   entries.clear();

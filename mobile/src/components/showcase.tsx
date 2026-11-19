@@ -11,21 +11,15 @@ import { useFullBleed } from '@/hooks/use-full-bleed';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useTheme } from '@/hooks/use-theme';
 
-// Share of the page width the screenshot takes on wide screens, and its largest width.
+// The screenshot's share of the page width on wide screens.
 const PREVIEW_SHARE = 0.66;
 const PREVIEW_MAX_WIDTH = 1000;
 const TEXT_WIDTH = 400;
-// Used until the narrow bands have been measured.
 const NARROW_TEXT_ESTIMATE = 220;
 
 type ShowcaseProps = { title: string; text: string; items: ShowcaseItem[] };
 
-/**
- * Items (e.g. shop systems) as full-width bands: a screenshot fading into the page colour, the description on
- * the fade. While the page scrolls through the section, its header and stage stay pinned and a short scroll
- * swaps the item on the stage for the next one (PinnedSequence). With reduced motion, or outside a Page,
- * the bands are a plain list.
- */
+/** Full-width screenshot bands, pinned while scrolling (PinnedSequence); a plain list with reduced motion or outside a Page. */
 export function Showcase({ title, text, items }: ShowcaseProps) {
   const reduceMotion = useReducedMotion();
   const page = usePageScroll();
@@ -119,12 +113,11 @@ function WideBand({
   previewWidth,
 }: BandProps & { index: number; previewWidth: number }) {
   const theme = useTheme();
-  // Screenshots alternate sides, starting on the right.
   const side = index % 2 === 0 ? 'right' : 'left';
   const height = Math.round(previewWidth / PreviewAspectRatio);
   const fadeWidth = Math.round(previewWidth * 0.5);
   const clear = clearOf(theme.background);
-  // The fade starts at the screenshot's inner edge, the one facing the text.
+  // The fade starts at the screenshot's edge facing the text.
   const fade = side === 'right' ? { left: width - previewWidth } : { left: previewWidth - fadeWidth };
 
   return (

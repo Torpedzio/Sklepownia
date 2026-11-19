@@ -6,7 +6,6 @@ import { Fonts } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { User } from '@/lib/types';
 
-/** The user's profile picture, or the first letter of their name on a coloured circle. */
 export function Avatar({
   user,
   size = 80,

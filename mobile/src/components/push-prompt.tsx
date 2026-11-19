@@ -12,7 +12,7 @@ import { useTheme } from '@/hooks/use-theme';
 // "Nie teraz" holds until the app is closed.
 let dismissed = false;
 
-/** An offer to turn on notifications about orders, shown only while the phone hasn't been asked yet. */
+/** Shown only while the phone hasn't been asked yet. */
 export function PushPrompt() {
   const theme = useTheme();
   const notify = useNotify();

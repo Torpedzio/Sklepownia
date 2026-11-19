@@ -1,7 +1,4 @@
-"""
-E-commerce systems a shop can run on, and what differs between them for the platform:
-the setup steps the owner watches, which settings the app can change and where the admin panel is.
-"""
+"""Supported e-commerce systems and what differs between them: setup steps, editable settings, admin panel."""
 
 from dataclasses import dataclass
 
@@ -17,18 +14,18 @@ class Platform(models.TextChoices):
 @dataclass(frozen=True)
 class PlatformInfo:
     description: str
-    # Name of the admin panel as owners know it, e.g. "panel WordPressa".
+    # As owners know it, e.g. "panel WordPressa".
     panel_name: str
-    # (key, label) of every setup step; the provisioner has a `step_<key>` method for each.
-    # Labels are shown to shop owners, so they say what the shop gets, not how it's done.
+    # (key, label) per setup step, run by the provisioner's `step_<key>`. Labels are shown to owners: what the shop
+    # gets, not how it's done.
     steps: list
-    # Settings sections (shops/shop_settings.py) the app can change on this platform.
+    # Sections of shops/shop_settings.py the app can change here.
     settings_sections: tuple
-    # Online payment operators (shop_settings.OPERATORS) the app sets up in the payments section.
+    # shop_settings.OPERATORS the app sets up in the payments section.
     payment_operators: tuple = ()
-    # Path of the admin panel, when it's the same for every shop (PrestaShop gives each shop its own).
+    # When the same for every shop (PrestaShop gives each shop its own).
     admin_path: str = ""
-    # How long setting up takes, as the app says it: "To potrwa <setup_time>".
+    # Shown as "To potrwa <setup_time>".
     setup_time: str = "około dwóch minut"
 
 
@@ -88,8 +85,7 @@ PLATFORMS = {
             ("configure_navigation", "Menu, wyszukiwarka i filtry"),
             ("health_check", "Końcowe sprawdzenie"),
         ],
-        # Opening and closing the shop, the shopping rules and the theme are set in the Magento panel,
-        # and so are online payments for now.
+        # Opening/closing, shopping rules, theme and (for now) online payments are set in the Magento panel.
         settings_sections=("general", "payments", "shipping", "taxes", "region", "documents"),
         setup_time="około minuty",
     ),

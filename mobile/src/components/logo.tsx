@@ -5,7 +5,6 @@ import { Brand } from '@/constants/brand';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-/** A tiny awning over a doorway, next to the wordmark. */
 /** `compact` drops the wordmark where space is tight. */
 export function Logo({ inverted = false, compact = false }: { inverted?: boolean; compact?: boolean }) {
   const theme = useTheme();

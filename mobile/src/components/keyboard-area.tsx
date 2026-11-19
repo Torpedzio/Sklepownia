@@ -2,9 +2,8 @@ import { useEffect, useRef, useState, type ComponentRef, type PropsWithChildren 
 import { Keyboard, Platform, StyleSheet, View } from 'react-native';
 
 /**
- * Shrinks to stay above the software keyboard on Android, where edge-to-edge apps are not
- * resized when the keyboard opens. A scroll view inside then keeps the focused field in view.
- * iOS scroll views handle this themselves with `automaticallyAdjustKeyboardInsets`.
+ * Shrinks to stay above the keyboard on Android, where edge-to-edge apps aren't resized for it, so a scroll view
+ * inside keeps the focused field in view. iOS scroll views use `automaticallyAdjustKeyboardInsets` instead.
  */
 export function KeyboardArea({ children }: PropsWithChildren) {
   const area = useRef<ComponentRef<typeof View>>(null);

@@ -1,7 +1,6 @@
 """
-The start checklist on the shop screen: what a new shop still needs before it sells. Every step ticks itself off,
-from what the platform already knows (the settings, the copy of the orders, the owner's phones) and from a count of
-the shop's products, which the worker makes when the owner opens the shop screen.
+Start checklist on the shop screen. Steps tick themselves off from what the platform knows, plus a product count the
+worker makes when the shop screen is opened.
 """
 
 import logging
@@ -22,14 +21,12 @@ logger = logging.getLogger(__name__)
 Step = ShopChecklist.Step
 
 
-# Opening the shop screen counts the products again when the last count is older than this.
 STALE_AFTER = timedelta(minutes=2)
-# A queued count that hasn't finished by then is not waited for any more.
 COUNT_TIMEOUT = timedelta(minutes=2)
 
 
 def overview(shop):
-    """What the app shows. Opening it queues what's needed to tick off the steps that aren't done yet."""
+    """Also queues what's needed to tick off the open steps."""
     checklist, _ = ShopChecklist.objects.get_or_create(shop=shop)
     hidden = checklist.hidden_at is not None
     if shop.status != Shop.Status.ACTIVE or hidden:
@@ -38,7 +35,7 @@ def overview(shop):
     steps = _steps(shop, checklist)
     refreshing = is_counting(checklist) or services.current_operation(shop) is not None
     if not steps[Step.TEST_ORDER]:
-        # The copy of the orders is read like for the sales overview, so the test order shows up soon after.
+        # Refresh the order copy so the test order shows up soon.
         refreshing = sales.is_refreshing(sales.request_refresh(shop)) or refreshing
     return _payload(checklist, available=True, steps=steps, refreshing=refreshing)
 
@@ -50,10 +47,7 @@ def hide(shop, hidden):
 
 
 def request_count(shop, checklist):
-    """
-    Queues counting the shop's products while a product step is still open and the last count was a while ago
-    (a failed one too, so a broken shop isn't asked on every visit). Nothing is queued twice.
-    """
+    """Only while a product step is open and the last attempt (failed too) is older than STALE_AFTER; never twice."""
     from .tasks import count_shop_products
 
     if not _needs_count(shop, checklist) or is_counting(checklist):
@@ -61,7 +55,7 @@ def request_count(shop, checklist):
     now = timezone.now()
     if checklist.attempted_at and checklist.attempted_at > now - STALE_AFTER:
         return
-    # Claimed with the old value: two requests at once queue one count.
+    # Compare-and-set on the old value: two requests at once queue one count.
     if ShopChecklist.objects.filter(pk=checklist.pk, requested_at=checklist.requested_at).update(requested_at=now):
         checklist.requested_at = now
         transaction.on_commit(lambda: count_shop_products.delay(shop.pk))
@@ -77,7 +71,7 @@ def is_counting(checklist, now=None):
 
 
 def count(shop_id):
-    """Counts the shop's products (in the worker). Returns False when the shop isn't running or counting failed."""
+    """Returns False when the shop isn't active or counting failed."""
     shop = Shop.objects.select_related("config").filter(pk=shop_id).first()
     if shop is None or shop.status != Shop.Status.ACTIVE:
         return False
@@ -96,11 +90,10 @@ def count(shop_id):
 
 
 def _steps(shop, checklist):
-    """{step: done} of the steps that apply to the shop, in order."""
     values = services.get_settings(shop).values
     sections = platform_info(shop.platform).settings_sections
     steps = {}
-    # Where the app can't change a setting, it's set in the shop's panel and can't be checked from here.
+    # Sections the app doesn't manage are set in the shop's panel and can't be checked from here.
     if "payments" in sections:
         payments = values["payments"]
         steps[Step.PAYMENTS] = any(
@@ -123,7 +116,6 @@ def _steps(shop, checklist):
 
 
 def _has_samples(shop, checklist):
-    """The shop got sample products at setup, or some were counted in it."""
     return shop.config.include_sample_products or bool(checklist.sample_products)
 
 

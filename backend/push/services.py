@@ -1,7 +1,4 @@
-"""
-Push notifications to the owner's phones. Other apps call `notify` with a Notice from `messages.py`; the worker
-sends it to every phone of the user that wants the topic.
-"""
+"""Other apps call `notify` with a Notice from `messages.py`; the worker sends it to the user's phones."""
 
 import logging
 from datetime import timedelta
@@ -24,7 +21,7 @@ BODY_LENGTH = 300
 
 
 def register_device(user, token, platform, name=""):
-    """Remembers the phone for `user`. A phone that changed accounts moves to the new one. Returns (device, created)."""
+    """A phone that changed accounts moves to the new one. Returns (device, created)."""
     return PushDevice.objects.update_or_create(
         token=token, defaults={"user": user, "platform": platform, "name": name[:100]},
     )
@@ -35,7 +32,6 @@ def forget_device(user, token):
 
 
 def forget_all_devices(user):
-    """After signing out everywhere or deleting the account: no phone gets the user's notifications any more."""
     PushDevice.objects.filter(user=user).delete()
 
 
@@ -44,7 +40,7 @@ def preferences(user):
 
 
 def notify(user_id, notice):
-    """Sends `notice` to the user's phones once the current transaction commits (nothing, when there are none)."""
+    """Sends once the current transaction commits; nothing when the user has no phones."""
     from .tasks import send_push
 
     if not PushDevice.objects.filter(user_id=user_id).exists():
@@ -55,7 +51,7 @@ def notify(user_id, notice):
 
 
 def send(user_id, topic, title, body, url):
-    """Sends to each phone of the user, if the user wants the topic. Returns how many the push service took."""
+    """Skips topics the user turned off. Returns how many messages the push service took."""
     chosen = PushPreferences.objects.filter(user_id=user_id).first()
     if chosen and not chosen.wants(topic):
         return 0
@@ -81,10 +77,7 @@ def send(user_id, topic, title, body, url):
 
 
 def check_receipts(now=None):
-    """
-    Run regularly (Celery beat): reads the receipts of notifications sent a while ago. Phones that no longer take
-    them are forgotten; other refusals (e.g. wrong FCM or APNs credentials) go to the log.
-    """
+    """Celery beat: forgets unregistered phones; other refusals (e.g. wrong FCM or APNs credentials) are logged."""
     now = now or timezone.now()
     PushTicket.objects.filter(created_at__lt=now - RECEIPT_KEPT_FOR).delete()
     tickets = list(

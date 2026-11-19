@@ -12,7 +12,6 @@ from . import checks, texts
 
 @shared_task
 def check_shops():
-    """Scheduled by Celery beat every MONITOR_INTERVAL_MINUTES."""
     checks.run()
 
 
@@ -30,7 +29,7 @@ def send_staff_alert(subject, body):
 
 @shared_task(autoretry_for=(OSError, SMTPException), retry_backoff=True, max_retries=5)
 def send_shop_email(shop_id, reason, since, until=None):
-    """Tells the owner the shop is down ("down") or works again ("back"); see texts.shop_email."""
+    """`reason` is "down" or "back"; dates are ISO strings."""
     shop = Shop.objects.select_related("owner").exclude(status=Shop.Status.DELETED).filter(pk=shop_id).first()
     if shop is None:
         return

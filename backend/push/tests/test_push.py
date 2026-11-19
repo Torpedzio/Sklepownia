@@ -7,7 +7,6 @@ from unittest import mock
 
 import pytest
 from django.utils import timezone
-from rest_framework.test import APIClient
 
 from accounts.models import User
 from billing import services as billing

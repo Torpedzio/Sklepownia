@@ -29,7 +29,6 @@ def test_index_renders_readme_and_rewrites_links(client, docs, settings):
     html = response.content.decode()
     assert '<h1 id="start">Start</h1>' in html
     assert 'href="/docs/architektura/#stany-sklepu"' in html
-    # Source files can't be opened from the docs, so they stay as plain paths.
     assert '<span class="path" title="Plik w repozytorium">kod</span>' in html
 
 

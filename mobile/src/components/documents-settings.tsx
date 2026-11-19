@@ -15,20 +15,17 @@ type Documents = ShopSettingsValues['documents'];
 type Field = keyof Documents & string;
 
 type Props = {
-  /** The documents' settings as saved. */
   saved: Documents;
-  /** The value as edited, or the saved one. */
   value: <K extends Field>(field: K) => Documents[K];
   onChange: (field: Field, value: string | boolean) => void;
   error: (field: Field) => string | undefined;
   registers: Choice[];
-  /** The country the shop sells from, as edited; the templates follow Polish law. */
+  /** As edited; the templates follow Polish law. */
   country: string;
-  /** The documents as they'd be with the edits, or null when the edits need fixing first. */
+  /** The documents with the edits; null when the edits need fixing first. */
   onPreview: () => Promise<ShopDocument[] | null>;
 };
 
-/** The body of the terms and privacy policy section of the shop settings. */
 export function DocumentsSettings({ saved, value, onChange, error, registers, country, onPreview }: Props) {
   const theme = useTheme();
   const [preview, setPreview] = useState<ShopDocument[] | null>(null);
@@ -247,7 +244,6 @@ export function DocumentsSettings({ saved, value, onChange, error, registers, co
   );
 }
 
-/** A document's blocks as text: headings, paragraphs and lists. */
 export function DocumentText({ blocks }: { blocks: DocumentBlock[] }) {
   return (
     <View style={styles.document}>

@@ -10,7 +10,7 @@ import type {
 
 type Overrides = { [S in keyof ShopSettingsValues]?: Partial<ShopSettingsValues[S]> };
 
-/** Settings of a shop as the API returns them, with sections changed by `overrides`. */
+/** As the API returns them; `overrides` change sections. */
 export function shopSettings(overrides: Overrides = {}, extra: Partial<ShopSettings> = {}): ShopSettings {
   const values: ShopSettingsValues = {
     general: { name: 'Palarnia', description: 'Kawa', contact_email: 'kontakt@example.com' },
@@ -118,7 +118,7 @@ export function shopSettings(overrides: Overrides = {}, extra: Partial<ShopSetti
   };
 }
 
-/** A shop as GET /shops/{id}/ returns it, set up and running unless `overrides` say otherwise. */
+/** As GET /shops/{id}/ returns it; running unless `overrides` say otherwise. */
 export function shopDetail(overrides: Partial<ShopDetail> = {}): ShopDetail {
   const steps = [
     { key: 'allocate_server', label: 'Miejsce na serwerze' },
@@ -174,10 +174,7 @@ export function shopDetail(overrides: Partial<ShopDetail> = {}): ShopDetail {
   };
 }
 
-/**
- * The sales overview of a shop with three orders: two today (one new, one paid) and one on 3 November.
- * The 30 days run from 20 October to 18 November 2026.
- */
+/** Three orders: two today (one new, one paid) and one on 3 November; the 30 days run 20.10–18.11.2026. */
 export function shopSales(overrides: Partial<ShopSales> = {}): ShopSales {
   const daily: SalesDay[] = Array.from({ length: 30 }, (_, offset) => {
     const date = new Date(Date.UTC(2026, 9, 20 + offset)).toISOString().slice(0, 10);
@@ -208,7 +205,7 @@ export function shopSales(overrides: Partial<ShopSales> = {}): ShopSales {
   };
 }
 
-/** The start checklist of a WooCommerce shop with samples: the steps in `done` are ticked off. */
+/** A WooCommerce shop with samples; the steps in `done` are ticked off. */
 export function shopChecklist(done: ChecklistStepKey[] = [], overrides: Partial<ShopChecklist> = {}): ShopChecklist {
   const keys: ChecklistStepKey[] = [
     'payments',

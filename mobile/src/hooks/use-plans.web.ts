@@ -4,10 +4,7 @@ import { useApiQuery } from '@/hooks/use-api-query';
 import type { loadPlans } from '@/lib/plans';
 import type { Plan } from '@/lib/types';
 
-/**
- * The plans on offer, from the route's loader (`loadPlans`): the server puts them in the page. When it couldn't
- * get them, the page asks the platform itself. Only for routes exporting that loader.
- */
+/** From the route's loader (`loadPlans`), so they're in the server's page; fetched here when it couldn't. Loader routes only. */
 export function usePlans() {
   const { plans } = useLoaderData<typeof loadPlans>();
   const query = useApiQuery<Plan[]>('/billing/plans/', { enabled: !plans });

@@ -19,7 +19,7 @@ export function StatusBadge({ status, label }: { status: ShopStatus; label: stri
   return <Badge label={label} color={color} background={background} />;
 }
 
-/** The shop's state; a running shop that doesn't answer its customers says so. */
+/** A running shop that doesn't answer its customers says so. */
 export function ShopStatusBadge({ shop }: { shop: Pick<Shop, 'status' | 'status_display' | 'down_since'> }) {
   if (shop.status === 'active' && shop.down_since) {
     return <Badge label="Nie odpowiada" color="danger" background="dangerMuted" />;
@@ -27,7 +27,7 @@ export function ShopStatusBadge({ shop }: { shop: Pick<Shop, 'status' | 'status_
   return <StatusBadge status={shop.status} label={shop.status_display} />;
 }
 
-/** A pill with a dot: the label says the state, the color only backs it up. */
+/** The label says the state; the color only backs it up. */
 export function Badge({ label, color, background }: { label: string; color: ThemeColor; background: ThemeColor }) {
   const theme = useTheme();
   return (

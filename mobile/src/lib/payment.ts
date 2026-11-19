@@ -5,15 +5,11 @@ import { Platform } from 'react-native';
 
 import type { Checkout } from '@/lib/types';
 
-/** Where the payment gateway sends the payer back: this app's return screen. */
 export function paymentReturnUrl() {
   return Linking.createURL('/billing/return');
 }
 
-/**
- * Sends the payer to the gateway's payment page. The web app leaves for the page and comes back with a
- * redirect; the phone app opens it in the system browser and continues once it closes.
- */
+/** The web leaves for the gateway and returns by redirect; phones open it in the system browser and go on once it closes. */
 export async function goToPayment(checkout: Checkout) {
   if (Platform.OS === 'web') {
     globalThis.location.assign(checkout.redirect_url);

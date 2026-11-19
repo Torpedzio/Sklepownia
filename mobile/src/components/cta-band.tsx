@@ -6,7 +6,6 @@ import { ThemedText } from '@/components/themed-text';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-/** Full-width green band under the awning that closes a page with a call to action. */
 export function CtaBand({ title, children }: PropsWithChildren<{ title: string }>) {
   const theme = useTheme();
   return (

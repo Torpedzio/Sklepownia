@@ -6,7 +6,6 @@ import { Radius, Spacing } from '@/constants/theme';
 import type { Feature } from '@/constants/content';
 import { useTheme } from '@/hooks/use-theme';
 
-/** Features in a two-column list separated by rules, not a grid of cards. */
 export function FeatureList({ features }: { features: Feature[] }) {
   const theme = useTheme();
   return (

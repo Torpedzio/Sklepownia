@@ -1,8 +1,8 @@
 import type { Plan, ShopBrief } from '@/lib/types';
 
 /**
- * Keeps or suspends shop `id`. Keeping one more when the plan is full swaps it for the shop kept longest
- * (a Magento shop for a Magento shop, when Magento is what is full), so the owner never has to untick first.
+ * Keeps or suspends shop `id`. Keeping one more on a full plan swaps out the shop kept longest (Magento for
+ * Magento when that's what is full), so the owner never has to untick first.
  */
 export function toggleKept(
   shops: ShopBrief[],

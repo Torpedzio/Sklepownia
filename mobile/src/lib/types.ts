@@ -5,14 +5,11 @@ export type User = {
   last_name: string;
   is_email_verified: boolean;
   date_joined: string;
-  /** How many shops the active plan allows; 0 without a plan. Test shops don't count. */
+  /** 0 without a plan; test shops don't count. */
   shop_limit: number;
-  /** How many of those may run on Magento; 0 without a plan or in a plan without Magento. */
   magento_shop_limit: number;
-  /** Name of the active plan, or null. */
   plan: string | null;
   can_create_shops: boolean;
-  /** Profile picture (a 512×512 WebP), or null. */
   avatar_url: string | null;
 };
 
@@ -29,13 +26,12 @@ export type Shop = {
   url: string;
   status: ShopStatus;
   status_display: string;
-  /** The e-commerce system the shop runs on. */
   platform: Platform;
   platform_display: string;
-  /** From before paid plans: works without a plan and doesn't count towards its limit. */
+  /** Pre-plan shop: works without a plan, outside its limit. */
   is_test: boolean;
   created_at: string;
-  /** Since when the running shop hasn't answered its customers (the monitor told the owner); null while it works. */
+  /** Since when the running shop doesn't answer; null while it works. */
   down_since: string | null;
 };
 
@@ -55,9 +51,9 @@ export type ProvisioningStep = {
 };
 
 export type ShopDetail = Shop & {
-  /** The admin panel as owners know it, e.g. "panel WordPressa". */
+  /** E.g. "panel WordPressa". */
   panel_name: string;
-  /** How long setting up takes, e.g. "około dwóch minut". */
+  /** E.g. "około dwóch minut". */
   setup_time: string;
   config: {
     industry: string;
@@ -80,7 +76,7 @@ export type ShopDetail = Shop & {
   } | null;
 };
 
-/** Where the admin panel is. The login and password only ever go by e-mail, to `sent_to`. */
+/** The login and password only ever go by e-mail, to `sent_to`. */
 export type ShopAdminAccess = {
   admin_url: string;
   sent_to: string;
@@ -92,9 +88,9 @@ export type FormOptions = {
   platforms: (Choice & {
     value: Platform;
     description: string;
-    /** Whether the plan lets the user create a shop on it now. */
+    /** Allowed by the plan now. */
     available: boolean;
-    /** The plan's limit, e.g. which plans have Magento; empty without one. */
+    /** The plan's limit (e.g. which plans have Magento); empty without one. */
     note: string;
   })[];
   industries: Choice[];
@@ -138,18 +134,18 @@ export type ShopSettingsValues = {
     przelewy24_enabled: boolean;
     przelewy24_sandbox: boolean;
     przelewy24_merchant_id: string;
-    /** The shop has the CRC and API keys for the chosen mode. Keys are only ever sent, never returned. */
+    /** CRC and API keys of the chosen mode are saved. Keys are only ever sent, never returned. */
     przelewy24_keys_saved: boolean;
     payu_enabled: boolean;
     payu_sandbox: boolean;
     payu_pos_id: string;
     payu_client_id: string;
-    /** The shop has the second MD5 key and the client_secret for the chosen mode. */
+    /** Same for the second MD5 key and client_secret. */
     payu_keys_saved: boolean;
   };
   shipping: {
     courier_enabled: boolean;
-    /** Money is sent and received as text with two decimals, e.g. "15.00". */
+    /** Money goes both ways as text with two decimals, e.g. "15.00". */
     courier_cost: string;
     free_shipping_enabled: boolean;
     free_shipping_min_amount: string;
@@ -158,9 +154,8 @@ export type ShopSettingsValues = {
   taxes: { enabled: boolean; prices_include_tax: boolean; standard_rate: string };
   region: { language: string; currency: string; country: string; timezone: string };
   appearance: { theme: string };
-  /** The shop's terms and privacy policy, written from the platform's templates and published as pages in the shop. */
   documents: {
-    /** The app keeps the documents in the shop and publishes them again after every change they describe. */
+    /** The app republishes the documents after every change they describe. */
     managed: boolean;
     seller_name: string;
     register: SellerRegister;
@@ -173,12 +168,12 @@ export type ShopSettingsValues = {
     phone: string;
     return_days: number;
     free_returns: boolean;
-    /** Working days from payment to sending the parcel. */
+    /** Working days from payment to dispatch. */
     dispatch_days: number;
-    /** The published pages; empty until the first publication. */
+    /** Empty until the first publication. */
     terms_url: string;
     privacy_url: string;
-    /** The version of the templates the shop's documents follow, e.g. "2026-11-18". */
+    /** E.g. "2026-11-18". */
     version: string;
   };
 };
@@ -196,10 +191,9 @@ export type ShopOperationKind =
   | 'create_backup'
   | 'restore_backup';
 
-/** A list item of a document; one level of items can sit inside. */
+/** One level of items can sit inside. */
 export type DocumentListItem = { text: string; items?: DocumentListItem[] };
 
-/** Text of a document as plain blocks, for the preview in the app. */
 export type DocumentBlock =
   | { type: 'heading'; level: number; text: string }
   | { type: 'paragraph'; text: string }
@@ -214,11 +208,11 @@ export type ShopOperation = {
   status: 'queued' | 'running' | 'succeeded' | 'failed';
   status_display: string;
   changes: Partial<{ [S in SettingsSection]: Partial<ShopSettingsValues[S]> }>;
-  /** Labels of the changed fields, e.g. ["Waluta"]. */
+  /** Field labels, e.g. ["Waluta"]. */
   changed_fields: string[];
-  /** removed: sample products deleted; before: the backup of the shop made before restoring another. */
+  /** removed: sample products deleted; before: the backup made before restoring. */
   result: { removed?: number; before?: number };
-  /** The moment of the backup made (create_backup) or restored (restore_backup). */
+  /** Of the backup made (create_backup) or restored (restore_backup). */
   backup_created_at: string | null;
   error: string;
   created_at: string;
@@ -232,36 +226,31 @@ export type ShopBackup = {
   id: number;
   kind: 'nightly' | 'manual' | 'before_restore' | 'before_delete';
   kind_display: string;
-  /** The moment restoring it takes the shop back to. */
   created_at: string;
-  /** Bytes of the shop's files and database in it. */
+  /** Bytes. */
   size: number | null;
 };
 
 export type ShopBackups = {
-  /** Backups work on the platform at all. */
+  /** The platform supports backups. */
   enabled: boolean;
   /** Newest first. */
   backups: ShopBackup[];
-  /** Backups the owner can still make today. */
   manual_left: number;
   manual_per_day: number;
-  /** The newest backup of each of this many latest days and weeks stays. */
+  /** The newest backup of each of this many last days and weeks stays. */
   keep_daily: number;
   keep_weekly: number;
-  /** When the next nightly backups start. */
   nightly_at: string;
 };
 
 export type ShopSettings = {
   values: ShopSettingsValues;
-  /** Sections the app can change on the shop's platform; the rest is set in the admin panel. */
+  /** Changeable here on this platform; the rest only in the admin panel. */
   sections: SettingsSection[];
-  /** Online payment operators the app sets up on the shop's platform. */
   payment_operators: PaymentOperator[];
-  /** The address the shop connects to operators from; Przelewy24 wants it in its panel. Null until known. */
+  /** Przelewy24 wants this address in its panel; null until known. */
   server_ip: string | null;
-  /** The admin panel as owners know it, e.g. "panel WordPressa". */
   panel_name: string;
   synced_at: string | null;
   operation: ShopOperation | null;
@@ -281,17 +270,14 @@ export type Plan = {
   code: string;
   name: string;
   description: string;
-  /** Gross price per period, e.g. "49.00". */
+  /** Gross, per period, e.g. "49.00". */
   price: string;
   currency: string;
   vat_rate: string;
   interval_months: number;
   max_shops: number;
-  /** How many of those shops may run on Magento; 0 when the plan has no Magento. */
   max_magento_shops: number;
-  /** Memory of each shop's container. */
   shop_memory_mb: number;
-  /** Highlighted as the usual choice. */
   is_featured: boolean;
   features: string[];
 };
@@ -318,7 +304,7 @@ export type Subscription = {
   cancel_at_period_end: boolean;
   next_attempt_at: string | null;
   card: { brand: string; tail: string; expiry: string } | null;
-  /** Overpaid money (e.g. after a cheaper plan mid-period); renewals use it first. */
+  /** Overpaid money (e.g. after downgrading mid-period); renewals use it first. */
   credit: string;
   allows_new_shops: boolean;
 };
@@ -331,7 +317,7 @@ export type Payment = {
   status_display: string;
   plan_name: string;
   amount: string;
-  /** Taken from the balance instead of the card. */
+  /** From the balance, not the card. */
   credit_used: string;
   currency: string;
   gateway_title: string;
@@ -340,20 +326,20 @@ export type Payment = {
   error: string;
   created_at: string;
   paid_at: string | null;
-  /** The invoice of a paid payment; null when there is none (e.g. a renewal paid from the balance). */
+  /** Null when there is none (e.g. a renewal paid from the balance). */
   invoice: Invoice | null;
 };
 
 export type Invoice = {
-  /** Empty until it is issued. */
+  /** Empty until issued. */
   number: string;
   issue_date: string | null;
   gross: string;
   currency: string;
   ksef_number: string;
-  /** Issued (and accepted in KSeF when it goes there): it can be downloaded. */
+  /** Issued (and accepted in KSeF when it goes there), so downloadable. */
   ready: boolean;
-  /** The PDF, a signed link valid for a day; null until ready. */
+  /** Signed PDF link valid for a day; null until ready. */
   url: string | null;
 };
 
@@ -373,24 +359,21 @@ export type ShopBrief = {
   platform_display: string;
 };
 
-/** What moving to another plan would mean now. */
 export type PlanChangePreview = {
   plan: Plan;
   direction: 'upgrade' | 'downgrade' | '';
-  /** Price difference for the rest of the paid period. */
+  /** For the rest of the paid period. */
   surcharge: string;
   credit_used: string;
-  /** To pay now. */
   amount_due: string;
-  /** A surcharge below 5 zł that isn't charged. */
+  /** Below 5 zł, not charged. */
   waived: boolean;
-  /** Unused money moved to the balance. */
   credit_added: string;
   credit_after: string;
   keep: ShopBrief[];
   suspend: ShopBrief[];
   resume: ShopBrief[];
-  /** Why the change isn't possible; empty when it is. */
+  /** Empty when the change is possible. */
   blocked: string;
 };
 
@@ -400,14 +383,14 @@ export type PlanChangeResult = {
   redirect_url: string | null;
 };
 
-/** Sales summed over a few days: placed orders that aren't cancelled, in the shop's currency. */
+/** Placed, non-cancelled orders, in the shop's currency. */
 export type SalesPeriod = { orders: number; revenue: string; average: string };
 
 export type SalesDay = { date: string; orders: number; revenue: string };
 
 export type OrderStatus = 'new' | 'processing' | 'completed' | 'cancelled' | 'unfinished';
 
-/** An order as last read from the shop. The customer is a first name and an initial. */
+/** As last read from the shop; the customer is a first name and an initial. */
 export type ShopOrder = {
   number: string;
   status: OrderStatus;
@@ -419,24 +402,23 @@ export type ShopOrder = {
   placed_at: string;
 };
 
-/** The sales overview, counted from a copy of the shop's orders that the platform reads every few minutes. */
+/** From a copy of the orders the platform reads every few minutes. */
 export type ShopSales = {
   /** The shop runs, so its orders are read. */
   available: boolean;
   synced_at: string | null;
   /** A read is under way: ask again in a few seconds. */
   refreshing: boolean;
-  /** Why the last read failed; empty when it worked. */
   error: string;
   currency: string;
   today: SalesPeriod;
   last_7_days: SalesPeriod;
   last_30_days: SalesPeriod;
   previous_30_days: SalesPeriod;
-  /** The last 30 days, oldest first. */
+  /** Oldest first. */
   daily: SalesDay[];
   to_handle: { new: number; processing: number };
-  /** The latest orders, newest first. */
+  /** Newest first. */
   recent: ShopOrder[];
 };
 
@@ -449,22 +431,21 @@ export type ChecklistStepKey =
   | 'notifications'
   | 'test_order';
 
-/** The start checklist of a new shop; every step ticks itself off from what the platform sees in the shop. */
+/** Every step ticks itself off from what the platform sees in the shop. */
 export type ShopChecklist = {
   /** The shop runs and the owner hasn't hidden the list. */
   available: boolean;
   hidden: boolean;
-  /** The steps that apply to the shop, in order. */
+  /** Applicable steps, in order. */
   steps: { key: ChecklistStepKey; done: boolean }[];
-  /** The owner's own products and the samples left in the shop; null until counted. */
+  /** Own products and samples left; null until counted. */
   products: number | null;
   sample_products: number | null;
   counted_at: string | null;
-  /** Products are being counted, orders read or a change saved: ask again in a few seconds. */
+  /** Counting, reading orders or saving: ask again in a few seconds. */
   refreshing: boolean;
 };
 
-/** What push notifications are about, and the phones that get them. */
 export type PushPreferences = {
   new_orders: boolean;
   shops: boolean;

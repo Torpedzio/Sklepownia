@@ -1,5 +1,3 @@
-"""E-mails about the owner's plan and payments."""
-
 from decimal import Decimal
 
 from django.conf import settings

@@ -17,7 +17,6 @@ import { ApiError } from '@/lib/api';
 import { confirm } from '@/lib/confirm';
 import type { BillingOverview, Shop } from '@/lib/types';
 
-/** Says what goes with the account, offers cancelling the plan instead, and deletes after the password. */
 export default function DeleteAccountScreen() {
   const { data: shops, error: shopsError } = useApiQuery<Shop[]>('/shops/');
   const { data: billing, error: billingError } = useApiQuery<BillingOverview>('/billing/');

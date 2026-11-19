@@ -9,10 +9,7 @@ FAKE_CARD = SavedCard(token="", brand="Visa", tail="4242", expiry="1230")
 
 
 class FakeGateway(BaseGateway):
-    """
-    Simulates a card gateway without any account: the payment page is served by the platform itself
-    (billing.views.fake_gateway_page) with buttons to pay or decline. For local work and tests.
-    """
+    """Simulated gateway: the platform serves the payment page (billing.views.fake_gateway_page)."""
 
     name = "fake"
 

@@ -20,14 +20,13 @@ import { configurePush, onPushTokenChange, openTappedNotifications, registerDevi
 SplashScreen.preventAutoHideAsync();
 configurePush();
 
-// The web shows the page at once in a system font (see `Fonts`) and swaps these in when they arrive. On a phone
-// they are files in the app, loaded while the splash screen is up.
+// The web shows a system font until these arrive (see `Fonts`); phones wait under the splash screen.
 const font = (source: number): FontSource => ({ uri: source, display: FontDisplay.SWAP });
 const waitForFonts = Platform.OS !== 'web';
 
 export default function RootLayout() {
   const systemScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
-  // The web's colors follow the visitor's mode in CSS (`WebColors`), so the page from the server fits both.
+  // Web colors follow the visitor's mode in CSS (`WebColors`), so the server's page fits both.
   const scheme = Platform.OS === 'web' ? 'light' : systemScheme;
   const [fontsLoaded, fontsError] = useFonts({
     BricolageGrotesque_600SemiBold: font(BricolageGrotesque_600SemiBold),
@@ -37,7 +36,7 @@ export default function RootLayout() {
     Figtree_600SemiBold: font(Figtree_600SemiBold),
     Figtree_700Bold: font(Figtree_700Bold),
   });
-  // Fonts that failed to load leave the system font instead of the splash screen for good.
+  // A failed font falls back to the system font rather than keeping the splash up.
   const fontsReady = !waitForFonts || fontsLoaded || !!fontsError;
   const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
   const colors = Platform.OS === 'web' ? WebColors : Colors[scheme];
@@ -81,12 +80,11 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
 
   usePushNotifications(signedIn ? user.id : null);
 
-  // Public pages don't wait for the account check: the server draws them for a visitor without a session (it has
-  // none), and in the browser they show the same until the check ends. The rest of the app waits, so a signed-in
-  // user opening it isn't sent to sign in first.
+  // Public pages don't wait for the account check: the server renders them signed out and hydration must match.
+  // The rest waits, so a signed-in user isn't sent to sign in first.
   if (!ready && !(fontsReady && publicPage(pathname))) return null;
 
-  // The web uses the site header instead of native navigation bars on public pages.
+  // Public web pages use the site header instead.
   const nativeHeader = Platform.OS !== 'web';
   const afterSignIn = user?.is_email_verified ? '/shops' : '/verify-email';
 
@@ -97,7 +95,7 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
         headerShadowVisible: false,
         headerTitleStyle: { fontFamily: Fonts.displayMedium },
       }}>
-      {/* The landing page is the home page for everyone; signed-in users reach their shops from its menu. */}
+      {/* Home for everyone; signed-in users reach their shops from its menu. */}
       <Stack.Screen name="index" options={{ headerShown: false, title: 'Sklep internetowy w dwie minuty' }} />
       <Stack.Protected guard={!user} redirectTo={afterSignIn}>
         <Stack.Screen name="sign-in" options={{ headerShown: false, title: 'Logowanie' }} />
@@ -127,11 +125,7 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
   );
 }
 
-
-/**
- * For a signed-in user: sends the phone's push token to the platform (when notifications are allowed) on start,
- * on coming back to the app and when the token changes, and opens the screen of a tapped notification.
- */
+/** Signed in: registers the push token (start, app resume, token change) and opens tapped notifications. */
 function usePushNotifications(userId: number | null) {
   useEffect(() => {
     if (userId === null) return;

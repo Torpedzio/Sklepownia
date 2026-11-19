@@ -57,8 +57,8 @@ function ChangeForm({ plans, subscription }: { plans: Plan[]; subscription: Subs
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // The preview is computed by the server, so the amounts shown are the ones charged. Which shops stay doesn't
-  // change the amounts, so picking them happens here and the server checks the choice when the plan changes.
+  // The server computes the preview, so the amounts shown are the ones charged. Which shops stay doesn't affect
+  // them, so they're picked here and the server checks the choice on change.
   useEffect(() => {
     if (!chosen) return;
     let current = true;
@@ -173,9 +173,9 @@ function Summary({ preview, subscription, keep, onToggleShop, saving, onSubmit }
   const periodEnd = subscription.current_period_end ? formatDate(subscription.current_period_end) : null;
   const nextPayment = Math.max(Number(plan.price) - Number(preview.credit_after), 0);
   const counted = [...preview.keep, ...preview.suspend];
-  // Shops are suspended only when they don't fit the new plan; then the owner picks which stay.
+  // Only when shops don't fit the new plan does the owner pick which stay.
   const choosing = preview.suspend.length > 0;
-  // A shop being set up can't be suspended; the owner keeps it, or waits until it is ready.
+  // A shop being set up can't be suspended: keep it or wait until it's ready.
   const settingUp = counted.find(
     (shop) => !keep.includes(shop.id) && (shop.status === 'pending' || shop.status === 'provisioning'),
   );

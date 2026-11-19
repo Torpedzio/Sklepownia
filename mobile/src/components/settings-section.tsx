@@ -9,7 +9,7 @@ import { useTheme } from '@/hooks/use-theme';
 type SettingsSectionProps = PropsWithChildren<{
   title: string;
   description?: string;
-  /** The section has edits that aren't saved yet; shows the save bar. */
+  /** Unsaved edits; shows the save bar. */
   dirty?: boolean;
   saving?: boolean;
   /** Another change is being saved in the shop, so this one has to wait. */

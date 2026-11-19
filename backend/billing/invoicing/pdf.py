@@ -1,5 +1,3 @@
-"""The PDF of an invoice the platform issues itself."""
-
 from pathlib import Path
 
 from django.conf import settings
@@ -19,7 +17,7 @@ LEFT_COLUMN = 95
 
 
 def render(invoice, *, notes=()):
-    """The invoice as a PDF (bytes). `notes` are extra lines under the totals, e.g. why VAT is not charged."""
+    """PDF bytes; `notes` are extra lines under the totals, e.g. why VAT is not charged."""
     pdf = FPDF(format="A4")
     pdf.set_title(f"Faktura {invoice.number}")
     pdf.set_author(invoice.seller.get("name", ""))

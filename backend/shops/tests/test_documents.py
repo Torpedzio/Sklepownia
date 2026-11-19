@@ -1,8 +1,4 @@
-"""
-The shop's terms and privacy policy: the seller's details in the settings, the documents written from our templates
-and published by the worker, again whenever what they describe changes. The shop is the fake provisioner here;
-what the platforms do with the pages is in test_woocommerce/test_prestashop/test_magento.
-"""
+"""Terms and privacy policy with the fake provisioner; platform publishing is tested in test_<platform>.py."""
 
 from datetime import date
 
@@ -35,7 +31,7 @@ def shop(auth_client, django_capture_on_commit_callbacks):
 
 @pytest.fixture
 def published(monkeypatch):
-    """The documents every publish_documents got, as {key: Document}."""
+    """One {key: Document} per publish_documents call."""
     calls = []
 
     def publish(self, shop, rendered):
@@ -56,7 +52,6 @@ def turn_on(client, shop, captured, **fields):
 
 
 def values(**changes):
-    """Settings of a shop with the documents on, for rendering."""
     shop = Shop.objects.first()
     result = default_settings(shop)
     result["documents"].update(managed=True, **{**SELLER, "tax_id": "5260001246"})
@@ -66,7 +61,6 @@ def values(**changes):
 
 
 def text(document):
-    """A document's text as the app shows it."""
     lines = []
     for block in document.blocks:
         if block["type"] == "list":
@@ -82,8 +76,6 @@ def render(**changes):
     return {document.key: document for document in documents.render(values(**changes), "https://palarnia.example.com",
                                                                     date(2026, 11, 18))}
 
-
-# --- settings ---
 
 def test_documents_are_off_until_the_owner_turns_them_on(auth_client, shop, verified_user):
     BillingProfile.objects.create(
@@ -139,7 +131,7 @@ def test_documents_off_are_left_alone(auth_client, shop, published, django_captu
     patch(auth_client, shop, django_capture_on_commit_callbacks, payments={"cash_on_delivery_enabled": True})
 
     assert len(published) == 1
-    # The pages stay in the shop.
+    # Turning documents off leaves the pages in the shop.
     assert ShopSettings.objects.get(shop=shop).values["documents"]["terms_url"]
 
 
@@ -208,8 +200,6 @@ def test_the_documents_are_for_shops_selling_from_poland(auth_client, shop, publ
     assert "Najpierw wyłącz go w sekcji Regulamin" in response.data["region"]["country"][0]
 
 
-# --- preview ---
-
 def test_a_preview_shows_the_documents_without_changing_anything(auth_client, shop, published):
     response = auth_client.post(f"/api/shops/{shop.pk}/documents/preview/", {"documents": SELLER}, format="json")
 
@@ -247,8 +237,6 @@ def test_only_the_owner_sees_a_preview(api_client, shop, user):
 
     assert response.status_code == 404
 
-
-# --- the documents themselves ---
 
 def test_the_terms_name_the_seller_and_how_to_reach_them(shop):
     terms = text(render(documents={"phone": "600 100 200", "regon": "123456785"})["terms"])
@@ -353,8 +341,6 @@ def test_the_pages_have_only_plain_markup(shop):
         assert set(re.findall(r"</?([a-z0-9]+)", document.html)) <= {"h2", "p", "ol", "ul", "li", "strong"}
 
 
-# --- new versions of the templates ---
-
 def test_new_templates_reach_every_shop_with_older_documents(auth_client, shop, published,
                                                              django_capture_on_commit_callbacks):
     turn_on(auth_client, shop, django_capture_on_commit_callbacks)
@@ -372,7 +358,7 @@ def test_new_templates_reach_every_shop_with_older_documents(auth_client, shop, 
     assert operation.status == ShopOperation.Status.SUCCEEDED
     assert ShopSettings.objects.get(shop=shop).values["documents"]["version"] == documents.VERSION
 
-    # Up to date now: nothing to do, unless asked for every shop.
+    # Up to date now: only --all republishes.
     with django_capture_on_commit_callbacks(execute=True):
         call_command("publish_shop_documents")
     assert len(published) == 2
@@ -389,8 +375,6 @@ def test_shops_without_documents_from_the_app_are_skipped(shop, published, djang
 
     assert published == []
 
-
-# --- start checklist ---
 
 def test_published_documents_tick_off_the_checklist(auth_client, shop, published, django_capture_on_commit_callbacks):
     ShopChecklist.objects.create(shop=shop, products=3, sample_products=0)

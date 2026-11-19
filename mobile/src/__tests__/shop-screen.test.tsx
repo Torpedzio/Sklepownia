@@ -137,7 +137,7 @@ test('opened again, the shop shows at once, and a setup that ended meanwhile is 
   await screen.findByText('Zakładamy Twój sklep…');
   await screen.unmount();
 
-  // Back on the screen later: the copy from the last visit shows while the shop is read again.
+  // Back later: the cached copy shows while the shop is read again.
   let answer!: (shop: ShopDetail) => void;
   await open(shopDetail(), {
     [SHOP]: () => new Promise<ShopDetail>((resolve) => (answer = resolve)),
@@ -218,7 +218,7 @@ test('a PrestaShop shop names its panel and asks only for what the app can set',
   await open(presta, { 'GET /shops/7/settings/': settings });
 
   expect(await screen.findByRole('button', { name: 'Panel PrestaShop' })).toBeTruthy();
-  // Shipping is set in the PrestaShop panel, so the app neither shows nor asks for it.
+  // Shipping is set in the PrestaShop panel, so the app doesn't ask for it.
   expect(
     screen.getByText('Zanim ogłosisz sklep, ustaw płatności. Bez tego klienci nie złożą zamówienia.'),
   ).toBeTruthy();
@@ -251,7 +251,7 @@ test('a Magento shop gets tips for its own panel, which open its start page', as
   expect(await screen.findByText('Sklepy → Konfiguracja → Ogólne → Informacje o sklepie')).toBeTruthy();
   await fireEvent.press(await screen.findByRole('button', { name: 'Uzupełnij dane firmy: otwórz w panelu sklepu' }));
 
-  // Pages of the Magento panel need a key from the session, so the tip opens its start page.
+  // Magento panel pages need a session key, so the tip opens the start page.
   expect(openURL).toHaveBeenCalledWith('http://palarnia.localhost:8080/admin_k3x9/');
   expect(screen.queryByText('WooCommerce → Ustawienia → Ogólne')).toBeNull();
 });

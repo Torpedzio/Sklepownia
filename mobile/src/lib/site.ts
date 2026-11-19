@@ -1,9 +1,8 @@
 import { origin } from 'expo-server';
 
 /**
- * The site's address for links that must be absolute (canonical, link previews, sitemap.xml), without
- * a trailing slash. `SITE_URL` sets it where the server can't see the visitor's address itself, e.g. behind
- * a proxy; otherwise it is the address of the request. Server only.
+ * Absolute site address without a trailing slash (canonical, previews, sitemap.xml). `SITE_URL` overrides the
+ * request's address where the server can't see it, e.g. behind a proxy. Server only.
  */
 export function siteUrl() {
   const configured = process.env.SITE_URL;

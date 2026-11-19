@@ -15,20 +15,19 @@ type AuthContextValue = {
   verifyEmail: (code: string) => Promise<void>;
   resendCode: () => Promise<void>;
   updateProfile: (changes: Pick<User, 'first_name' | 'last_name'>) => Promise<void>;
-  /** Loads the account again, e.g. after paying for a plan. */
   refreshUser: () => Promise<void>;
-  /** Uploads a new profile picture; the server crops it to a square. */
+  /** The server crops it to a square. */
   changeAvatar: (file: AvatarFile) => Promise<void>;
   removeAvatar: () => Promise<void>;
-  /** New password; other devices are signed out, this one keeps working with fresh tokens. */
+  /** Other devices are signed out; this one keeps working with fresh tokens. */
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
-  /** Signs out on every device, this one included. */
+  /** This device included. */
   signOutEverywhere: () => Promise<void>;
-  /** E-mails a code for a new password; the server answers the same for addresses without an account. */
+  /** The server answers the same for addresses without an account. */
   requestPasswordReset: (email: string) => Promise<void>;
-  /** Sets the new password with the code from the e-mail and signs in. */
+  /** Also signs in. */
   resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
-  /** Deletes the account with its shops and plan for good, then forgets the session here. */
+  /** For good, with its shops and plan; then forgets the session here. */
   deleteAccount: (password: string) => Promise<void>;
 };
 
@@ -106,7 +105,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         body: { current_password: currentPassword, new_password: newPassword },
       });
       await setTokens(tokens);
-      // Changing the password signs out every phone, this one's notifications included; it gets them back.
+      // The password change signed out every phone, this one's notifications too; register it again.
       await registerDevice({ force: true }).catch(() => {});
     },
     async signOutEverywhere() {

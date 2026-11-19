@@ -5,22 +5,19 @@ import { api, ApiError } from '@/lib/api';
 import { fetchQuery, readQuery, subscribeQuery } from '@/lib/query-cache';
 
 type Options<T> = {
-  /** Milliseconds until the next refetch for the given data, or false to stop polling. */
+  /** Ms until the next refetch, or false to stop polling. */
   refetchInterval?: (data: T | undefined) => number | false;
-  /** Skip the request, e.g. until the user signs in. */
+  /** E.g. off until the user signs in. */
   enabled?: boolean;
 };
 
-/**
- * Data from `GET path`, loaded on every visit to the screen. A screen opened again shows the data it had at once
- * (shared by every screen with the same path) and swaps in the fresh copy when it arrives.
- */
+/** `GET path`, loaded on every visit; a reopened screen shows cached data (shared by path) until fresh arrives. */
 export function useApiQuery<T>(path: string, { refetchInterval, enabled = true }: Options<T> = {}) {
   const subscribe = useCallback((onChange: () => void) => subscribeQuery(path, onChange), [path]);
   const getEntry = useCallback(() => readQuery(path), [path]);
   const entry = useSyncExternalStore(subscribe, getEntry, getEntry);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  // What the cache held when this screen started showing `path`: until it changes, it's a copy from earlier.
+  // The entry when this screen started showing `path`; while unchanged, it's from an earlier visit.
   const [opened, setOpened] = useState({ path, entry });
   if (opened.path !== path) setOpened({ path, entry });
 
@@ -52,7 +49,7 @@ export function useApiQuery<T>(path: string, { refetchInterval, enabled = true }
     return () => clearTimeout(timer);
   }, [entry, interval, fetchData]);
 
-  // After a change: a request sent before it may still be on its way, so this one doesn't join it.
+  // After a change: an earlier request may still be on its way, so this one doesn't join it.
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
     await fetchData(true);
@@ -63,7 +60,7 @@ export function useApiQuery<T>(path: string, { refetchInterval, enabled = true }
     data,
     error,
     isLoading: data === undefined && error === null,
-    /** The data is a copy from an earlier visit; the fresh one is on its way. */
+    /** A copy from an earlier visit; the fresh one is on its way. */
     isStale: data !== undefined && entry === opened.entry,
     isRefreshing,
     refresh,

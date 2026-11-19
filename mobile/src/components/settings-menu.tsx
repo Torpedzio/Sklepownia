@@ -12,7 +12,6 @@ export type SettingsMenuItem<K extends string> = {
   key: K;
   title: string;
   icon: IconName;
-  /** The section has edits that aren't saved yet. */
   dirty?: boolean;
 };
 
@@ -20,21 +19,19 @@ type SettingsMenuProps<K extends string> = {
   items: SettingsMenuItem<K>[];
   active: K;
   onSelect: (key: K) => void;
-  /** A list beside the content on wide screens; a scrolling strip above it on narrow ones. */
+  /** Wide screens: a list beside the content; narrow: a scrolling strip above it. */
   vertical: boolean;
 };
 
-// How far a section travels as it comes in, and how long it takes.
 const SWAP_OFFSET = 24;
 const SWAP_MS = 260;
 
-/** Picks the settings section shown next to it. */
 export function SettingsMenu<K extends string>({ items, active, onSelect, vertical }: SettingsMenuProps<K>) {
   const strip = useRef<ScrollViewInstance>(null);
   const positions = useRef(new Map<K, number>());
   const [measured, setMeasured] = useState(0);
 
-  // The strip keeps the chosen entry in view, also when the screen opens on a later section.
+  // Keep the chosen entry in view, also when the screen opens on a later section.
   useEffect(() => {
     const x = positions.current.get(active);
     if (!vertical && x !== undefined) strip.current?.scrollTo({ x: Math.max(0, x - Spacing.four), animated: true });
@@ -122,15 +119,13 @@ function MenuEntry<K extends string>({
 }
 
 type SettingsPaneProps<K extends string> = PropsWithChildren<{
-  /** Key of the shown section; a newly chosen one slides in. */
   active: K;
-  /** Menu order, to tell which way the section comes from. */
+  /** Menu order, for the direction a section comes from. */
   order: K[];
-  /** Matches the menu: beside a list sections come from below or above, below a strip from the side. */
+  /** As the menu: beside a list sections come from below or above, below a strip from the side. */
   vertical: boolean;
 }>;
 
-/** The shown settings section. A newly chosen one fades in from the direction of the move through the menu. */
 export function SettingsPane<K extends string>({ active, order, vertical, children }: SettingsPaneProps<K>) {
   const [shown, setShown] = useState(active);
   const [direction, setDirection] = useState(0);

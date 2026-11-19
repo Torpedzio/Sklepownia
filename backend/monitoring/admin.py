@@ -5,8 +5,6 @@ from .models import Heartbeat, Incident, ShopHealth
 
 
 class ReadOnly(admin.ModelAdmin):
-    """The monitor writes these; the admin only reads them."""
-
     def has_add_permission(self, request):
         return False
 
@@ -57,6 +55,4 @@ class ShopHealthAdmin(ReadOnly):
 
 @admin.register(Heartbeat)
 class HeartbeatAdmin(ReadOnly):
-    """When the monitor's round and the nightly backups last ran."""
-
     list_display = ["name", "beat_at"]

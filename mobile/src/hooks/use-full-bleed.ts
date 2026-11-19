@@ -5,10 +5,8 @@ import { Spacing } from '@/constants/theme';
 import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
 /**
- * Lets a section inside the centered page column reach the page edges. Put `columnRef` and `onColumnLayout`
- * on a View in the column, then give the full-width child `width` and `marginLeft: -inset`;
- * `inset` is also where the column starts, for lining content up with the rest of the page.
- * On the web the page is narrower than the window by its scrollbar, so the column is measured there.
+ * Lets a section in the centered column reach the page edges: `columnRef` and `onColumnLayout` go on a View in the
+ * column, `width` and `marginLeft: -inset` on the child. The web measures the column (its scrollbar narrows the page).
  */
 export function useFullBleed() {
   const { width: windowWidth } = useWindowDimensions();

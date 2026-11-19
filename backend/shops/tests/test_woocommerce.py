@@ -1,7 +1,4 @@
-"""
-WooCommerceProvisioner without Docker: commands it would run inside containers go to a fake shell,
-which records them and answers with scripted output. The real setup is checked by hand on a live shop.
-"""
+"""WooCommerceProvisioner against a fake `docker exec` shell with scripted answers; real setups are checked by hand."""
 
 import base64
 import json
@@ -14,6 +11,7 @@ from docker.errors import NotFound
 from accounts.models import User
 from shops.models import Server, Shop, ShopConfig, ShopCredentials, ShopTemplate
 from shops.provisioning.base import ProvisioningError
+from shops.provisioning.container import container_env
 from shops.documents import Document
 from shops.platforms.woocommerce import (
     DOCUMENTS_PLUGIN,
@@ -22,10 +20,10 @@ from shops.platforms.woocommerce import (
     MAIL_PLUGIN_PATH,
     OUTPUT_MARKER,
     SAMPLE_PRODUCT_META,
+    WORDPRESS_ENV_KEYS,
     CommandError,
     WooCommerceProvisioner,
     _currency_options,
-    _env,
     _int,
 )
 
@@ -58,7 +56,7 @@ class Shell:
         return ""
 
     def wp(self):
-        """WP-CLI argument lists in the order they ran, `wp eval` scripts left out."""
+        """WP-CLI argument lists in run order, `wp eval` scripts left out."""
         return [call["args"] for call in self.calls if call["args"][0] != "eval" and call["user"] == "www-data"]
 
     def ran(self, *prefix):
@@ -149,9 +147,6 @@ def settings_values(**overrides):
     return values
 
 
-# --- running PHP and reading options ---
-
-
 def test_php_passes_data_safely_and_returns_what_follows_the_marker(provisioner, shell, shop):
     shell.on_php("echo", output=f"PHP Notice: something\n{OUTPUT_MARKER}42")
     data = {"text": "zażółć ' \" $x"}
@@ -170,9 +165,6 @@ def test_option_falls_back_to_the_default(provisioner, shell, shop):
 
     assert provisioner._option(shop, "woocommerce_enable_reviews", "yes") == "no"
     assert shell.php("get_option")[0][1] == {"name": "woocommerce_enable_reviews", "default": "yes"}
-
-
-# --- settings ---
 
 
 def wordpress_state(**overrides):
@@ -400,9 +392,6 @@ def test_remove_sample_products_counts_what_was_removed(provisioner, shell, shop
     assert re.match(data["name_pattern"][1:-2], "Przykładowy produkt 12")
 
 
-# --- provisioning steps ---
-
-
 def test_allocate_server_picks_one_with_room(provisioner, shop):
     Server.objects.update(max_shops=0)
     roomy = Server.objects.create(name="drugi", hostname="drugi.example.com", max_shops=5)
@@ -450,7 +439,7 @@ def test_start_container_creates_a_new_one_behind_the_proxy(provisioner, shop):
     assert kwargs["name"] == f"shop-{shop.pk}"
     assert kwargs["labels"][f"traefik.http.routers.shop-{shop.pk}.rule"] == f"Host(`{shop.domain}`)"
     assert kwargs["environment"]["WORDPRESS_DB_NAME"] == f"shop_{shop.pk}"
-    # Traefik sends visitors only to a healthy container: the home page at the shop's address must answer.
+    # Traefik routes only to healthy containers: the home page at the shop's address must answer.
     health = kwargs["healthcheck"]
     assert f"-H 'Host: {shop.domain}' http://localhost/" in health["Test"][1]
     assert (health["Retries"], health["StartInterval"]) == (3, 3_000_000_000)
@@ -591,9 +580,6 @@ def test_health_check_reports_what_failed(provisioner, shell, shop):
         provisioner.step_health_check(shop)
 
 
-# --- lifecycle ---
-
-
 def test_teardown_removes_container_volume_and_database(provisioner, shell, shop):
     container = provisioner.client.containers.get.return_value
     provisioner.client.volumes.get.side_effect = NotFound("brak")
@@ -618,9 +604,6 @@ def test_update_address_replaces_the_old_address(provisioner, shell, shop, monke
 
     assert previous == "http://palarnia.stary.example"
     assert ["search-replace", previous, shop.url, "--all-tables-with-prefix", "--skip-columns=guid"] in shell.wp()
-
-
-# --- e-mail ---
 
 
 @pytest.fixture
@@ -709,7 +692,7 @@ def test_a_container_of_the_current_image_is_kept(provisioner, shop):
     current.start.assert_called_once()
     assert provisioner.container_outdated(shop) is False
 
-    # A container from before the healthcheck gets one: it is made again.
+    # A container from before the healthcheck is recreated with one.
     del current.attrs["Config"]["Healthcheck"]
     assert provisioner.container_outdated(shop) is True
 
@@ -727,9 +710,6 @@ def test_shops_send_from_their_own_address(shop, settings):
     assert shop.mail_sender == "palarnia@sklepy.example.pl"
 
 
-# --- helpers ---
-
-
 def test_failed_command_names_only_the_command(provisioner):
     result = provisioner.client.containers.get.return_value.exec_run.return_value
     result.exit_code = 1
@@ -745,8 +725,10 @@ def test_failed_command_names_only_the_command(provisioner):
 def test_helpers():
     container = MagicMock(attrs={"Config": {"Env": ["WORDPRESS_DB_NAME=shop_1", "BROKEN"]}})
 
-    assert _env(container)["WORDPRESS_DB_NAME"] == "shop_1"
-    assert _env(container)["WORDPRESS_DB_HOST"] is None
+    environment = container_env(container, WORDPRESS_ENV_KEYS)
+
+    assert environment["WORDPRESS_DB_NAME"] == "shop_1"
+    assert environment["WORDPRESS_DB_HOST"] is None
     assert _int("7", 2) == 7
     assert _int(False, 2) == 2
 
@@ -824,9 +806,6 @@ def test_memory_limits_in_bytes(limit, expected):
     assert _memory_bytes(limit) == expected
 
 
-# --- orders for the sales overview ---
-
-
 def test_orders_are_read_through_woocommerce_and_named_by_initial(provisioner, shell, shop):
     from datetime import UTC, datetime
     from decimal import Decimal
@@ -870,8 +849,6 @@ def test_products_are_counted_with_the_samples_apart(provisioner, shell, shop):
     assert "LIKE %s" in script and "'trash'" not in script
 
 
-# --- online payments ---
-
 P24_KEYS = {"przelewy24_crc_key": "0123456789abcdef", "przelewy24_api_key": "0123456789abcdef0123456789abcdef"}
 PAYU_KEYS = {"payu_md5_key": "13a980d4f851f3d9a1cfc792fb1f5e50", "payu_client_secret": "12f071174cb7eb79d4aac5bc2f07563f"}
 
@@ -901,7 +878,7 @@ def change_payments(provisioner, shop, **changed):
 
 
 def index_of(shell, snippet):
-    """Where in the run the PHP script containing `snippet`, or the WP-CLI command (tuple), came."""
+    """Position in the run of the PHP script containing `snippet`, or of the WP-CLI command (tuple)."""
     for i, call in enumerate(shell.calls):
         args = call["args"]
         if isinstance(snippet, tuple) and tuple(args[: len(snippet)]) == snippet:
@@ -1007,8 +984,6 @@ def test_operators_untouched_by_the_change_are_left_alone(provisioner, shell, sh
     assert shell.php("get_plugins()") == []
     assert archives == []
 
-
-# --- terms and privacy policy ---
 
 DOCUMENTS = [
     Document(key="terms", title="Regulamin sklepu", slug="regulamin", html="<h2>§ 1</h2>\n<p>Treść</p>"),

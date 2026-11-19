@@ -1,18 +1,15 @@
 """
-Tpay Open API (https://docs-api.tpay.com): card payments with tokenization, then charges of the saved card.
-
-- First payment: POST /transactions with pay.groupId 103 and pay.cardPaymentData.save, payer goes to
-  transactionPaymentUrl; the card token comes in the payment notification (card_token).
+Tpay Open API (https://docs-api.tpay.com).
+- First payment: POST /transactions with pay.groupId 103 and pay.cardPaymentData.save; the card token comes in
+  the notification (card_token).
 - Renewal: POST /transactions, then POST /transactions/{id}/pay with the token and cof "recurring".
-- Notifications are form posts, checked by md5sum (with the merchant security code) and by the
-  X-JWS-Signature header, signed with a certificate issued by Tpay's root CA.
+- Notifications: form posts checked by md5sum (merchant security code) and X-JWS-Signature (Tpay's root CA).
 """
 
 import base64
 import hashlib
 import hmac
 import json
-import logging
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -27,8 +24,6 @@ from django.conf import settings
 from django.core.cache import cache
 
 from .base import BaseGateway, Checkout, GatewayError, InvalidNotification, PaymentResult, SavedCard
-
-logger = logging.getLogger(__name__)
 
 API_URL = {True: "https://openapi.sandbox.tpay.com", False: "https://api.tpay.com"}
 # Where notification signing certificates may come from.
@@ -198,9 +193,8 @@ class TpayGateway(BaseGateway):
 
 def verify_jws(signature, body, certificates_url, fetch=None):
     """
-    Checks Tpay's detached JWS (RFC 7515) over the raw notification body: the signing certificate must come
-    from Tpay's certificate address, be issued by Tpay's root CA and be valid, and its key must verify the
-    RSA SHA-256 signature of "<header>.<base64url(body)>".
+    Checks Tpay's detached JWS (RFC 7515) over the raw body: the certificate must come from Tpay's address,
+    be issued by Tpay's root CA, be valid now and verify the RSA SHA-256 signature of "<header>.<base64url(body)>".
     """
     fetch = fetch or _fetch_certificate
     parts = signature.split(".")

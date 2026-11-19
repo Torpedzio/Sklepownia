@@ -13,7 +13,7 @@ GENERIC_STEP_ERROR = "Wystąpił nieoczekiwany błąd."
 
 
 def run_job(job_id):
-    """Runs the job's steps. Returns the shop when it ended up active, otherwise None."""
+    """Returns the shop when it ended up active, otherwise None."""
     with transaction.atomic():
         job = ProvisioningJob.objects.select_for_update().select_related("shop").get(pk=job_id)
         if job.status != ProvisioningJob.Status.QUEUED:

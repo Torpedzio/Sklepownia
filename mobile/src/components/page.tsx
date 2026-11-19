@@ -24,27 +24,25 @@ import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 type PageProps = PropsWithChildren<
   ScrollViewProps & {
     maxWidth?: number;
-    /** Rendered full-width above the centered content (e.g. the awning and site header). */
+    /** Full-width, above the centered content (e.g. awning, site header). */
     top?: ReactNode;
-    /** Rendered full-width below the centered content (e.g. the footer). */
+    /** Full-width, below it (e.g. footer). */
     bottom?: ReactNode;
   }
 >;
 
-/** The surrounding Page's scrolling, for sections that move with it. */
 export type PageScroll = {
   scrollY: SharedValue<number>;
   /** For `scrollTo` from a worklet. */
   scrollRef: AnimatedRef<Animated.ScrollView>;
-  /** True while a finger drags the page. */
   dragging: SharedValue<boolean>;
-  /** Goes up by one every time the page comes to rest after a gesture. */
+  /** Increments each time the page comes to rest after a gesture. */
   rests: SharedValue<number>;
-  /** True after a jump to the top until the next touch, so sections let the jump pass instead of stopping it. */
+  /** After a jump to the top until the next touch, so sections let the jump pass. */
   jumping: SharedValue<boolean>;
 };
 
-// Below this release speed (per millisecond) the page stops where the finger let go.
+// Release speed (per ms) below which the page stops where the finger let go.
 const REST_VELOCITY = 0.05;
 
 const PageScrollContext = createContext<PageScroll | null>(null);
@@ -120,7 +118,6 @@ export function Page({ children, maxWidth = MaxContentWidth, top, bottom, conten
   );
 }
 
-/** Jumps straight to the top of the page, past any sections that pin while scrolling. */
 function TopButton({ onPress }: { onPress: () => void }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();

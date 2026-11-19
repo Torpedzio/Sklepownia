@@ -43,7 +43,7 @@ MIN_CATEGORY_COUNT = 1
 MAX_CATEGORY_COUNT = 20
 
 
-# Time zone a new shop gets from its country; also the time zones the settings offer.
+# A new shop's time zone by country; also the zones the settings offer.
 COUNTRY_TIMEZONES = {
     "PL": "Europe/Warsaw",
     "DE": "Europe/Berlin",
@@ -66,7 +66,7 @@ class Timezone(models.TextChoices):
     UTC = "UTC", "UTC"
 
 
-# Common VAT rates per country, standard rate first. The settings accept any rate; these are suggestions.
+# Suggestions only (any rate is accepted); standard rate first.
 VAT_RATES = {
     "PL": ["23.00", "8.00", "5.00", "0.00"],
     "DE": ["19.00", "7.00", "0.00"],

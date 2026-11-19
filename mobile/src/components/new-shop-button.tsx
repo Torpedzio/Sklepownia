@@ -14,18 +14,17 @@ export function isShopLimitReached(limit: number | undefined, shopCount: number 
   return limit !== undefined && shopCount !== undefined && shopCount >= limit;
 }
 
-/** Shops that count towards the plan: test shops from before paid plans don't. */
 export function paidShopCount(shops: Shop[] | undefined) {
   return shops?.filter((shop) => !shop.is_test).length;
 }
 
 type NewShopButtonProps = Omit<ButtonProps, 'onPress' | 'disabled'> & {
-  /** The user's live shops that count towards the plan; until they load, the server enforces the limit. */
+  /** Live shops that count towards the plan; until they load, the server enforces the limit. */
   shopCount: number | undefined;
   tooltipSide?: TooltipProps['side'];
 };
 
-/** Opens the new shop form; without a plan it leads to choosing one, at the plan's limit it explains why not. */
+/** Without a plan it leads to choosing one; at the plan's limit it explains why not. */
 export function NewShopButton({ shopCount, tooltipSide, ...buttonProps }: NewShopButtonProps) {
   const { user } = useAuth();
   const limit = user?.shop_limit;

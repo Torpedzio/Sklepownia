@@ -16,7 +16,7 @@ export function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-/** When, briefly: "10:42" today, "18 listopada, 10:42" on another day. */
+/** "10:42" today, "18 listopada, 10:42" on another day. */
 export function formatMoment(iso: string, now = new Date()) {
   const date = new Date(iso);
   const time = date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });

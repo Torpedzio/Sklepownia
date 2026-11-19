@@ -21,7 +21,7 @@ export class ApiError extends Error {
     super(ApiError.describe(status, data));
   }
 
-  /** Field-level validation messages, e.g. `{ slug: 'Ten adres jest już zajęty.' }`. */
+  /** E.g. `{ slug: 'Ten adres jest już zajęty.' }`. */
   get fieldErrors(): Record<string, string> {
     const result: Record<string, string> = {};
     for (const [key, value] of Object.entries(this.data ?? {})) {
@@ -51,8 +51,7 @@ export async function loadTokens() {
 }
 
 export async function setTokens(next: Tokens | null) {
-  // Signing in or out: what the screens loaded belongs to the previous session. New tokens for the same session
-  // (after a password change) keep it.
+  // Signing in or out drops what screens loaded; new tokens for the same session (password change) keep it.
   if (!next || !tokens) clearQueryCache();
   tokens = next;
   await writeTokens(next);

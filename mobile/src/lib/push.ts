@@ -1,7 +1,4 @@
-/**
- * Push notifications on this phone: permission, the Android channels and the token the platform sends to.
- * Works in an app build (development or store), not in Expo Go or the browser.
- */
+/** Push only works in app builds (development or store), not in Expo Go or the browser. */
 import { isRunningInExpoGo } from 'expo';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
@@ -17,19 +14,18 @@ const Notifications: NotificationsModule | null =
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   Platform.OS === 'web' || isRunningInExpoGo() ? null : require('expo-notifications');
 
-/** Why this phone can't get notifications: a reason for the screen, or null when it can. */
 export type PushBlocker = 'web' | 'expo-go' | 'simulator' | 'no-project';
 
 export type PushPermission = 'granted' | 'denied' | 'undetermined';
 
-// Each topic is its own Android channel, so the phone's settings can silence one of them. Ids match the backend.
+// One Android channel per topic, so the phone's settings can silence each. Ids match the backend.
 const CHANNELS = [
   { id: 'new_orders', name: 'Nowe zamówienia', high: true },
   { id: 'shops', name: 'Sklepy', high: false },
   { id: 'billing', name: 'Plan i płatności', high: false },
 ];
 
-// After this long the app sends its token again on coming back to the screen, so the platform knows it's in use.
+// After this long the token is sent again, so the platform knows it's still in use.
 const REGISTER_AGAIN_AFTER_MS = 60 * 60 * 1000;
 
 let registered: { token: string; at: number } | null = null;
@@ -46,7 +42,7 @@ export function pushBlocker(): PushBlocker | null {
   return null;
 }
 
-/** Notifications that come while the app is open show as a banner too, quietly. Call once, at start. */
+/** Quiet banners while the app is open too. Call once, at start. */
 export function configurePush() {
   Notifications?.setNotificationHandler({
     handleNotification: async () => ({
@@ -63,10 +59,7 @@ export async function getPushPermission(): Promise<{ permission: PushPermission;
   return describe(await Notifications.getPermissionsAsync());
 }
 
-/**
- * Sends this phone's token to the platform, when notifications are allowed; otherwise does nothing.
- * `force` sends it even when it went a moment ago. Returns whether the phone is registered.
- */
+/** Returns whether the phone is registered; `force` resends even if the token just went. */
 export async function registerDevice({ force = false } = {}) {
   if (!Notifications || pushBlocker()) return false;
   if (describe(await Notifications.getPermissionsAsync()).permission !== 'granted') return false;
@@ -81,7 +74,6 @@ export async function registerDevice({ force = false } = {}) {
   return true;
 }
 
-/** Asks for permission (where the system still lets the app ask) and registers the phone. */
 export async function enablePush(): Promise<PushPermission> {
   if (!Notifications || pushBlocker()) return 'undetermined';
   // Android 13 asks for permission once a channel exists, so the channels come first.
@@ -95,23 +87,19 @@ export async function enablePush(): Promise<PushPermission> {
   return permission;
 }
 
-/** On signing out: this phone stops getting the account's notifications. Never fails the sign-out. */
+/** Never fails the sign-out. */
 export async function forgetDevice() {
   const token = registered?.token;
   registered = null;
   if (token) await api('/push/devices/forget/', { method: 'POST', body: { token } }).catch(() => {});
 }
 
-/** Calls `listener` when the phone gets a new push token, e.g. after restoring a backup. */
 export function onPushTokenChange(listener: () => void) {
   const subscription = Notifications?.addPushTokenListener(listener);
   return () => subscription?.remove();
 }
 
-/**
- * Opens the screen a notification points to (`data.url`) when it's tapped, also when the tap started the app.
- * Returns the cleanup.
- */
+/** Also handles the tap that started the app. Returns the cleanup. */
 export function openTappedNotifications(open: (url: string) => void) {
   if (!Notifications) return () => {};
   const module = Notifications;

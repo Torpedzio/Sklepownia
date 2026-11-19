@@ -14,7 +14,6 @@ export type ButtonProps = Omit<PressableProps, 'children'> & {
   loading?: boolean;
 };
 
-// Grows a little under the pointer and gives way when pressed.
 const HOVER_SCALE = 1.03;
 const PRESS_SCALE = 0.96;
 

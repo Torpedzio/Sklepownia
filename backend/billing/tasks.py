@@ -8,13 +8,11 @@ from .models import Payment, Subscription
 
 @shared_task
 def renew_subscriptions():
-    """Scheduled by Celery beat (CELERY_BEAT_SCHEDULE)."""
     services.renew_due()
 
 
 @shared_task
 def reconcile_payments():
-    """Scheduled by Celery beat: settles payments whose outcome never reached the platform."""
     services.reconcile_pending()
 
 
@@ -43,5 +41,4 @@ def deliver_invoice(invoice_id):
 
 @shared_task
 def process_invoices():
-    """Scheduled by Celery beat: retries issuing, follows KSeF, e-mails invoices that never left."""
     invoices.process()

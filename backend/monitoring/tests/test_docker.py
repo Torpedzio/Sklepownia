@@ -52,9 +52,6 @@ def container(status="running", health=None, labels=None):
     return MagicMock(status=status, labels=labels or {}, attrs={"State": state})
 
 
-# --- the shop's home page ---
-
-
 def test_the_home_page_is_visited_through_the_proxy_like_a_customer_would(provisioner, shop):
     shop_container = provisioner.client.containers.get.return_value
     shop_container.exec_run.return_value = answer(0, b"200 0.254 ")
@@ -108,9 +105,6 @@ def test_the_shops_containers_are_found_by_their_label(provisioner):
     provisioner.client.containers.list.assert_called_once_with(all=True, filters={"label": "shops.id"})
 
 
-# --- waiting until the proxy sends visitors to a started container ---
-
-
 def test_a_started_shop_is_waited_for_until_healthy_and_routed(provisioner, shop, clock, monkeypatch):
     started = container("running", "starting")
     healths = iter(["starting", "starting", "healthy"])
@@ -134,9 +128,6 @@ def test_a_container_from_before_the_healthcheck_is_routed_while_it_runs(provisi
     provisioner.client.containers.get.return_value = container("running")
 
     assert provisioner._wait_until_routed(shop) is True
-
-
-# --- repairs ---
 
 
 def test_a_shop_is_started_again_from_its_files(provisioner, shop, monkeypatch):
@@ -164,9 +155,6 @@ def test_a_restart_waits_until_the_shop_is_routed_again(provisioner, shop, monke
 
     assert provisioner.restart_shop(shop) is False
     provisioner.client.containers.get.return_value.restart.assert_called_once_with(timeout=30)
-
-
-# --- the shop node ---
 
 
 def test_the_shared_services_are_checked_by_their_containers(provisioner):

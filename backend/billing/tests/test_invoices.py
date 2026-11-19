@@ -31,7 +31,7 @@ def client(api_client, unsubscribed_user):
 
 
 def pay(client, captured, details=PERSON):
-    """The owner fills in invoice details and pays for Standard on the simulated gateway's page."""
+    """Fills in invoice details and pays for Standard on the fake gateway's page."""
     assert client.put("/api/billing/profile/", details, format="json").status_code == 200
     with captured(execute=True):
         response = client.post("/api/billing/checkout/", {

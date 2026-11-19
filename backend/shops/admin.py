@@ -54,7 +54,7 @@ class ShopOperationAdmin(admin.ModelAdmin):
     list_display = ["id", "shop", "kind", "status", "requested_by", "created_at", "finished_at"]
     list_filter = ["kind", "status"]
     search_fields = ["shop__name", "shop__slug"]
-    # Payment keys on their way to the shop: nobody reads them here.
+    # Payment keys in transit to the shop: nobody reads them here.
     exclude = ["secrets"]
     readonly_fields = [
         "shop", "kind", "status", "changes", "result", "error", "requested_by", "created_at", "started_at", "finished_at",
@@ -63,7 +63,7 @@ class ShopOperationAdmin(admin.ModelAdmin):
 
 @admin.register(ShopBackup)
 class ShopBackupAdmin(admin.ModelAdmin):
-    """The index of the backup repository; the worker makes and restores backups (python manage.py restore_shop)."""
+    """Read-only index; restoring is done by the worker or manage.py restore_shop."""
 
     list_display = ["id", "shop", "kind", "status", "created_at", "size_display"]
     list_filter = ["status", "kind", "shop__platform"]
@@ -81,5 +81,5 @@ class ShopBackupAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        # The snapshot would stay in the repository, and the nightly run would list it again.
+        # The snapshot would stay in the repository and maintain() would adopt it again.
         return False

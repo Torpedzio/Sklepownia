@@ -13,7 +13,7 @@ from .serializers import ForgetDeviceSerializer, PushDeviceSerializer, PushPrefe
 @api_view(["POST"])
 @permission_classes([IsEmailVerified])
 def register_device(request):
-    """The app sends its push token after the user agrees to notifications, and again on each start."""
+    """Sent after the user agrees to notifications, and again on each app start."""
     serializer = PushDeviceSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     device, created = services.register_device(request.user, **serializer.validated_data)
@@ -36,7 +36,7 @@ def forget_device(request):
 @api_view(["GET", "PATCH"])
 @permission_classes([IsEmailVerified])
 def preferences(request):
-    """What the notifications are about, and the phones that get them."""
+    """Notification topics, and the phones that get them."""
     chosen = services.preferences(request.user)
     if request.method == "PATCH":
         serializer = PushPreferencesSerializer(chosen, data=request.data, partial=True)

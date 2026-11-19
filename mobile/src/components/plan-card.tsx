@@ -11,10 +11,9 @@ import type { Plan } from '@/lib/types';
 
 type PlanCardProps = {
   plan: Plan;
-  /** Pickable card (checkout): shows whether it is the chosen plan. */
+  /** Pickable card (checkout): shows whether it's the chosen plan. */
   selected?: boolean;
   onSelect?: () => void;
-  /** E.g. a button under the benefits (pricing page). */
   children?: ReactNode;
 };
 
@@ -34,7 +33,6 @@ export function planShopsLabel(plan: Pick<Plan, 'max_shops' | 'max_magento_shops
   return `${shops}, w tym ${magento === 1 || magento === plan.max_shops ? magento : `do ${magento}`} na Magento`;
 }
 
-/** A plan with its gross price and benefits. */
 export function PlanCard({ plan, selected, onSelect, children }: PlanCardProps) {
   const theme = useTheme();
   const content = (
@@ -120,7 +118,7 @@ const styles = StyleSheet.create({
   },
   features: {
     gap: Spacing.two,
-    // Side by side, cards are as tall as the tallest; their buttons line up at the bottom.
+    // Side by side, cards match the tallest and their buttons line up.
     flexGrow: 1,
   },
   featured: {

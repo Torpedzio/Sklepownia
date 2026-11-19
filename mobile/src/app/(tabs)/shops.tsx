@@ -92,7 +92,7 @@ export default function DashboardScreen() {
           </View>
         ) : (
           <View style={styles.grid}>
-            {/* Shops suspended by the plan go last: the ones that work come first. */}
+            {/* Suspended shops go last; the working ones come first. */}
             {[...(shops ?? [])]
               .sort((a, b) => Number(a.status === 'suspended') - Number(b.status === 'suspended'))
               .map((shop) => (

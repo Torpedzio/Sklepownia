@@ -8,9 +8,9 @@ import { useTheme } from '@/hooks/use-theme';
 import type { Choice, SettingsSection, ShopSettings } from '@/lib/types';
 
 export type Tile = {
-  /** The settings section the tile shows. */
+  /** The section the tile shows. */
   key: SettingsSection;
-  /** Settings section the tile opens (as in the address: ?section=…). */
+  /** The section it opens, as in the address: ?section=…. */
   section: string;
   title: string;
   icon: IconName;
@@ -19,7 +19,6 @@ export type Tile = {
   missing?: boolean;
 };
 
-/** The shop's settings at a glance; each tile opens its section of the settings. */
 export function ShopOverview({ shopId, settings }: { shopId: number; settings: ShopSettings }) {
   const tiles = describeSettings(settings);
   return (
@@ -37,7 +36,6 @@ export function ShopOverview({ shopId, settings }: { shopId: number; settings: S
   );
 }
 
-/** What still stops customers from buying, for the shop's main card. */
 export function missingForSales(settings: ShopSettings) {
   const { values } = settings;
   const missing: string[] = [];
@@ -55,7 +53,7 @@ function paymentMethods(payments: ShopSettings['values']['payments']) {
   ].filter((method): method is string => Boolean(method));
 }
 
-/** Whether the app can change `section` on the shop's platform; the rest is set in the shop's panel. */
+/** Whether the app can change `section` on this platform; the rest is set in the shop's panel. */
 export function supports(settings: Pick<ShopSettings, 'sections'>, section: SettingsSection) {
   return !settings.sections || settings.sections.includes(section);
 }
@@ -92,7 +90,6 @@ function OverviewTile({ tile, onPress }: { tile: Tile; onPress: () => void }) {
   );
 }
 
-/** One tile per area of the settings the platform has, worded for the shop owner. */
 export function describeSettings(settings: ShopSettings): Tile[] {
   return allTiles(settings).filter((tile) => supports(settings, tile.key));
 }

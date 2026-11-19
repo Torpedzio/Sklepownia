@@ -1,7 +1,6 @@
 /**
- * Answers `api()` calls in screen tests by "METHOD /path/". A route is a value, a function of the request body,
- * or a list of those used one after another (the last one repeats). Use with
- * `jest.mock('@/lib/api', () => ({ ...jest.requireActual('@/lib/api'), api: jest.fn() }))`.
+ * Answers `api()` calls in screen tests by "METHOD /path/": a value, a function of the body, or a list used in turn
+ * (the last repeats). Use with `jest.mock('@/lib/api', () => ({ ...jest.requireActual('@/lib/api'), api: jest.fn() }))`.
  */
 import { api } from '@/lib/api';
 

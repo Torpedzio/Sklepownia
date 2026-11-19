@@ -8,9 +8,8 @@ import { siteUrl } from '@/lib/site';
 import { viewportOfRequest } from '@/lib/viewport';
 
 /**
- * The page around every screen on the web, drawn on the server for each request and never in the browser.
- * It names the page for search engines and link previews (constants/pages.ts), sets the colors for the visitor's
- * light or dark mode before any JS runs, and notes the window size the page was drawn for (lib/viewport.ts).
+ * The web page shell, server-rendered per request, never in the browser: <head> for search engines and previews
+ * (constants/pages.ts), colors for the visitor's mode before JS runs, the assumed window size (lib/viewport.ts).
  */
 export default function Root({ children, pathname = '/' }: PropsWithChildren<{ pathname?: string }>) {
   const { htmlAttributes, bodyAttributes, headNodes, bodyNodes } = useServerDocumentContext();

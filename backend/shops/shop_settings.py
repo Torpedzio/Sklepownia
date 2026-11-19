@@ -1,8 +1,6 @@
 """
-Shop settings the owner can change in the app, grouped in sections as the app shows them.
-
-The section serializers below are the schema: they validate input, give every field its label
-(shown in the change history) and turn values into plain JSON (money as "15.00").
+Owner-editable shop settings. The section serializers are the schema: validation, labels (shown in the change
+history) and plain JSON values (money as "15.00").
 """
 
 import re
@@ -18,15 +16,12 @@ from .choices import COUNTRY_TIMEZONES, VAT_RATES, Country, Currency, Language, 
 from .models import ShopTemplate
 
 MONEY = {"max_digits": 10, "decimal_places": 2, "min_value": Decimal("0")}
-# Stands for a key in the change history (ShopOperation.changes); the key itself never leaves the operation.
+# Stands for a key in ShopOperation.changes; the key itself never leaves the operation.
 SECRET_PLACEHOLDER = "••••••••"
 
 
 class SecretField(serializers.CharField):
-    """
-    A key the app only writes: it goes to the shop, and the platform neither stores nor shows it (see split_secrets).
-    Left blank, the shop keeps the key it has.
-    """
+    """Write-only: sent to the shop, never stored by the platform (see split_secrets). Blank keeps the current key."""
 
     def __init__(self, **kwargs):
         super().__init__(write_only=True, required=False, allow_blank=True, **kwargs)
@@ -42,7 +37,7 @@ def _digits(value, label):
 def _hex_key(value, length):
     value = re.sub(r"\s", "", value).lower()
     if value and not re.fullmatch(rf"[0-9a-f]{{{length}}}", value):
-        # 16 znaków, 32 znaki.
+        # Polish plural: 32 znaki, 16 znaków.
         chars = "znaki" if length % 10 in (2, 3, 4) and length % 100 not in (12, 13, 14) else "znaków"
         raise serializers.ValidationError(f"Klucz ma {length} {chars}: cyfry i litery od a do f.")
     return value
@@ -72,7 +67,7 @@ class PaymentsSection(serializers.Serializer):
     bank_account_number = serializers.CharField(label="Numer konta", max_length=42, allow_blank=True)
     bank_name = serializers.CharField(label="Nazwa banku", max_length=100, allow_blank=True)
     cash_on_delivery_enabled = serializers.BooleanField(label="Płatność przy odbiorze")
-    # Online payments: the operator's plugin is installed in the shop the first time it's turned on.
+    # The operator's plugin is installed in the shop the first time it's turned on.
     przelewy24_enabled = serializers.BooleanField(label="Płatności Przelewy24")
     przelewy24_sandbox = serializers.BooleanField(label="Tryb testowy Przelewy24")
     przelewy24_merchant_id = serializers.CharField(label="ID sprzedawcy Przelewy24", max_length=15, allow_blank=True)
@@ -168,10 +163,7 @@ class SellerRegister(serializers.ChoiceField):
 
 
 class DocumentsSection(serializers.Serializer):
-    """
-    The shop's terms of sale and privacy policy, written from our templates (shops/documents.py) and published as
-    pages in the shop. The platform keeps the seller's details; the shop gets the finished documents.
-    """
+    """Terms of sale and privacy policy from our templates (shops/documents.py), published as pages in the shop."""
 
     managed = serializers.BooleanField(label="Regulamin i polityka prywatności z aplikacji")
     seller_name = serializers.CharField(label="Nazwa sprzedawcy", max_length=200, allow_blank=True)
@@ -186,7 +178,7 @@ class DocumentsSection(serializers.Serializer):
     return_days = serializers.IntegerField(label="Dni na odstąpienie od umowy", min_value=14, max_value=365)
     free_returns = serializers.BooleanField(label="Darmowy zwrot")
     dispatch_days = serializers.IntegerField(label="Czas wysyłki", min_value=1, max_value=30)
-    # Where the documents are in the shop and which version of our templates they follow, after publishing.
+    # Set after publishing.
     terms_url = serializers.CharField(read_only=True)
     privacy_url = serializers.CharField(read_only=True)
     version = serializers.CharField(read_only=True)
@@ -232,7 +224,7 @@ def _django_check(validator, value):
         raise serializers.ValidationError(exc.messages) from exc
 
 
-# Order of the sections in the app and when applying changes.
+# Order matters: the app shows and applies the sections in this order.
 SECTIONS = {
     "general": GeneralSection,
     "availability": AvailabilitySection,
@@ -250,7 +242,7 @@ FIELD_LABELS = {
     for section, serializer in SECTIONS.items()
 }
 
-# Keys the app writes to the shop but never keeps: {section: (field, …)}.
+# {section: (field, …)}
 SECRET_FIELDS = {
     section: tuple(name for name, field in serializer().fields.items() if isinstance(field, SecretField))
     for section, serializer in SECTIONS.items()
@@ -259,13 +251,13 @@ SECRET_FIELDS = {
 
 @dataclass(frozen=True)
 class Operator:
-    """An online payment operator, as the payments section has it: fields named <key>_…"""
+    """Its payments-section fields are named <key>_…"""
 
     key: str
     name: str
-    # What identifies the owner's account, kept in the settings.
+    # Account ids, kept in the settings.
     ids: tuple
-    # What signs the payments: written to the shop, never kept (SecretField).
+    # Signing keys: SecretField, never kept.
     keys: tuple
 
 
@@ -280,7 +272,7 @@ OPERATORS = {
 
 
 def default_settings(shop):
-    """Settings of a freshly provisioned shop, used until the shop has been read for the first time."""
+    """Used until the shop has been read for the first time."""
     config = shop.config
     return {
         "general": {"name": shop.name, "description": config.description, "contact_email": config.contact_email},
@@ -337,7 +329,7 @@ def default_settings(shop):
 
 
 def _seller_defaults(owner):
-    """The seller's details as the owner gave them for our invoices, a start for the documents."""
+    """Prefilled from the owner's billing profile."""
     profile = getattr(owner, "billing_profile", None) if owner else None
     if profile is None:
         return {"seller_name": "", "street": "", "postal_code": "", "city": "", "tax_id": ""}
@@ -352,7 +344,6 @@ def _seller_defaults(owner):
 
 
 def _operator_defaults():
-    """Every operator off, without an account, in production mode."""
     values = {}
     for key, operator in OPERATORS.items():
         values.update({f"{key}_enabled": False, f"{key}_sandbox": False, f"{key}_keys_saved": False})
@@ -365,28 +356,21 @@ def suggested_vat_rate(country):
 
 
 def complete(values, defaults):
-    """`values` with every section and field present, missing ones taken from `defaults`."""
     return {section: {**fields, **values.get(section, {})} for section, fields in defaults.items()}
 
 
 class SettingsUpdateSerializer(serializers.Serializer):
-    """
-    Partial update (use with `partial=True`): any sections, and any fields within them. Rules spanning
-    several fields are checked against the settings as they will be after the change
-    (`context["current"]` merged with the input).
-    """
+    """Use with partial=True. Cross-field rules are checked against context["current"] merged with the input."""
 
     def get_fields(self):
         return {name: section(required=False) for name, section in SECTIONS.items()}
 
     def validate(self, attrs):
         errors = {}
-        # The platform's sections (context["sections"]); themes belong to one platform too.
         sections = self.context.get("sections", SECTIONS)
         for section in attrs:
             if section not in sections:
                 errors[section] = ["Tę część ustawień zmienisz w panelu sklepu."]
-        # Online payment operators the platform can set up (context["operators"]).
         operators = self.context.get("operators", tuple(OPERATORS))
         given = attrs.get("payments", {})
         for key, operator in OPERATORS.items():
@@ -426,7 +410,7 @@ class SettingsUpdateSerializer(serializers.Serializer):
 
 
 def _documents_errors(values, given):
-    """What the documents miss, when they are on and their details or the shop's country are being changed."""
+    """Only checked when documents are on and their details or the country are being changed."""
     if not values["documents"]["managed"]:
         return {}
     if "documents" in given:
@@ -439,7 +423,7 @@ def _documents_errors(values, given):
 
 
 def documents_errors(values):
-    """{section: {field: [message]}} of what the documents need and don't have; also for a preview."""
+    """{section: {field: [message]}}; also used for a preview."""
     documents = values["documents"]
     required = ["seller_name", "street", "postal_code", "city"]
     if documents["register"] in ("ceidg", "krs"):
@@ -453,10 +437,7 @@ def documents_errors(values):
 
 
 def _operator_errors(current, payments, given):
-    """
-    What's missing for the operators being changed (`given` has their fields) that will be on:
-    their ids, and their keys unless the shop has them.
-    """
+    """Only for enabled operators touched in `given`: their ids, and keys unless the shop has them."""
     errors = {}
     for key, operator in OPERATORS.items():
         if not payments[f"{key}_enabled"] or not any(field.startswith(f"{key}_") for field in given):
@@ -479,10 +460,7 @@ def _operator_errors(current, payments, given):
 
 
 def split_secrets(changes):
-    """
-    `changes` (normalized input) without the keys, and the keys given, both {section: {field: value}}.
-    A key left blank isn't a change: the shop keeps the one it has.
-    """
+    """Returns (changes without keys, given keys). A blank key isn't a change."""
     rest, keys = {}, {}
     for section, fields in changes.items():
         secret = SECRET_FIELDS.get(section, ())
@@ -494,7 +472,7 @@ def split_secrets(changes):
 
 
 def with_placeholders(changes, keys):
-    """`changes` with SECRET_PLACEHOLDER for every key given, so the history says a key was changed."""
+    """So the history says a key was changed without storing it."""
     result = {section: dict(fields) for section, fields in changes.items()}
     for section, fields in keys.items():
         result.setdefault(section, {}).update({name: SECRET_PLACEHOLDER for name in fields})
@@ -502,7 +480,6 @@ def with_placeholders(changes, keys):
 
 
 def reveal(changes, keys):
-    """`changes` of an operation with its keys in place of the placeholders: what the shop gets."""
     result = {section: dict(fields) for section, fields in changes.items()}
     for section, fields in keys.items():
         result.setdefault(section, {}).update(fields)
@@ -510,10 +487,7 @@ def reveal(changes, keys):
 
 
 def conceal(values, keys):
-    """
-    `values` (settings after a change) as the platform keeps them: without keys, and with every operator
-    whose keys were just written marked as having them.
-    """
+    """Strips keys from `values` and marks operators whose keys were just written as *_keys_saved."""
     result = {section: dict(fields) for section, fields in values.items()}
     for section, fields in result.items():
         for name in SECRET_FIELDS.get(section, ()):
@@ -526,7 +500,6 @@ def conceal(values, keys):
 
 
 def normalize(validated):
-    """Validated input as plain JSON values, in the same form as the stored settings."""
     result = {}
     for section, fields in validated.items():
         schema = SECTIONS[section]().fields
@@ -539,7 +512,6 @@ def merge(current, changes):
 
 
 def diff(current, changes):
-    """Only the fields whose value actually changes, {section: {field: new value}}."""
     result = {}
     for section, fields in changes.items():
         changed = {name: value for name, value in fields.items() if current.get(section, {}).get(name) != value}
@@ -549,7 +521,7 @@ def diff(current, changes):
 
 
 def describe(changes):
-    """Labels of the changed fields, in section order, e.g. ["Nazwa sklepu", "Waluta"]."""
+    """E.g. ["Nazwa sklepu", "Waluta"], in section order."""
     return [
         FIELD_LABELS[section][name]
         for section in SECTIONS
@@ -565,7 +537,6 @@ def _iban_checksum_ok(iban):
 
 
 def _group(number):
-    """Account numbers read best in groups of four, like on a bank statement."""
     if re.fullmatch(r"\d{26}", number):
         return number[:2] + " " + " ".join(number[i:i + 4] for i in range(2, 26, 4))
     return " ".join(number[i:i + 4] for i in range(0, len(number), 4))

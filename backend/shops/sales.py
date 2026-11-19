@@ -1,7 +1,6 @@
 """
-The sales overview in the app. The worker copies the shop's recent orders (ShopOrder) from the shop: every few
-minutes, and when the owner opens the overview with an old copy. The overview is counted from the copy, so it
-opens at once and works while the shop is slow.
+Sales overview, counted from a local copy of recent orders (ShopOrder) so it opens at once even when the shop is slow.
+The copy is refreshed every few minutes and when the overview is opened with stale data.
 """
 
 import logging
@@ -22,20 +21,18 @@ from .provisioning import get_provisioner
 logger = logging.getLogger(__name__)
 
 Status = ShopOrder.Status
-# Orders that count as sales: placed, paid or not yet, and not cancelled.
+# Placed (paid or not) and not cancelled.
 SALE = (Status.NEW, Status.PROCESSING, Status.COMPLETED)
-# How far back orders are copied and how long they are kept: enough to compare 30 days with the 30 before.
+# Copy window: enough to compare 30 days with the 30 before.
 KEPT_FOR = timedelta(days=90)
-# Each read starts this much before the newest change seen, for changes saved a moment late.
+# Reads start this much before the cursor, for changes saved a moment late.
 OVERLAP = timedelta(minutes=10)
 BATCH = 500
 MAX_BATCHES = 10
-# Opening the overview reads the shop again when the copy is older than this; the button, after this.
 STALE_AFTER = timedelta(minutes=2)
-# Orders older than this aren't announced as new, even when they're new to the copy.
+# Older orders aren't pushed as new, even when they're new to the copy.
 ANNOUNCED_FOR = timedelta(days=7)
 REFRESH_AGAIN_AFTER = timedelta(seconds=30)
-# A queued read that hasn't finished by then is not waited for any more.
 REFRESH_TIMEOUT = timedelta(minutes=2)
 RECENT_ORDERS = 10
 CHART_DAYS = 30
@@ -43,10 +40,7 @@ SYNC_FAILED = "Nie udało się odczytać zamówień ze sklepu. Spróbujemy ponow
 
 
 def sync(shop_id):
-    """
-    Copies the orders changed since the last read. Returns False when the shop isn't running, another read
-    of it is under way, or reading failed (the error is kept for the overview).
-    """
+    """Returns False when the shop isn't active, another read is under way, or reading failed (error kept)."""
     shop = Shop.objects.select_related("config").filter(pk=shop_id).first()
     if shop is None or shop.status != Shop.Status.ACTIVE:
         return False
@@ -54,19 +48,19 @@ def sync(shop_id):
     now = timezone.now()
     oldest = now - KEPT_FOR
     with transaction.atomic():
-        # Held while reading, so a second read of the same shop (scheduled and requested) skips instead of waiting.
+        # Held while reading, so a concurrent read of the same shop skips instead of waiting.
         state = SalesSync.objects.select_for_update(skip_locked=True).filter(shop=shop).first()
         if state is None:
             return False
         since = max(state.cursor - OVERLAP, oldest) if state.cursor else oldest
-        # The first read copies what the shop already had: nothing of it is news.
+        # The first read copies existing orders: nothing of it is news.
         announce = state.synced_at is not None
         provisioner = get_provisioner(shop.platform)
         new_sales = []
         try:
             for _ in range(MAX_BATCHES):
                 orders = provisioner.read_orders(shop, since, BATCH)
-                # A batch that fails to save is undone alone, so the state below can still be saved.
+                # Savepoint: a failed batch is undone alone, so the state below can still be saved.
                 with transaction.atomic():
                     stored = _store(shop, [order for order in orders if order.placed_at >= oldest])
                 new_sales += stored
@@ -76,7 +70,7 @@ def sync(shop_id):
                 if len(orders) < BATCH:
                     break
         except Exception:
-            # Batches read before the failure stay, and so does the cursor after them.
+            # Earlier batches and their cursor stay.
             logger.exception("Reading the orders of shop %s failed", shop.pk)
             state.attempted_at = timezone.now()
             state.error = SYNC_FAILED
@@ -93,7 +87,7 @@ def sync(shop_id):
 
 
 def sync_all():
-    """The scheduled round: every running shop not read in the last half interval gets read."""
+    """Queues every active shop not attempted in the last half interval."""
     from .tasks import sync_shop_orders
 
     recent = timezone.now() - timedelta(minutes=settings.SHOP_ORDERS_SYNC_MINUTES) / 2
@@ -104,9 +98,8 @@ def sync_all():
 
 def request_refresh(shop, *, force=False):
     """
-    Queues a read of the shop when it was last read a while ago: on opening the overview, or with `force` from the
-    refresh button (unless it was read a moment ago). A failed read counts too, so a broken shop isn't asked again on
-    every visit. Nothing is queued twice. Returns the shop's SalesSync.
+    Queues a read if the last attempt is older than STALE_AFTER (REFRESH_AGAIN_AFTER with `force`). Failed reads
+    count too, so a broken shop isn't asked on every visit. Never queues twice. Returns the SalesSync.
     """
     from .tasks import sync_shop_orders
 
@@ -116,7 +109,7 @@ def request_refresh(shop, *, force=False):
     now = timezone.now()
     if state.attempted_at and state.attempted_at > now - (REFRESH_AGAIN_AFTER if force else STALE_AFTER):
         return state
-    # Claimed with the old value: two requests at once queue one read.
+    # Compare-and-set on the old value: two requests at once queue one read.
     if SalesSync.objects.filter(pk=state.pk, requested_at=state.requested_at).update(requested_at=now):
         state.requested_at = now
         transaction.on_commit(lambda: sync_shop_orders.delay(shop.pk))
@@ -133,7 +126,7 @@ def is_refreshing(state, now=None):
 
 
 def overview(shop, now=None):
-    """What the app shows: sales in the shop's currency by period and day, orders to handle, the latest orders."""
+    """Only orders in the shop's currency count."""
     now = now or timezone.now()
     today = timezone.localdate(now)
     first_day = today - timedelta(days=2 * CHART_DAYS - 1)
@@ -175,8 +168,8 @@ def overview(shop, now=None):
 
 
 def _store(shop, orders):
-    """Saves the orders; returns those that just became sales: unseen before, or unpaid until now."""
-    # One row per order: an upsert may not touch the same row twice.
+    """Upserts; returns orders that just became sales (unseen before, or unpaid until now)."""
+    # An upsert may not touch the same row twice.
     orders = list({order.external_id: order for order in orders}.values())
     if not orders:
         return []

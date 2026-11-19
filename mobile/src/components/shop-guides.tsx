@@ -17,18 +17,14 @@ import { useTheme } from "@/hooks/use-theme";
 import type { Platform } from "@/lib/types";
 
 type ShopGuidesPanelProps = {
-  /** Whose panel the tips walk through. A new platform needs a new panel (`key`), starting from the first tip. */
+  /** A new platform needs a new panel (`key`), starting from the first tip. */
   platform: Platform;
-  /**
-   * The shop's admin panel. When given, each tip gets a button: the right page in WooCommerce, the start page in
-   * PrestaShop and Magento.
-   */
+  /** Gives each tip a button: the right page in WooCommerce, the start page in PrestaShop and Magento. */
   adminUrl?: string;
 };
 
 const SWIPE_DISTANCE = 50;
 
-/** Tips for setting up and running a shop, shown one slide at a time. */
 export function ShopGuidesPanel({ platform, adminUrl }: ShopGuidesPanelProps) {
   const theme = useTheme();
   const guides = ShopGuides[platform];

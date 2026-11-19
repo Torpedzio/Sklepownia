@@ -48,10 +48,8 @@ def test_a_code_by_e_mail_sets_a_new_password_and_signs_in(api_client, verified_
     assert set(response.data) == {"access", "refresh"}
     verified_user.refresh_from_db()
     assert verified_user.check_password(NEW)
-    # Other devices are signed out, and the owner hears about the change.
     assert api_client.post("/api/auth/refresh/", {"refresh": other_device["refresh"]}, format="json").status_code == 401
     assert mailoutbox[-1].subject == "Hasło do konta zostało zmienione"
-    # The code works once.
     assert not PasswordResetCode.objects.exists()
     again = reset(api_client, django_capture_on_commit_callbacks, verified_user.email, code, "Jeszcze-Inne-Haslo-9")
     assert again.data == {"code": ["Kod wygasł. Poproś o nowy kod."]}
@@ -74,7 +72,7 @@ def test_asking_again_within_a_minute_sends_nothing_new(api_client, verified_use
     PasswordResetCode.objects.update(created_at=timezone.now() - timedelta(minutes=2))
     ask(api_client, django_capture_on_commit_callbacks, verified_user.email)
     assert len(mailoutbox) == 2
-    # Only the newest code works.
+    # Only the newest code works (the two codes may match by chance).
     old, new = code_from(mailoutbox[0]), code_from(mailoutbox[1])
     if old != new:
         assert reset(api_client, django_capture_on_commit_callbacks, verified_user.email, old).data == {

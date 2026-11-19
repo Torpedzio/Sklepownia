@@ -1,20 +1,17 @@
-"""
-A sender hands notifications to a push service, which passes them on to Apple's and Google's services. The answer
-comes in two parts: a ticket at once (the service took the message) and a receipt later (the phone's service did).
-"""
+"""Senders pass notifications to a push service (then APNs/FCM): a ticket comes at once, a receipt later."""
 
 from dataclasses import dataclass
 
-# The phone no longer takes notifications from the app (uninstalled, or notifications turned off for good).
+# The app was uninstalled or its notifications turned off for good.
 DEVICE_NOT_REGISTERED = "DeviceNotRegistered"
 
 
 class PushError(Exception):
-    """The push service refused the request; sending it again won't help."""
+    """Refused; sending it again won't help."""
 
 
 class PushUnavailable(PushError):
-    """The push service didn't answer or asked to slow down; try again later."""
+    """No answer or asked to slow down; try again later."""
 
 
 @dataclass(frozen=True)
@@ -39,9 +36,9 @@ class Ticket:
 
 class BaseSender:
     def send(self, messages):
-        """Sends `messages`; returns one Ticket per message, in the same order. Raises PushUnavailable to retry."""
+        """Returns one Ticket per message, in the same order. Raises PushUnavailable to retry."""
         raise NotImplementedError
 
     def receipts(self, ticket_ids):
-        """Receipts of the tickets that have one by now, as {ticket id: Ticket}."""
+        """{ticket id: Ticket} for the tickets whose receipt is ready."""
         raise NotImplementedError

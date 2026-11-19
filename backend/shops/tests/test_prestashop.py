@@ -1,7 +1,4 @@
-"""
-PrestaShopProvisioner without Docker: commands it would run inside containers go to a fake shell,
-which records them and answers with scripted output. The real setup is checked by hand on a live shop.
-"""
+"""PrestaShopProvisioner against a fake `docker exec` shell with scripted answers; real setups are checked by hand."""
 
 import base64
 import json
@@ -311,9 +308,6 @@ def test_update_address_moves_the_shop(provisioner, shell, shop, monkeypatch):
     assert shell.php("shop_url")[0][1] == {"domain": shop.url.split("://")[1]}
 
 
-# --- orders for the sales overview ---
-
-
 def test_orders_are_read_from_prestashop(provisioner, shell, shop):
     from datetime import UTC, datetime
     from decimal import Decimal
@@ -344,8 +338,6 @@ def test_products_are_counted_with_the_samples_apart(provisioner, shell, shop):
     [(script, _)] = shell.php("SKLEPOWNIA_SAMPLE_PRODUCTS")
     assert "id_product IN" in script
 
-
-# --- online payments ---
 
 P24_KEYS = {"przelewy24_crc_key": "0123456789abcdef", "przelewy24_api_key": "0123456789abcdef0123456789abcdef"}
 PAYU_KEYS = {"payu_md5_key": "13a980d4f851f3d9a1cfc792fb1f5e50", "payu_client_secret": "12f071174cb7eb79d4aac5bc2f07563f"}
@@ -434,9 +426,6 @@ def test_an_operator_the_shop_never_had_stays_away_when_off(provisioner, shell, 
     assert archives == []
     assert shell.php("przelewy24_credentials_config WHERE") == []
     assert shell.php("sklepownia_module($d['name']") == []
-
-
-# --- terms and privacy policy ---
 
 
 def test_documents_take_the_terms_page_and_a_privacy_page_ticked_at_checkout(provisioner, shell, shop):

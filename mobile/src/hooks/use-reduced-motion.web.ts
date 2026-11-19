@@ -8,11 +8,7 @@ function subscribe(onChange: () => void) {
   return () => media.removeEventListener('change', onChange);
 }
 
-/**
- * Whether the visitor asked for less motion. The server can't know, so it draws the animated version, and so
- * does the browser's first render (otherwise React couldn't reuse the page); the visitor's choice follows right
- * after.
- */
+/** The server can't know, so it and hydration render the animated version; the visitor's choice follows. */
 export function useReducedMotion() {
   return useSyncExternalStore(
     subscribe,

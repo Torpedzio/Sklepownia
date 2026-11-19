@@ -31,7 +31,6 @@ def _hash_code(code):
 
 
 def _new_code(model, user):
-    """Replaces the user's code of this kind with a new one and returns it; only its hash is stored."""
     code = f"{secrets.randbelow(1_000_000):06d}"
     model.objects.filter(user=user).delete()
     model.objects.create(
@@ -41,7 +40,7 @@ def _new_code(model, user):
 
 
 def _check_code(record, code):
-    """Raises VerificationError unless `code` matches the stored one; a wrong guess counts as an attempt."""
+    """Raises VerificationError unless `code` matches; a wrong guess counts as an attempt."""
     if record is None or record.expires_at < timezone.now():
         raise VerificationError("Kod wygasł. Poproś o nowy kod.")
     if record.attempts >= settings.EMAIL_VERIFICATION_MAX_ATTEMPTS:
@@ -79,8 +78,8 @@ def verify_email(user, code):
 
 def sign_out_everywhere(user):
     """
-    Every refresh token of the user stops working, so other devices are signed out at their next refresh.
-    No phone gets the user's notifications any more; the one still signed in sends its token again on its next start.
+    Blacklists all refresh tokens (other devices drop out at their next refresh) and forgets all push devices;
+    the phone still signed in registers again on its next start.
     """
     from push.services import forget_all_devices
 
@@ -94,10 +93,7 @@ def _active_user(email):
 
 
 def request_password_reset(email):
-    """
-    E-mails a code for setting a new password. Nothing tells the caller whether the address has an account:
-    unknown addresses, and repeats within the resend cooldown, just get no e-mail.
-    """
+    """Never reveals whether the address has an account: unknown ones and repeats within the cooldown get no e-mail."""
     user = _active_user(email)
     if user is None or not _cooled_down(PasswordResetCode, user):
         return
@@ -108,9 +104,8 @@ def request_password_reset(email):
 
 def reset_password(email, code, new_password):
     """
-    Sets a new password once the code from the e-mail matches. Raises VerificationError for a wrong or expired code
-    (the same for unknown addresses) and Django's ValidationError for a weak password, which keeps the code usable.
-    The code proves the address, so an unverified account becomes verified. Other devices are signed out.
+    Raises VerificationError for a wrong or expired code (also for unknown addresses), or Django's ValidationError
+    for a weak password, which keeps the code usable. The code proves the address, so the e-mail becomes verified.
     """
     user = _active_user(email)
     record = PasswordResetCode.objects.filter(user=user).first() if user else None
@@ -118,7 +113,7 @@ def reset_password(email, code, new_password):
     _check_code(record, code)
     password_validation.validate_password(new_password, user)
     with transaction.atomic():
-        # The code works once, also when two requests bring it at the same moment.
+        # Single use, also when two requests bring it at once.
         if not PasswordResetCode.objects.filter(pk=record.pk).delete()[0]:
             raise VerificationError("Kod wygasł. Poproś o nowy kod.")
         user.set_password(new_password)
@@ -132,17 +127,15 @@ def reset_password(email, code, new_password):
 
 def delete_account(user):
     """
-    Deletes the account for good. Every shop is torn down, the plan ends now without a refund of the paid period,
-    and the card is forgotten. The user row stays, because paid payments (kept for tax law) point at it,
-    but without anything personal: no e-mail, name, picture or password, and it can't sign in.
-    The address is free for a new account. A confirmation goes to the old address.
+    Tears down every shop, ends the plan now without a refund and forgets the card. The user row stays, anonymised
+    and unable to sign in, because paid payments (kept for tax law) point at it; the address is freed.
     """
     from billing.services import close_account
     from shops.services import ShopBeingSetUp, delete_all_shops
     from push.models import PushPreferences
 
     with transaction.atomic():
-        # The same lock as creating a shop, so no shop appears while the account goes.
+        # Same lock as creating a shop, so no shop appears meanwhile.
         user = User.objects.select_for_update().get(pk=user.pk)
         if user.is_staff:
             raise AccountDeletionBlocked("Konto administratora usuń w panelu administracyjnym.")

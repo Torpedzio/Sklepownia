@@ -10,7 +10,7 @@ type CodeFieldProps = {
   error?: string;
 };
 
-/** The 6-digit code from an e-mail: large digits, anything else dropped, filled in from the message on phones. */
+/** The 6-digit e-mailed code: other characters dropped, filled in from the message on phones. */
 export function CodeField({ value, onChangeText, onSubmitEditing, error }: CodeFieldProps) {
   return (
     <TextField

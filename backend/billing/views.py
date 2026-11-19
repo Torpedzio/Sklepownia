@@ -39,7 +39,7 @@ PAYMENT_HISTORY_LENGTH = 12
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def plans(request):
-    """Plans on offer, for the pricing page. Prices are gross."""
+    """Plans on offer; prices are gross."""
     return Response(PlanSerializer(Plan.objects.filter(is_active=True), many=True).data)
 
 
@@ -65,7 +65,7 @@ def overview(request):
 @api_view(["PUT"])
 @permission_classes(VERIFIED)
 def profile(request):
-    """Saves who pays: a person or a company with NIP, and the address for invoices."""
+    """Saves the payer's invoice details: a person, or a company with NIP."""
     instance = BillingProfile.objects.filter(user=request.user).first()
     serializer = BillingProfileSerializer(instance, data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -109,7 +109,7 @@ def checkout(request):
 @api_view(["GET"])
 @permission_classes(VERIFIED)
 def payment_detail(request, payment_id):
-    """One payment. While it is pending, the gateway is asked about it too."""
+    """A pending payment is also checked with the gateway."""
     payment = get_object_or_404(Payment.objects.select_related("plan"), pk=payment_id, user=request.user)
     payment = services.check_with_gateway(payment)
     return Response(PaymentSerializer(payment, context={"request": request}).data)
@@ -135,7 +135,7 @@ def resume(request):
 @api_view(["POST"])
 @permission_classes(VERIFIED)
 def change_preview(request):
-    """What moving to another plan would cost and which shops it would suspend or bring back. Changes nothing."""
+    """Cost of moving to another plan and the shops it would suspend or resume. Changes nothing."""
     serializer = PlanChangeSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
@@ -190,10 +190,7 @@ def _change_subscription(request, change):
 
 @csrf_exempt
 def gateway_notification(request):
-    """
-    Payment notifications from the gateway (Tpay: form post with X-JWS-Signature). Not part of the app's API.
-    Answers the acknowledgement the gateway expects, or 400 so it tries again later.
-    """
+    """Gateway notifications, outside the app's API. Answers the expected ack, or 400 so the gateway retries."""
     if request.method != "POST":
         return HttpResponse(status=405)
     gateway = get_gateway()
@@ -207,7 +204,7 @@ def gateway_notification(request):
 
 
 def invoice_pdf(request, token):
-    """An invoice's PDF behind a signed link from the app (`invoice.url`). Not part of the app's API."""
+    """PDF behind a signed link from the app (`invoice.url`), outside the app's API."""
     invoice = invoices.from_link(token)
     if invoice is None or not invoice.is_final:
         return HttpResponse("Link do faktury wygasł. Otwórz ją ponownie w aplikacji: Konto → Plan i płatności.",
@@ -224,7 +221,7 @@ def _pdf_response(invoice):
 
 
 def fake_gateway_page(request, payment_id):
-    """The simulated gateway's payment page (only with FakeGateway): pay with a test card, or decline."""
+    """FakeGateway's payment page: pay with a test card, or decline."""
     if not isinstance(get_gateway(), FakeGateway):
         raise Http404
     payment = get_object_or_404(Payment.objects.select_related("plan", "user"), pk=payment_id)

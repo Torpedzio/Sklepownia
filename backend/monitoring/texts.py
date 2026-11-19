@@ -1,7 +1,4 @@
-"""
-What the monitor says: to the owner of a shop that is down (push notification and e-mail, in the owner's words, without
-the technical cause) and to the staff (plain e-mail with what the monitor saw).
-"""
+"""Monitor messages: to the owner (push and e-mail, no technical cause) and to the staff (plain e-mail, full detail)."""
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -14,7 +11,7 @@ from push.models import Topic
 MINUTES = ("minutę", "minuty", "minut")
 HOURS = ("godzinę", "godziny", "godzin")
 DAYS = ("dzień", "dni", "dni")
-# What the monitor did by itself (Incident.repaired).
+# Keyed by Incident.repaired.
 REPAIRS = {"start": "uruchomił kontener sklepu", "restart": "zrestartował kontener sklepu"}
 REPAIR_FAILED = {
     "start": "Nie udało się uruchomić kontenera sklepu",
@@ -41,7 +38,7 @@ def shop_back_notice(shop, since, until):
 
 
 def shop_email(shop, reason, since, until=None):
-    """The e-mail to the owner: the shop is down ("down") or works again ("back")."""
+    """`reason` is "down" or "back"."""
     if reason == "down":
         subject = f"Sklep „{shop.name}” nie działa"
         heading = "Sklep nie działa"
@@ -126,7 +123,7 @@ def _shop_lines(shop):
 
 
 def duration(delta):
-    """How long, after "przez": "25 minut", "godzinę i 5 minut", "2 dni i 3 godziny"."""
+    """For use after "przez": "25 minut", "godzinę i 5 minut", "2 dni i 3 godziny"."""
     minutes = max(round(delta.total_seconds() / 60), 1)
     if minutes < 60:
         return _amount(minutes, MINUTES)
@@ -138,7 +135,7 @@ def duration(delta):
 
 
 def moment(value, today=None):
-    """When, briefly: "10:42" on the same day as `today` (now by default), "18 listopada, 10:42" on another."""
+    """"10:42" on the same day as `today` (default now), else "18 listopada, 10:42"."""
     local = timezone.localtime(value)
     day = timezone.localtime(today or timezone.now()).date()
     time = formats.time_format(local, "H:i")

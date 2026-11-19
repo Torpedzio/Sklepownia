@@ -1,8 +1,4 @@
-"""
-The project documentation (Markdown files in the repository) rendered as web pages under /docs/.
-
-Files are read on every request, so an edited file shows up after a page refresh.
-"""
+"""The repository's Markdown docs under /docs/, read on every request (edits show up on refresh)."""
 
 import posixpath
 from dataclasses import dataclass
@@ -24,7 +20,7 @@ class Page:
     path: str
 
 
-# Menu order. A new document becomes visible here once it is listed.
+# Menu order; a document is shown only once listed here.
 PAGES = [
     Page("", "Start", "README.md"),
     Page("architektura", "Architektura", "docs/architektura.md"),
@@ -50,7 +46,7 @@ def page_url(page):
 
 
 def render(page):
-    """Return the page as HTML, or None when its file is missing."""
+    """HTML, or None when the file is missing."""
     source = Path(settings.HANDBOOK_ROOT) / page.path
     if not source.is_file():
         return None
@@ -73,10 +69,7 @@ class LinkExtension(Extension):
 
 
 class LinkRewriter(Treeprocessor):
-    """
-    Points links between documents at their pages. Links to source files can't be followed here,
-    so they become plain paths.
-    """
+    """Points links between documents at their pages; links to source files become plain paths."""
 
     def __init__(self, md, page):
         super().__init__(md)

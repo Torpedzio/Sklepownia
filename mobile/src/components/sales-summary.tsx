@@ -11,7 +11,6 @@ import { plural } from '@/lib/plural';
 import { ordersLabel, SALES_POLL_MS } from '@/lib/sales';
 import type { ShopSales } from '@/lib/types';
 
-/** Today's and the month's sales on the shop's screen, with the way to the full overview. */
 export function SalesSummary({ shopId }: { shopId: number }) {
   const theme = useTheme();
   const { data: sales } = useApiQuery<ShopSales>(`/shops/${shopId}/sales/`, {

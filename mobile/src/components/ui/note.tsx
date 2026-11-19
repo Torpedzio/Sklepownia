@@ -4,7 +4,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-/** A short remark under settings; `warning` when a change has a side effect worth noticing. */
+/** `warning` when a change has a side effect worth noticing. */
 export function Note({ children, warning }: { children: string; warning?: boolean }) {
   const theme = useTheme();
   return (

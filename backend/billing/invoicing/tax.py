@@ -1,4 +1,4 @@
-"""VAT on invoices. Plan prices are gross; the invoice splits what was paid into net and VAT."""
+"""Plan prices are gross; invoices split what was paid into net and VAT."""
 
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -9,10 +9,7 @@ CENT = Decimal("0.01")
 
 
 def rate_for(buyer, plan_rate):
-    """
-    A company from abroad buys a service taxed where it is (art. 28b of the VAT act): no Polish VAT. People
-    and Polish companies pay the plan's rate.
-    """
+    """Foreign companies pay no Polish VAT (art. 28b of the VAT act: taxed where they are); others, the plan's rate."""
     if buyer.get("kind") == "company" and buyer.get("country", "PL") != "PL":
         return NOT_SUBJECT
     return format(Decimal(plan_rate).normalize(), "f")
@@ -27,7 +24,6 @@ def split(gross, rate):
 
 
 def notes(invoice):
-    """What the invoice has to say about VAT it does not charge."""
     if invoice.vat_rate != NOT_SUBJECT:
         return []
     if invoice.buyer.get("country") in EU:

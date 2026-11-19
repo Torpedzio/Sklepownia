@@ -1,12 +1,11 @@
 import * as ImagePicker from 'expo-image-picker';
 
-/** The backend's upload limit; it then stores the picture as a 512×512 square. */
+/** The backend's upload limit; it stores the picture as a 512×512 square. */
 export const MAX_AVATAR_BYTES = 10 * 1024 * 1024;
 
 /** A web `File`, or what React Native's FormData takes for a file on the device. */
 export type AvatarFile = Blob | { uri: string; name: string; type: string };
 
-/** Opens the photo library with a square crop. Resolves to the chosen picture, or null when cancelled. */
 export async function pickAvatar(): Promise<AvatarFile | null> {
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],

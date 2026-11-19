@@ -19,33 +19,30 @@ def _test_settings(settings, tmp_path, monkeypatch):
     settings.SHOPS_HTTP_PORT = 443
     settings.FAKE_PROVISIONER_STEP_DELAY = 0
     settings.FAKE_PROVISIONER_FAIL_AT_STEP = ""
-    # Never the real payment gateway from .env: tests must not call Tpay.
+    # Never the real Tpay, Fakturownia or Expo from .env.
     settings.PAYMENT_GATEWAY = "billing.gateways.fake.FakeGateway"
     settings.FAKE_GATEWAY_DECLINE_RENEWALS = False
     settings.TPAY_CLIENT_ID = ""
     settings.TPAY_CLIENT_SECRET = ""
     settings.TPAY_SECURITY_CODE = ""
-    # Invoices are numbered here, never sent to Fakturownia from .env.
     settings.INVOICE_ISSUER = "billing.invoicing.platform.PlatformIssuer"
     settings.INVOICE_SELLER = {"name": "Sklepownia sp. z o.o.", "tax_id": "5260001246", "street": "Prosta 20",
                                "postal_code": "00-850", "city": "Warszawa", "bank_account": ""}
     settings.INVOICE_NUMBER_FORMAT = "FV/{year}/{month:02}/{number:04}"
     settings.FAKTUROWNIA_DOMAIN = ""
     settings.FAKTUROWNIA_API_TOKEN = ""
-    # Notifications stay in memory (push_outbox), never reach Expo.
+    # Notifications stay in memory, see push_outbox.
     settings.PUSH_SENDER = "push.senders.memory.MemorySender"
     settings.EXPO_ACCESS_TOKEN = ""
-    # Uploaded avatars go to a throwaway folder.
     settings.MEDIA_ROOT = tmp_path / "media"
-    # Plugins for shops are never fetched from their makers; tests that install one give the archive themselves.
+    # Never download plugins; tests that install one provide the archive.
     settings.SHOPS_PACKAGE_CACHE = str(tmp_path / "packages")
     monkeypatch.setattr("shops.provisioning.packages._download", _no_downloads)
-    # The simulated backup repository starts empty, and never the real one from .env is used.
+    # FakeProvisioner keeps its state (backups, broken shops) on the class: start every test clean.
     from shops.provisioning.fake import FakeProvisioner
 
     monkeypatch.setattr(FakeProvisioner, "snapshots", {})
     monkeypatch.setattr(FakeProvisioner, "restored", [])
-    # Every shop and service works until a test breaks one.
     for name, value in {"containers": {}, "pages": {}, "services": {}, "disk": None, "repairs": []}.items():
         monkeypatch.setattr(FakeProvisioner, name, value)
     monkeypatch.setattr(FakeProvisioner, "repairs_help", True)
@@ -83,7 +80,7 @@ def plan(db):
 
 
 def subscribe(user, plan, **fields):
-    """Gives `user` a paid, active plan, as if the first payment went through."""
+    """Active paid plan with a saved card, as after the first payment."""
     from datetime import timedelta
 
     from django.utils import timezone
@@ -115,7 +112,7 @@ def unsubscribed_user(db):
 
 @pytest.fixture
 def verified_user(unsubscribed_user, plan):
-    """Verified and on an active plan, so shops can be created."""
+    """Verified and on an active plan."""
     subscribe(unsubscribed_user, plan)
     return unsubscribed_user
 

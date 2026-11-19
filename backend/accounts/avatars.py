@@ -1,5 +1,3 @@
-"""Profile pictures: whatever the user uploads is stored as one small square WebP."""
-
 import uuid
 from io import BytesIO
 
@@ -18,7 +16,7 @@ class InvalidAvatar(ValueError):
 
 
 def process_avatar(upload) -> ContentFile:
-    """Crops the picture to a centred square, scales it to SIZE and drops its metadata (EXIF, GPS)."""
+    """Centre-crops to a SIZE square and drops metadata (EXIF, GPS)."""
     if upload.size > MAX_UPLOAD_BYTES:
         raise InvalidAvatar("Zdjęcie jest za duże. Wybierz plik do 10 MB.")
     try:
@@ -38,7 +36,7 @@ def process_avatar(upload) -> ContentFile:
 
     output = BytesIO()
     image.save(output, "WEBP", quality=85, method=4)
-    # A fresh name for every picture, so it can be cached for good and old links stop working.
+    # Fresh name per picture, so it can be cached forever and old links stop working.
     return ContentFile(output.getvalue(), name=f"{uuid.uuid4().hex}.webp")
 
 

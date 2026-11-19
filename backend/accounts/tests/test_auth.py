@@ -180,7 +180,6 @@ def test_changing_the_password_signs_out_other_devices(api_client, verified_user
 
     assert response.status_code == 200
     assert set(response.data) == {"access", "refresh"}
-    # The other device's refresh token no longer works; the new one does.
     assert api_client.post("/api/auth/refresh/", {"refresh": login["refresh"]}, format="json").status_code == 401
     assert api_client.post("/api/auth/refresh/", {"refresh": response.data["refresh"]}, format="json").status_code == 200
     verified_user.refresh_from_db()

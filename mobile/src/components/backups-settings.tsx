@@ -11,9 +11,9 @@ import type { ShopBackup, ShopBackups } from '@/lib/types';
 
 type Props = {
   backups: ShopBackups | undefined;
-  /** Something else is being done in the shop, so this waits. */
+  /** Another job runs in the shop, so this waits. */
   busy: boolean;
-  /** A backup or a restore is being asked for. */
+  /** A backup or restore request is on its way. */
   starting: boolean;
   onBackup: () => void;
   onRestore: (backup: ShopBackup) => void;
@@ -50,7 +50,7 @@ export function backupName(iso: string, now = new Date()) {
   return `kopię z ${date}, ${time}`;
 }
 
-/** "dziś o 03:00", "jutro o 03:00": when the next nightly backup is made. */
+/** "dziś o 03:00", "jutro o 03:00": the next nightly backup. */
 function nextTime(iso: string, now = new Date()) {
   const { relative, time, date } = moment(iso, now);
   return `${relative === 'today' ? 'dziś' : relative === 'tomorrow' ? 'jutro' : date} o ${time}`;
@@ -65,7 +65,6 @@ export function backupsDescription(backups: ShopBackups | undefined) {
   return `${intro} Zostaje najnowsza kopia z każdego z ostatnich ${days} i ${weeks}.`;
 }
 
-/** The body of the backups section of the shop settings: making one now and going back to one. */
 export function BackupsSettings({ backups, busy, starting, onBackup, onRestore }: Props) {
   const theme = useTheme();
   if (!backups) {
@@ -137,7 +136,7 @@ const styles = StyleSheet.create({
   list: {
     gap: Spacing.three,
   },
-  // A backup and its button stay side by side, also on a phone: the list is short to scan.
+  // Side by side on phones too: the list is short to scan.
   item: {
     flexDirection: 'row',
     alignItems: 'center',

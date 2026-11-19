@@ -1,33 +1,28 @@
 import type { SettingsSection } from '@/lib/types';
 
-/** Unsaved edits of one settings section: field → value as typed. */
+/** Field → value as typed. */
 export type Draft = Record<string, string | boolean>;
 export type Drafts = Partial<Record<SettingsSection, Draft>>;
-/** Validation messages per section and field, as the settings screen shows them. */
 export type FieldErrors = Partial<Record<SettingsSection, Record<string, string>>>;
 
-// Money and rates are typed by people, who may use a comma.
+// Money and rates: people may type a comma.
 const DECIMAL_FIELDS = new Set(['courier_cost', 'free_shipping_min_amount', 'standard_rate']);
 const WHOLE_NUMBER_FIELDS = new Set(['low_stock_threshold', 'return_days', 'dispatch_days']);
 
-/**
- * The edits that differ from the saved values; text fields compare as text, so "5" equals 5. Fields the settings
- * don't return (payment keys, only ever sent) count as empty.
- */
+/** Edits that differ from the saved values ("5" equals 5); fields not returned (payment keys) count as empty. */
 export function changedFields(saved: Record<string, unknown>, draft: Draft | undefined) {
   return Object.fromEntries(
     Object.entries(draft ?? {}).filter(([key, value]) => String(value) !== String(saved[key] ?? '')),
   );
 }
 
-/** Field labels in a sentence: "nazwa sklepu, stawka VAT, płatności PayU" (names and acronyms keep their capitals). */
+/** "nazwa sklepu, stawka VAT, płatności PayU": names and acronyms keep their capitals. */
 export function fieldList(labels: string[]) {
   return labels
     .map((label) => (/^\p{Lu}\p{Lu}/u.test(label) ? label : label.charAt(0).toLowerCase() + label.slice(1)))
     .join(', ');
 }
 
-/** A typed value in the form the API accepts. */
 export function toApi(key: string, value: string | boolean) {
   if (typeof value === 'boolean') return value;
   if (DECIMAL_FIELDS.has(key)) return value.replace(',', '.').replace(/\s/g, '');
@@ -35,7 +30,7 @@ export function toApi(key: string, value: string | boolean) {
   return value;
 }
 
-/** The first message per field from a 400 response, `{section: {field: [messages]}}`. */
+/** First message per field from a 400 response, `{section: {field: [messages]}}`. */
 export function sectionErrors(data: Record<string, unknown> | null): FieldErrors {
   const result: FieldErrors = {};
   for (const [section, fields] of Object.entries(data ?? {})) {

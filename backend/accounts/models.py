@@ -30,7 +30,7 @@ class User(AbstractUser):
     email = models.EmailField("adres e-mail", unique=True)
     is_email_verified = models.BooleanField(default=False)
     avatar = models.FileField("zdjęcie profilowe", upload_to="avatars/", blank=True)
-    # When the owner deleted the account. The row stays, without personal data, because payments point at it.
+    # The row of a deleted account stays, without personal data, because payments point at it.
     deleted_at = models.DateTimeField("usunięte", null=True, blank=True)
 
     USERNAME_FIELD = "email"
@@ -43,7 +43,7 @@ class User(AbstractUser):
 
 
 class OneTimeCode(models.Model):
-    """A 6-digit code sent by e-mail. Only its hash is kept; wrong guesses are counted."""
+    """A 6-digit code sent by e-mail; only its hash is stored."""
 
     code_hash = models.CharField(max_length=64)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -59,6 +59,4 @@ class EmailVerificationCode(OneTimeCode):
 
 
 class PasswordResetCode(OneTimeCode):
-    """Lets someone who forgot the password set a new one."""
-
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="password_reset_code")

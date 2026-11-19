@@ -4,20 +4,14 @@ import { Platform, Pressable, StyleSheet } from 'react-native';
 import { Icon } from '@/components/icon';
 import { Spacing } from '@/constants/theme';
 
-/**
- * Header options with a back arrow beside the title on the web, where the navigator only draws one
- * when there's history to go back to (not after a page reload). Phones keep their own header arrow.
- */
+/** Web only: a back arrow by the title, as the navigator draws one only with history (not after a reload). */
 export function backArrowOptions(fallback: Href, label: string) {
   if (Platform.OS !== 'web') return {};
   const goBack = () => (router.canGoBack() ? router.back() : router.replace(fallback));
   return { headerLeft: () => <HeaderArrow label={label} onPress={goBack} /> };
 }
 
-/**
- * Header options for a screen that shouldn't lead back to where it came from, like the payment
- * result after the gateway: the arrow leaves for `target` on every platform, with or without history.
- */
+/** For screens that mustn't lead back (e.g. payment result after the gateway): the arrow always goes to `target`. */
 export function exitArrowOptions(target: Href, label: string) {
   return {
     headerBackVisible: false,

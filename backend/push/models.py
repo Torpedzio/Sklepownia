@@ -3,7 +3,7 @@ from django.db import models
 
 
 class Topic(models.TextChoices):
-    """What a notification is about. The owner turns each topic on or off; Android shows each as its own channel."""
+    """The owner turns each topic on or off; Android shows each as its own channel."""
 
     NEW_ORDERS = "new_orders", "Nowe zamówienia"
     SHOPS = "shops", "Sklepy"
@@ -11,8 +11,6 @@ class Topic(models.TextChoices):
 
 
 class PushDevice(models.Model):
-    """A phone with the app that agreed to notifications, as an Expo push token."""
-
     class Platform(models.TextChoices):
         IOS = "ios", "iOS"
         ANDROID = "android", "Android"
@@ -34,7 +32,7 @@ class PushDevice(models.Model):
 
 
 class PushPreferences(models.Model):
-    """Which topics the owner wants on the phone. Without a row, all of them."""
+    """No row means every topic is on."""
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="push_preferences")
     new_orders = models.BooleanField(default=True)
@@ -50,10 +48,7 @@ class PushPreferences(models.Model):
 
 
 class PushTicket(models.Model):
-    """
-    A notification the push service took. Its receipt, checked a while later, says whether the phone's service
-    (APNs, FCM) took it too; a phone that no longer has the app is dropped then.
-    """
+    """Taken by the push service; its receipt, checked later, says whether APNs/FCM took it too."""
 
     device = models.ForeignKey(PushDevice, on_delete=models.CASCADE, related_name="tickets")
     ticket_id = models.CharField(max_length=64, unique=True)

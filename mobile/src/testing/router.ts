@@ -1,6 +1,6 @@
 /**
- * Stand-in for expo-router in screen tests: `jest.mock('expo-router', () => require('@/testing/router'))`.
- * Set the screen's route params with `useLocalSearchParams.mockReturnValue(...)`.
+ * Stand-in for expo-router: `jest.mock('expo-router', () => require('@/testing/router'))`.
+ * Route params: `useLocalSearchParams.mockReturnValue(...)`.
  */
 import { cloneElement, createElement, isValidElement, useEffect, type ReactElement, type ReactNode } from 'react';
 import { Text } from 'react-native';
@@ -27,7 +27,7 @@ export const usePathname = jest.fn(() => '/');
 
 type LinkProps = { href: unknown; asChild?: boolean; children?: ReactNode; [prop: string]: unknown };
 
-/** Pressing it calls `router.push(href)`, so tests can check where a link leads. */
+/** Pressing calls `router.push(href)`, so tests can check where a link leads. */
 export function Link({ href, asChild, children, ...rest }: LinkProps) {
   const onPress = () => router.push(href);
   if (asChild && isValidElement(children)) {
@@ -41,7 +41,6 @@ export function Link({ href, asChild, children, ...rest }: LinkProps) {
   return createElement(Text, { ...rest, onPress, accessibilityRole: 'link' }, children);
 }
 
-/** Navigates on render, like expo-router's Redirect. */
 export function Redirect({ href }: { href: unknown }) {
   useEffect(() => {
     router.replace(href);

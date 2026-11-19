@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class LogSender(BaseSender):
-    """Writes notifications to the log instead of sending them: for development without a phone."""
+    """Only logs notifications, for development without a phone."""
 
     def send(self, messages):
         for message in messages:

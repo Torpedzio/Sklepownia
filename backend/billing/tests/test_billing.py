@@ -177,7 +177,6 @@ def test_a_declined_first_payment_leaves_no_plan(client, user, django_capture_on
     assert payment["error"] == "Płatność odrzucona na stronie testowej."
     assert Subscription.objects.get(user=user).status == Subscription.Status.INCOMPLETE
     assert mailoutbox == []
-    # Trying again is allowed.
     assert checkout(client, django_capture_on_commit_callbacks).status_code == 201
 
 

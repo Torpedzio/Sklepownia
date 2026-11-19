@@ -45,7 +45,6 @@ import type {
   ShopSettingsValues,
 } from '@/lib/types';
 
-// Read the shop again on opening when the last read is older than this.
 const FRESH_FOR_MS = 60_000;
 const POLL_MS = 1500;
 const HISTORY_LENGTH = 10;
@@ -57,7 +56,7 @@ const SLOW_SECTIONS: Partial<Record<Section, string>> = {
 
 type MenuKey = Section | 'security' | 'backups' | 'manual' | 'history';
 
-// Menu order; `slug` is what the address shows (?section=platnosci).
+// Menu order; `slug` goes in the address (?section=platnosci).
 const MENU: (SettingsMenuItem<MenuKey> & { slug: string })[] = [
   { key: 'general', slug: 'podstawowe', title: 'Podstawowe', icon: 'store' },
   { key: 'availability', slug: 'dostepnosc', title: 'Sklep otwarty', icon: 'power' },
@@ -86,7 +85,6 @@ const SECTION_KEYS: MenuKey[] = [
   'appearance',
 ];
 
-/** The menu without the sections the shop's platform doesn't let the app change. */
 function menuFor(settings: ShopSettings | undefined) {
   if (!settings) return MENU;
   return MENU.filter((item) => !SECTION_KEYS.includes(item.key) || supports(settings, item.key as Section));
@@ -116,11 +114,11 @@ export default function ShopSettingsScreen() {
   const [drafts, setDrafts] = useState<Drafts>({});
   const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState<Section | 'security' | 'backups' | null>(null);
-  // The operation whose end this screen reports; operations finished before it opened stay quiet.
+  // The operation whose end this screen reports; ones finished before it opened stay quiet.
   const [watched, setWatched] = useState<number | null>(null);
   const announced = useRef(new Set<number>());
-  // A change still running when the screen opens (e.g. after leaving it mid-save) is reported too. Settings kept
-  // from an earlier visit may show one that has ended since, so this waits for fresh ones.
+  // A change still running on opening (e.g. left mid-save) is reported too. Cached settings may show one that
+  // has ended since, so this waits for fresh ones.
   const [adopted, setAdopted] = useState(false);
   if (settings && !isStale && !adopted) {
     setAdopted(true);

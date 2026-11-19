@@ -1,7 +1,4 @@
-"""
-PrestaShop: every shop is its own container of the official PrestaShop image (see ContainerProvisioner),
-installed with the image's command-line installer and configured by PHP run inside the shop.
-"""
+"""PrestaShop: the official image, installed with its CLI installer and configured by PHP run inside the shop."""
 
 import base64
 import json
@@ -30,18 +27,16 @@ TABLE_PREFIX = "ps_"
 
 # Output after this marker is the result, so notices PrestaShop might print before it don't break parsing.
 OUTPUT_MARKER = "@@sklepownia@@"
-# Configuration key with the ids of the sample products, so they can be removed later without touching
-# the owner's own products (and without a marker customers could see).
+# Ids of the sample products, so they can be removed without touching the owner's (and with no visible marker).
 SAMPLE_PRODUCTS_KEY = "SKLEPOWNIA_SAMPLE_PRODUCTS"
 
-# The image's environment; a change means the container gets replaced. Nothing is installed automatically:
-# install_prestashop runs the installer itself, with the shop's settings.
+# No auto-install: install_prestashop runs the installer itself, with the shop's settings.
 CONTAINER_ENV = {"PS_INSTALL_AUTO": "0", "PS_DEV_MODE": "0", "PS_DEMO_MODE": "0", "PS_ERASE_DB": "0"}
 
 # Installer language codes for our WordPress-style locales.
 LANGUAGES = {"pl_PL": "pl", "en_US": "en", "de_DE": "de"}
 
-# Which file in localization/ brings each currency with its name, symbol and format.
+# The localization/ pack that brings each currency's name, symbol and format.
 CURRENCY_LOCALIZATION = {"PLN": "pl", "EUR": "de", "USD": "us", "GBP": "gb"}
 
 # Payment modules the app turns on and off; cheques are switched off for good.
@@ -54,7 +49,7 @@ MAIL_MODULE_FILE = Path(__file__).parent / "files" / "prestashop" / MAIL_MODULE 
 # Modules that fill a new shop's home page with demo slides and lorem ipsum.
 DEMO_MODULES = ["ps_imageslider", "ps_customtext", "ps_banner"]
 
-# Online payment operators' modules, installed the first time the owner turns the operator on.
+# Installed the first time the owner turns the operator on.
 ONLINE_PAYMENTS = {
     "przelewy24": Package(
         title="modułu Przelewy24",
@@ -73,8 +68,7 @@ ONLINE_PAYMENTS = {
     ),
 }
 
-# Runs before every script: PrestaShop with its default shop, language and first employee as the context.
-# `$d` holds the data passed in (see _php).
+# Runs before every script: default shop, language and first employee as the context; `$d` is the data (see _php).
 BOOTSTRAP_PHP = """
 require '%(root)s/config/config.inc.php';
 $context = Context::getContext();
@@ -222,8 +216,7 @@ Tools::clearSf2Cache();
 Tools::clearAllCache();
 """
 
-# The operators as the shop has them, for the shop's default currency (both keep an account per currency).
-# Keys are only checked, not read.
+# For the default currency (both operators keep an account per currency). Keys are only checked, not read.
 ONLINE_PAYMENTS_PHP = """
 function sklepownia_online_payments($installed) {
     $context = Context::getContext();
@@ -308,8 +301,8 @@ if (!Module::isInstalled($d['name']) && !$module->install()) {
 }
 """
 
-# The account of the default currency in test or production mode, with the merchant id as the shop id too
-# (Przelewy24 gives a merchant's first shop the merchant's id). Keys only when given.
+# The default currency's account (test or live). Keys only when given. The merchant id doubles as the shop id:
+# Przelewy24 gives a merchant's first shop the merchant's id.
 PRZELEWY24_ACCOUNT_PHP = """
 $db = Db::getInstance();
 $table = _DB_PREFIX_ . 'przelewy24_account';
@@ -340,9 +333,8 @@ if ($db->getValue('SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'przelewy24_credential
 $db->update('przelewy24_account', array('test_mode' => $test), 'id_account = ' . $account);
 """
 
-# PayU keeps a value per currency in serialized arrays, with SANDBOX_ in front for test mode; only the default
-# currency's changes. The installments promotion asks PayU on product pages, so a new installation has it off, and
-# installments as a payment method of their own too, as in WooCommerce.
+# PayU keeps serialized per-currency values (SANDBOX_ prefix in test mode); only the default currency's change. A new
+# install turns off the installments promotion (it calls PayU on product pages) and separate installments.
 PAYU_ACCOUNT_PHP = """
 $iso = (new Currency((int) Configuration::get('PS_CURRENCY_DEFAULT')))->iso_code;
 $prefix = $d['sandbox'] ? 'SANDBOX_' : '';
@@ -373,11 +365,11 @@ sklepownia_module('%(wire)s', $d['wire']);
 sklepownia_module('%(cod)s', $d['cod']);
 """ % {"wire": WIRE_MODULE, "cod": COD_MODULE}
 
-# The terms take the CMS page the shop accepts at checkout (PrestaShop's own "Terms and conditions of use" at first),
-# the privacy policy a page of ours, also linked in the footer next to the terms. Customers tick the terms at checkout.
-# Hummingbird resets the numbers of ordered lists, which the terms' paragraphs are made of.
+# Hummingbird resets the numbering of ordered lists, which the terms' paragraphs are made of.
 NUMBERED_LIST = '<ol style="list-style-type: decimal; padding-left: 2em;">'
 
+# The terms take the CMS page accepted at checkout (PrestaShop's own at first), the privacy policy a page of ours,
+# also linked in the footer next to the terms.
 DOCUMENTS_PHP = """
 $ids = array(
     'terms' => (int) Configuration::get('PS_CONDITIONS_CMS_ID'),
@@ -449,7 +441,7 @@ Configuration::updateValue('%(samples)s', '[]');
 echo "\\n%(marker)s" . $removed;
 """ % {"samples": SAMPLE_PRODUCTS_KEY, "marker": OUTPUT_MARKER}
 
-# The samples are the products whose ids were kept at setup and that still exist.
+# Samples: products whose ids were kept at setup and that still exist.
 COUNT_PRODUCTS_PHP = """
 $samples = array_map('intval', (array) json_decode((string) Configuration::get('%(samples)s'), true));
 $db = Db::getInstance();
@@ -460,9 +452,8 @@ $left = $samples ? (int) $db->getValue(
 echo "\\n%(marker)s" . json_encode(array('products' => $total - $left, 'samples' => $left));
 """ % {"samples": SAMPLE_PRODUCTS_KEY, "marker": OUTPUT_MARKER}
 
-# Orders straight from the database. PrestaShop stores dates in the shop's time zone (PHP's default after
-# config.inc.php), so they are turned into timestamps here. A state's flags say how far the order got; the
-# cancelled, refunded and payment error states are the ones the shop's configuration names.
+# Dates are stored in the shop's time zone (PHP's default after config.inc.php), so timestamps are made here. State
+# flags say how far an order got; cancelled means the configured cancelled, refund or payment error state.
 READ_ORDERS_PHP = """
 $tz = new DateTimeZone(date_default_timezone_get());
 $since = (new DateTime('@' . (int) $d['since']))->setTimezone($tz)->format('Y-m-d H:i:s');
@@ -521,7 +512,7 @@ echo "\\n%(marker)s" . $row['domain'];
 class PrestaShopProvisioner(ContainerProvisioner):
     ENV_KEYS = tuple(CONTAINER_ENV)
     START_FAILED = "PrestaShop nie wystartował."
-    # Symfony's and Smarty's compiled caches: PrestaShop builds them again on the first visit.
+    # Symfony and Smarty caches, rebuilt on the first visit.
     BACKUP_EXCLUDES = ("var/cache",)
 
     def image(self):
@@ -537,8 +528,6 @@ class PrestaShopProvisioner(ContainerProvisioner):
     def default_admin_login(self, shop):
         # PrestaShop employees sign in with their e-mail address.
         return shop.config.contact_email
-
-    # --- steps ---
 
     def step_install_prestashop(self, shop):
         config = shop.config
@@ -571,11 +560,11 @@ class PrestaShopProvisioner(ContainerProvisioner):
                 "--fixtures=0",
                 f"--theme={config.template.theme}",
             ], user="www-data")
-        # The installer gives the admin panel a random folder name, which keeps it hidden from bots.
+        # The installer names the admin folder randomly, which keeps it hidden from bots.
         if not shop.admin_path:
             shop.admin_path = self._admin_folder(shop)
             shop.save(update_fields=["admin_path", "updated_at"])
-        # Also covers an installation from an earlier attempt: the login is always what we stored.
+        # Also for an install from an earlier attempt: the login is always what we stored.
         self._php(shop, ADMIN_PHP, {"email": credentials.admin_login, "password": credentials.admin_password})
 
     def step_configure_shop(self, shop):
@@ -599,7 +588,7 @@ class PrestaShopProvisioner(ContainerProvisioner):
             self._php(shop, GENERAL_PHP, {
                 "name": shop.name, "email": config.contact_email, "description": config.description,
             })
-        # Order confirmations and the owner's new-order alerts.
+        # For order confirmations and the owner's new-order alerts.
         relay = mail_relay(shop)
         if relay is not None:
             self._configure_mail(shop, relay)
@@ -727,7 +716,7 @@ class PrestaShopProvisioner(ContainerProvisioner):
         return f"{shop.url.split('://', 1)[0]}://{previous}"
 
     def _apply_online_payments(self, shop, changed, payments):
-        """Install, configure and turn on or off the operators whose fields are in `changed`."""
+        """Install, configure and toggle the operators whose fields are in `changed`."""
         for key, package in ONLINE_PAYMENTS.items():
             if not any(field.startswith(f"{key}_") for field in changed):
                 continue
@@ -752,7 +741,7 @@ class PrestaShopProvisioner(ContainerProvisioner):
                     **account, "pos_id": payments["payu_pos_id"], "client_id": payments["payu_client_id"],
                     "fresh": not installed,
                 })
-            # Turning a module on or off may update its translations, which needs the back office's kernel.
+            # Toggling a module may update its translations, which needs the back office's kernel.
             self._php(shop, "sklepownia_module($d['name'], $d['enabled']);",
                       {"name": package.folder, "enabled": enabled}, kernel=True)
 
@@ -770,8 +759,6 @@ class PrestaShopProvisioner(ContainerProvisioner):
         # Installing a module updates its translations, which needs the back office's kernel.
         if self._php(shop, MAIL_PHP, relay, kernel=True) != "enabled":
             raise CommandError(f"module {MAIL_MODULE} is not enabled on actionEmailSendBefore")
-
-    # --- helpers ---
 
     def _installed(self, shop):
         try:
@@ -803,5 +790,5 @@ class PrestaShopProvisioner(ContainerProvisioner):
 
 
 def _host(shop):
-    """The shop's address without the scheme, with the port when it isn't the default: what PrestaShop stores."""
+    """Without the scheme, with a non-default port: what PrestaShop stores."""
     return shop.url.split("://", 1)[1]

@@ -77,7 +77,6 @@ export default function AccountScreen() {
   );
 }
 
-/** The account's card: who it is, whether the e-mail is confirmed, the plan, how long with us. */
 function ProfileCard({ user }: { user: User }) {
   const theme = useTheme();
   const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
@@ -116,7 +115,7 @@ function ProfileCard({ user }: { user: User }) {
   );
 }
 
-/** Tapping the picture opens the photo library; the new one is uploaded straight away. */
+/** Tapping opens the photo library; the new picture uploads straight away. */
 function EditableAvatar({ user }: { user: User }) {
   const theme = useTheme();
   const notify = useNotify();
@@ -206,7 +205,6 @@ function Badge({ icon, label, tone }: { icon: IconName; label: string; tone: [Th
   );
 }
 
-/** The account at a glance; each tile leads to where it can be changed. */
 function Overview({
   user,
   shops,
@@ -219,7 +217,7 @@ function Overview({
   const paid = shops?.filter((shop) => !shop.is_test) ?? [];
   const counted = paid.filter((shop) => shop.status !== 'suspended');
   const suspended = paid.length - counted.length;
-  // Plans allow only some of their shops on Magento; that count matters once there is one.
+  // Only some of a plan's shops may run on Magento; show that count once there is one.
   const magento = counted.filter((shop) => shop.platform === 'magento').length;
   const magentoNote =
     user.plan && magento && user.magento_shop_limit ? `W tym ${magento} z ${user.magento_shop_limit} na Magento` : '';

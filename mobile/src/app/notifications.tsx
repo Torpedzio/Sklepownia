@@ -38,7 +38,6 @@ const TOPICS: { key: Topic; label: string; description: string }[] = [
   },
 ];
 
-// What a phone that can't get notifications says instead of the switch.
 const BLOCKED: Record<PushBlocker, string> = {
   web: 'Powiadomienia przychodzą na telefon z aplikacją Sklepownia. Tutaj wybierzesz, o czym mają mówić.',
   'expo-go': 'Ta wersja aplikacji (Expo Go) nie odbiera powiadomień. Działają w aplikacji zainstalowanej ze sklepu.',

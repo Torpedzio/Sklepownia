@@ -23,18 +23,17 @@ FAKE_CUSTOMERS = ("Anna N.", "Jan K.", "Ewa W.", "Piotr Z.", "Maria L.", "Tomasz
 class FakeProvisioner(BaseProvisioner):
     """Simulates provisioning without touching any infrastructure."""
 
-    # The simulated backup repository, {snapshot id: Snapshot}. It lives in the process, so it starts empty
-    # whenever the worker does.
+    # Simulated backup repository {snapshot id: Snapshot}; per process, so empty whenever the worker starts.
     snapshots = {}
     # Snapshot ids restored, oldest first.
     restored = []
-    # Simulated breakdowns, set by tests; everything works otherwise. {shop id: ContainerState, or None when the
-    # container is gone}, {shop id: PageCheck}, {service name: problem} and (free, total) bytes of the disk.
+    # Breakdowns set by tests: {shop id: ContainerState, or None when the container is gone}, {shop id: PageCheck},
+    # {service name: problem} and (free, total) disk bytes.
     containers = {}
     pages = {}
     services = {}
     disk = None
-    # (shop id, "start" or "restart") the monitor did, oldest first; whether they fix the shop.
+    # (shop id, "start" or "restart") done by the monitor, oldest first; whether they fix the shop.
     repairs = []
     repairs_help = True
 
@@ -97,14 +96,12 @@ class FakeProvisioner(BaseProvisioner):
     def set_admin_password(self, shop, password):
         self._simulate("set_admin_password")
 
-    # --- backups ---
-
     def can_back_up(self):
         return True
 
     def backup(self, shop, tag):
         self._simulate("backup")
-        # Shops get their credentials early in the setup; before that there is nothing of them to copy.
+        # Shops get their credentials early in the setup; before that there is nothing to copy.
         if not ShopCredentials.objects.filter(shop=shop).exists():
             raise NothingToBackUp()
         snapshot = Snapshot(
@@ -126,8 +123,6 @@ class FakeProvisioner(BaseProvisioner):
 
     def prune_backups(self):
         pass
-
-    # --- health ---
 
     def can_monitor(self):
         return True

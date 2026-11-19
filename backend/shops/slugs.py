@@ -17,7 +17,7 @@ def normalize_slug(slug):
 
 
 def slug_error(slug):
-    """Return why `slug` can't be used for a new shop, or None if it's free."""
+    """Returns the reason `slug` can't be used, or None if it's free."""
     if not SLUG_PATTERN.match(slug) or "--" in slug:
         return "Adres może mieć 3–30 znaków: małe litery, cyfry i myślniki (nie na początku ani na końcu)."
     if slug in RESERVED_SLUGS:

@@ -99,7 +99,6 @@ def test_a_declined_surcharge_changes_nothing(client, halfway, plans, django_cap
     client.post(f"/api/billing/fake-gateway/{payment_id}/", {"action": "decline"})
 
     assert Subscription.objects.get(pk=halfway.pk).plan.code == "standard"
-    # Another try is allowed once the declined payment is settled.
     assert preview(client, "business").data["blocked"] == ""
 
 
@@ -142,7 +141,7 @@ def test_upgrading_brings_back_suspended_shops(client, halfway, verified_user, p
         client.post(f"/api/billing/fake-gateway/{payment_id}/", {"action": "pay"})
 
     assert Shop.objects.get(slug="zawieszony").status == Shop.Status.ACTIVE
-    # A shop whose setup never finished comes back as failed, ready to retry.
+    # Setup never finished: back as failed, ready to retry.
     assert Shop.objects.get(slug="nieudany").status == Shop.Status.FAILED
 
 

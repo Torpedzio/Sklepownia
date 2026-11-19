@@ -12,6 +12,5 @@ def notify_about_contact_message(message_id):
         subject=f"[Kontakt] {message.get_topic_display()} od {message.name}",
         body=f"Od: {message.name} <{message.email}>\n\n{message.message}",
         to=[settings.CONTACT_EMAIL],
-        # Replying goes straight to the sender.
         reply_to=[message.email],
     ).send()

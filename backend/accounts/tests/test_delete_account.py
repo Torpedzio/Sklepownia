@@ -1,4 +1,4 @@
-"""Deleting an account: shops and plan go, paid payments stay without anything that identifies the owner."""
+"""Account deletion: shops and plan go, paid payments stay without anything that identifies the owner."""
 
 import logging
 
@@ -67,10 +67,8 @@ def test_deleting_the_account_removes_shops_plan_and_personal_data(
     assert not user.has_usable_password()
     assert user.deleted_at is not None
     assert not default_storage.exists(verified_user.avatar.name)
-    # Every shop is torn down and gone from the database, with its settings.
     assert not Shop.objects.exists()
     assert not ShopSettings.objects.exists()
-    # The plan ends now and the card is forgotten; the paid payment stays for the books.
     subscription = Subscription.objects.get(user=user)
     assert subscription.status == Subscription.Status.CANCELED
     assert (subscription.card_token, subscription.card_tail) == ("", "")
@@ -78,11 +76,9 @@ def test_deleting_the_account_removes_shops_plan_and_personal_data(
     assert not BillingProfile.objects.exists()
     paid.refresh_from_db()
     assert (paid.status, paid.billing_details) == (Payment.Status.PAID, {"full_name": "Anna Nowak"})
-    # A confirmation goes to the old address, naming the shops that were still there.
     [mail] = mailoutbox
     assert (mail.to, mail.subject) == (["anna@example.com"], "Konto zostało usunięte")
     assert "Palarnia" in mail.body and "Zawieszony" in mail.body and "Stary" not in mail.body
-    # Signed out everywhere, and the address is free for a new account.
     assert api_client.get("/api/auth/me/").status_code == 401
     api_client.credentials()
     assert api_client.post("/api/auth/refresh/", {"refresh": tokens["refresh"]}, format="json").status_code == 401

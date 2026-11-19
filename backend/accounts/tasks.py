@@ -21,7 +21,6 @@ def send_verification_email(email, code):
 
 @shared_task(autoretry_for=(OSError, SMTPException), retry_backoff=True, max_retries=5)
 def send_password_reset_email(user_id, code):
-    """The code for setting a new password. Ignoring the message leaves the old password working."""
     user = User.objects.get(pk=user_id)
     minutes = int(settings.EMAIL_VERIFICATION_CODE_TTL.total_seconds() // 60)
     context = {
@@ -44,7 +43,7 @@ def send_password_reset_email(user_id, code):
 
 @shared_task(autoretry_for=(OSError, SMTPException), retry_backoff=True, max_retries=5)
 def send_account_deleted_email(email, shop_names):
-    """Confirms a deleted account to its old address; the account itself no longer has one."""
+    """Takes the old address: the deleted account no longer has one."""
     when = formats.date_format(timezone.localtime(), "j E Y, H:i")
     context = {
         "platform": settings.PLATFORM_NAME,
@@ -71,7 +70,6 @@ def send_account_deleted_email(email, shop_names):
 
 @shared_task(autoretry_for=(OSError, SMTPException), retry_backoff=True, max_retries=5)
 def send_password_changed_email(user_id):
-    """Tells the owner their password changed, so a change they didn't make doesn't go unnoticed."""
     user = User.objects.get(pk=user_id)
     when = formats.date_format(timezone.localtime(), "j E Y, H:i")
     context = {

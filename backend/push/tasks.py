@@ -11,5 +11,4 @@ def send_push(user_id, topic, title, body, url):
 
 @shared_task
 def check_push_receipts():
-    """Scheduled by Celery beat."""
     services.check_receipts()

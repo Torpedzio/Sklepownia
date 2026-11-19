@@ -1,7 +1,4 @@
-"""
-What the notifications say. A notification is short: the title says what happened, the body what it means or what
-to do, and tapping it opens the screen with the rest (`url`, an app route).
-"""
+"""Notification texts: the title says what happened, the body what to do; tapping opens `url` (an app route)."""
 
 from dataclasses import dataclass
 
@@ -21,7 +18,7 @@ class Notice:
 
 
 def new_orders(shop, orders):
-    """Orders that just appeared in the shop (`shops.orders.Order`), newest last."""
+    """`orders`: new `shops.orders.Order`s, newest last."""
     url = f"/shops/{shop.pk}/sales"
     if len(orders) == 1:
         order = orders[0]

@@ -1,7 +1,4 @@
-"""
-Invoices for paid payments: created together with the paid payment, issued in the background by INVOICE_ISSUER,
-followed in KSeF when they go there, and e-mailed to the payer once final.
-"""
+"""Invoices: created with the paid payment, issued in the background, followed in KSeF, e-mailed once final."""
 
 import logging
 from datetime import timedelta
@@ -19,21 +16,18 @@ from .models import Invoice, Payment
 
 logger = logging.getLogger(__name__)
 
-# Failed issuing is tried again later and later (5 minutes, 10, 20 … up to 6 hours) until the admin steps in.
+# Failed issuing is retried with doubling delays (5 min, 10, 20 … up to 6 h) until the admin steps in.
 RETRY_FIRST = timedelta(minutes=5)
 RETRY_LONGEST = timedelta(hours=6)
 MAX_ATTEMPTS = 15
-# Invoices e-mailed right after issuing are left alone for this long by the background check.
+# process() leaves freshly issued invoices to their own e-mail for this long.
 DELIVERY_GRACE = timedelta(minutes=10)
 LINK_SALT = "billing.invoice-pdf"
 LINK_MAX_AGE = 24 * 60 * 60
 
 
 def create_for(payment):
-    """
-    The invoice for a payment that has just been paid, in its transaction. A renewal paid entirely from the balance
-    has nothing to invoice: the balance comes from payments already invoiced.
-    """
+    """Call in the payment's transaction. Nothing for zero amounts: the balance came from invoiced payments."""
     if payment.amount <= 0 or Invoice.objects.filter(payment=payment).exists():
         return None
     buyer = payment.billing_details or {}
@@ -55,7 +49,7 @@ def create_for(payment):
 
 
 def issue(invoice_id):
-    """Issues a pending invoice; a failure is recorded and tried again by process(). Returns the invoice."""
+    """A failure is recorded and retried by process(). Returns the invoice."""
     with transaction.atomic():
         invoice = Invoice.objects.select_for_update().select_related("payment__plan").get(pk=invoice_id)
         if invoice.status != Invoice.Status.PENDING:
@@ -90,7 +84,6 @@ def issue(invoice_id):
 
 
 def check_ksef(invoice_id):
-    """Asks how KSeF took an invoice sent there; e-mails it once accepted."""
     with transaction.atomic():
         invoice = Invoice.objects.select_for_update().select_related("payment__plan").get(pk=invoice_id)
         if invoice.status != Invoice.Status.ISSUED or invoice.ksef_status == Invoice.Ksef.NONE:
@@ -116,7 +109,7 @@ def check_ksef(invoice_id):
 
 
 def deliver(invoice_id):
-    """E-mails a final invoice to the payer, once. Accounts deleted meanwhile get nothing."""
+    """At most once; deleted accounts get nothing. Returns whether it was sent."""
     from .emails import invoice_message
 
     invoice = Invoice.objects.select_related("payment__plan", "payment__user").get(pk=invoice_id)
@@ -135,10 +128,7 @@ def deliver(invoice_id):
 
 
 def process(now=None):
-    """
-    The background round (every few minutes): pending invoices are tried again, KSeF is asked about invoices sent
-    there, and final invoices that never left are e-mailed.
-    """
+    """Background round: retries pending invoices, polls KSeF and e-mails final invoices that never left."""
     now = now or timezone.now()
     for invoice in Invoice.objects.filter(status=Invoice.Status.PENDING, attempts__lt=MAX_ATTEMPTS):
         if invoice.checked_at is None or invoice.checked_at + _retry_delay(invoice.attempts) <= now:
@@ -157,13 +147,13 @@ def process(now=None):
 
 
 def download_url(invoice, request):
-    """A link to the invoice's PDF that works without signing in, for a day: the app opens it in the browser."""
+    """Works without signing in, for LINK_MAX_AGE: the app opens it in the browser."""
     token = signing.dumps(invoice.pk, salt=LINK_SALT)
     return request.build_absolute_uri(reverse("billing-invoice-pdf", args=[token]))
 
 
 def from_link(token):
-    """The invoice behind a download link, or None when the link is wrong or too old."""
+    """None when the link is wrong or too old."""
     try:
         invoice_id = signing.loads(token, salt=LINK_SALT, max_age=LINK_MAX_AGE)
     except signing.BadSignature:

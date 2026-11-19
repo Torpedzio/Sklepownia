@@ -1,7 +1,4 @@
-"""
-Online payments in the shop settings: the operator's account in the settings, its keys only on their way to the shop.
-The shop itself is the fake provisioner; what the platforms do with the values is in test_woocommerce/test_prestashop.
-"""
+"""Online payment settings with the fake provisioner; platform specifics are in test_woocommerce/test_prestashop."""
 
 import json
 from datetime import timedelta
@@ -41,7 +38,7 @@ def shop(new_shop):
 
 @pytest.fixture
 def applied(monkeypatch):
-    """What the shop was given: (changes, values) of every apply_settings."""
+    """(changes, values) of every apply_settings call."""
     calls = []
     monkeypatch.setattr(SAVE_SETTINGS, lambda self, shop, changes, values: calls.append((changes, values)))
     return calls

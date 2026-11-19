@@ -79,7 +79,6 @@ function LimitReached({ limit }: { limit: number }) {
   );
 }
 
-/** The first platform the plan allows now, with its first theme. */
 function initialForm(options: FormOptions): NewShop {
   const platform = (options.platforms.find((p) => p.available) ?? options.platforms[0]).value;
   return {
@@ -106,7 +105,6 @@ function NewShopForm({ options }: { options: FormOptions }) {
   const [submitting, setSubmitting] = useState(false);
 
   const slug = form.slug;
-  // A check is only meaningful for the slug currently typed in.
   const slugCheck = lastSlugCheck?.slug === slug ? lastSlugCheck : null;
   useEffect(() => {
     if (slug.length < 3) return;
@@ -346,7 +344,7 @@ function Choice({
 }: {
   title: string;
   text: string;
-  /** A limit of the plan, e.g. "W planach Standard i Biznes." */
+  /** E.g. "W planach Standard i Biznes." */
   note?: string;
   colors?: string[];
   selected: boolean;

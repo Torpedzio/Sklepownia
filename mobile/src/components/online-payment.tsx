@@ -13,11 +13,10 @@ type Field = { field: string; label: string; hint?: string; placeholder?: string
 type Operator = {
   name: string;
   description: string;
-  /** What identifies the owner's account; kept in the settings. */
+  /** Identify the owner's account; kept in the settings. */
   ids: Field[];
-  /** What signs the payments; sent to the shop, never shown again. */
+  /** Sign the payments; sent to the shop, never shown again. */
   keys: Field[];
-  /** Where the owner finds all of it in the operator's panel. */
   where: string;
 };
 
@@ -49,17 +48,14 @@ const OPERATORS: Record<PaymentOperator, Operator> = {
 
 type Props = {
   operator: PaymentOperator;
-  /** The payments as the shop has them. */
   saved: Payments;
-  /** A field as edited: the draft, or else the saved value. */
   value: (field: string) => string | boolean;
   onChange: (field: string, value: string | boolean) => void;
   error: (field: string) => string | undefined;
-  /** Where the shop connects to the operator from, for Przelewy24's list of allowed addresses. */
+  /** For Przelewy24's list of allowed addresses. */
   serverIp: string | null;
 };
 
-/** One online payment operator in the payments section: on or off, its account, and its keys. */
 export function OnlinePayment({ operator, saved, value, onChange, error, serverIp }: Props) {
   const info = OPERATORS[operator];
   const enabled = value(`${operator}_enabled`) === true;

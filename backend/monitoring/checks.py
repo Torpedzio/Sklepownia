@@ -1,14 +1,6 @@
 """
-The monitor. Every MONITOR_INTERVAL_MINUTES (Celery beat) one round checks:
-
-- the shop node's shared services: Docker, the proxy and the shops' database (without them no shop can work, so
-  the shops are not judged then), OpenSearch while there are Magento shops, and the shops' mail relay;
-- every running shop: its container, and its home page visited through the proxy like a customer would;
-- the disk the shops keep their data on, how full each server is, and whether the nightly backups ran.
-
-A shop that fails MONITOR_FAILURES checks in a row is down. The monitor starts its stopped container at once and
-restarts a running one that doesn't answer, once per run of failures; when that doesn't help, the owner and the
-staff hear about it (alerts.py), and again when the shop works.
+Monitor rounds. A shop failing MONITOR_FAILURES checks in a row is down: a stopped container is started at once, an
+unresponsive one restarted, once per run of failures; if that doesn't help, owner and staff are alerted (alerts.py).
 """
 
 import logging
@@ -38,18 +30,15 @@ logger = logging.getLogger(__name__)
 
 START, RESTART = "start", "restart"
 MONITOR = "monitor"
-# Nightly backups that haven't run for this long are late (they run once a day).
 BACKUPS_LATE_AFTER = timedelta(hours=26)
-# A repair waits up to 5 minutes for the container's healthcheck; one that takes longer was lost (e.g. the worker
-# restarted), and the rounds count the failures again.
+# A repair waits up to 5 min for the healthcheck; one older than this was lost (e.g. worker restart).
 REPAIR_TIMEOUT = timedelta(minutes=10)
-# One round at a time (a PostgreSQL advisory lock): a slow round must not count a shop's failures twice.
+# PostgreSQL advisory lock: a slow round must not count a shop's failures twice.
 LOCK_ID = 7_204_116
 
 
 @dataclass(frozen=True)
 class Finding:
-    """What one check of a shop found: nothing wrong (no `problem`), or what is and how the monitor can help."""
 
     problem: str = ""
     repair: str = ""
@@ -62,7 +51,6 @@ class Finding:
 
 @dataclass
 class Round:
-    """What a round found, for the check_shops command."""
 
     checked: int = 0
     failing: list = field(default_factory=list)
@@ -71,7 +59,6 @@ class Round:
 
 
 def run(now=None, slugs=None):
-    """One round of checks (of the shops at `slugs` only, when given). Returns a Round."""
     now = now or timezone.now()
     provisioner = get_provisioner()
     if not provisioner.can_monitor():
@@ -82,7 +69,7 @@ def run(now=None, slugs=None):
         result = Round(services=check_services(provisioner, now))
         blocking = {"docker", settings.SHOPS_PROXY_CONTAINER, settings.SHOPS_DB_CONTAINER} & set(result.services)
         if blocking:
-            # Every shop would fail for a reason of ours, which the staff already hears about.
+            # Every shop would fail for a reason of ours; staff already get the service alert.
             result.skipped = f"Sklepów nie sprawdzono: nie działa {', '.join(sorted(blocking))}."
         else:
             check_shops(provisioner, now, result, slugs)
@@ -97,15 +84,12 @@ def run(now=None, slugs=None):
     return result
 
 
-# --- the shop node ---
-
-
 def check_services(provisioner, now):
-    """Opens and closes incidents of the shared services; returns {name: problem} of those that don't work."""
+    """Returns {name: problem} of the services that don't work."""
     required = [settings.SHOPS_PROXY_CONTAINER, settings.SHOPS_DB_CONTAINER]
     if Shop.objects.filter(status=Shop.Status.ACTIVE, platform=Platform.MAGENTO).exists():
         required.append(settings.SHOPS_SEARCH_CONTAINER)
-    # The mail relay is checked when it is a container on the node (locally Mailpit, shops-mail).
+    # Only when the mail relay is a container on the node (locally Mailpit, shops-mail).
     optional = [settings.SHOPS_SMTP_HOST] if settings.SHOPS_SMTP_HOST else []
     problems = provisioner.service_problems(required, optional)
     if "docker" in problems:
@@ -170,7 +154,7 @@ def check_backups(now):
 
 
 def ping():
-    """Tells the outside watcher (MONITOR_PING_URL) the round is done; it raises the alarm when they stop."""
+    """Dead man's switch: the outside watcher at MONITOR_PING_URL alarms when pings stop."""
     if not settings.MONITOR_PING_URL:
         return
     try:
@@ -179,13 +163,10 @@ def ping():
         logger.warning("Pinging MONITOR_PING_URL failed", exc_info=True)
 
 
-# --- shops ---
-
-
 def check_shops(provisioner, now, result, slugs=None):
     shops = Shop.objects.filter(status=Shop.Status.ACTIVE).select_related("owner").order_by("pk")
     shops = list(shops.filter(slug__in=slugs) if slugs is not None else shops)
-    # A restore or a settings change may stop or replace the container: those shops wait for the next round.
+    # A running operation may stop or replace the container: those shops wait for the next round.
     busy = set(
         ShopOperation.objects.filter(
             shop__in=shops,
@@ -206,10 +187,7 @@ def check_shops(provisioner, now, result, slugs=None):
 
 
 def forget_stopped_shops(now):
-    """
-    A shop deleted or suspended while it was down: its incident is over, quietly, and when it runs again the
-    monitor starts afresh (its owner doesn't hear it "works again").
-    """
+    """Shops deleted or suspended while down: incidents close quietly (no "works again" mail), health resets."""
     stopped = Incident.objects.filter(kind=Incident.Kind.SHOP, resolved_at__isnull=True).exclude(
         shop__status=Shop.Status.ACTIVE,
     )
@@ -219,7 +197,6 @@ def forget_stopped_shops(now):
 
 
 def visit(shops):
-    """{shop id: PageCheck} of each shop's home page, a few shops at a time."""
 
     def one(shop):
         try:
@@ -235,13 +212,13 @@ def visit(shops):
 
 
 def closed_shops(shops):
-    """Ids of the shops their owner closed for customers: their own 503 page is no fault."""
+    """Shops closed by their owner: their 503 page is no fault."""
     stored = ShopSettings.objects.filter(shop__in=shops).values_list("shop_id", "values")
     return {shop_id for shop_id, values in stored if not values.get("availability", {}).get("is_open", True)}
 
 
 def examine(state, page, closed=False):
-    """A Finding from the shop's container and the visit to its home page (None when it wasn't visited)."""
+    """`page` is None when the home page wasn't visited."""
     if state is None:
         return Finding("Nie ma kontenera sklepu.", START)
     if not state.running:
@@ -268,10 +245,7 @@ def record(shop, finding, now):
 
 
 def repair(shop_id, action):
-    """
-    Starts (START) or restarts (RESTART) the shop's container and checks it again (monitoring.tasks.repair_shop).
-    When the shop still doesn't work and counts as down, its owner and the staff are told.
-    """
+    """START or RESTART the container and check again; alerts if the shop still fails and counts as down."""
     shop = Shop.objects.filter(pk=shop_id, status=Shop.Status.ACTIVE).select_related("owner").first()
     if shop is None or current_operation(shop) is not None:
         return
@@ -325,7 +299,7 @@ def _works(shop, health, now, response_ms):
 
 def _fails(shop, health, now, finding):
     if health.repairing and now - health.repaired_at < REPAIR_TIMEOUT:
-        # The monitor is starting or restarting the container right now; the repair tells how it went.
+        # A repair is under way; it records the outcome itself.
         health.save(update_fields=["checked_at"])
         return
     health.failures += 1
@@ -333,7 +307,7 @@ def _fails(shop, health, now, finding):
     health.problem = finding.problem[:300]
     down = health.failures >= settings.MONITOR_FAILURES
     incident = _shop_incident(shop, health) if down else None
-    # Once per run of failures: a stopped container at once, a running one when the shop counts as down.
+    # Once per run of failures: a stopped container at once, a running one only once the shop counts as down.
     if finding.repair and not health.repaired and (finding.repair == START or down):
         health.repaired = finding.repair
         health.repaired_at = now
@@ -347,7 +321,7 @@ def _fails(shop, health, now, finding):
 
 
 def _shop_incident(shop, health):
-    """The shop's open incident, opened when the shop started failing."""
+    """Opens one if needed, dated from when the shop started failing."""
     incident = alerts.open_incident(f"shop:{shop.pk}")
     if incident is None:
         return Incident.objects.create(

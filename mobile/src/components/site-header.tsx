@@ -11,7 +11,6 @@ import { useAuth } from '@/context/auth';
 import { useTheme } from '@/hooks/use-theme';
 import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
-/** Header of the public pages: awning on top, logo, links and the sign-in button. */
 export function SiteHeader() {
   const { user } = useAuth();
   const { width } = useWindowDimensions();
@@ -54,7 +53,6 @@ export function SiteHeader() {
   );
 }
 
-/** A text link underlined with a thin line while its page is open. */
 function NavLink({ href, label }: { href: Href & string; label: string }) {
   const theme = useTheme();
   const current = usePathname() === href;

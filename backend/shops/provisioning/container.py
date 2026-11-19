@@ -1,7 +1,4 @@
-"""
-What every platform shares on the shop node from infra/shops: a shop is its own container behind
-the Traefik proxy, with its files in a volume and a separate database in the shared MariaDB.
-"""
+"""Shared by Docker platforms (infra/shops): a container per shop behind Traefik, files in a volume, DB in MariaDB."""
 
 import io
 import json
@@ -24,16 +21,14 @@ from .base import (
     Backup, BaseProvisioner, ContainerState, NothingToBackUp, PageCheck, ProvisioningError, Snapshot,
 )
 
-# Where the platform's files live in the container, in the shop's volume.
 FILES_PATH = "/var/www/html"
 
-# Where the backup container (infra/shops/backup) has the repository, restic's cache and the shop's volume.
+# Mount points in the backup container (infra/shops/backup).
 BACKUP_REPOSITORY = "/repository"
 BACKUP_CACHE = "/cache"
 BACKUP_FILES = "/shop/files"
-# Marks backup containers, with the shop's id ("" for work on the whole repository).
+# Label on backup containers: the shop's id, "" for work on the whole repository.
 BACKUP_LABEL = "shops.backup"
-# Marks shop containers, with the shop's id.
 SHOP_LABEL = "shops.id"
 
 
@@ -47,45 +42,40 @@ class _Healthcheck(docker.types.Healthcheck):
             self["StartInterval"] = start_interval
 
 
-# docker-py (7.2) rebuilds a container's healthcheck from the options it knows, which end at API 1.29, so it drops
-# StartInterval (API 1.44) and a starting shop would be checked once a minute instead of every few seconds.
+# docker-py 7.2 rebuilds healthchecks from options up to API 1.29, dropping StartInterval (API 1.44): a starting shop
+# would be checked once a minute instead of every few seconds.
 docker.types.containers.Healthcheck = _Healthcheck
 
-# Docker's check of a shop's web server (seconds). Traefik sends visitors only to a healthy container, so a shop
-# that is starting or hangs gets the platform's "temporarily unavailable" page instead of an error. While the shop
-# starts, it is checked every few seconds and failures don't count; then once a minute, unhealthy after 3 failures.
+# Healthcheck timings (seconds). Traefik routes only to healthy containers, so a starting or hung shop shows the
+# platform's "temporarily unavailable" page instead of an error. Failures during the start period don't count.
 HEALTH_INTERVAL = 60
 HEALTH_TIMEOUT = 15
 HEALTH_RETRIES = 3
 HEALTH_START_PERIOD = 300
 HEALTH_START_INTERVAL = 3
-# How long the monitor's visit to a page may take (seconds).
+# Monitor's page visit timeout (seconds).
 PAGE_TIMEOUT = 20
-# Seconds to wait for Traefik to send visitors to a container that just became healthy.
+# Seconds for Traefik to start routing to a container that just became healthy.
 ROUTE_TIMEOUT = 30
 
 
 class CommandError(Exception):
-    """A command inside a container failed. The message is for logs only: it may contain internals."""
+    """The message is for logs only: it may contain internals."""
 
 
 class ContainerProvisioner(BaseProvisioner):
-    """
-    Base for platforms that run as one container per shop. Subclasses say which image to run with
-    what environment, and which file shows the container is ready; they add the platform's own steps.
-    """
+    """Base for one-container-per-shop platforms; subclasses give image, environment, ready check and own steps."""
 
-    # Environment variables the platform's container is configured with; a change means a new container.
+    # Env vars the container is configured with; a change means a new container.
     ENV_KEYS = ()
-    # Shown when the container doesn't get ready in time.
     START_FAILED = "Sklep nie wystartował."
-    # Where the shop's volume is mounted: the platform's files, or only the shop's own data when the code is in the image.
+    # Volume mount: the platform's files, or only the shop's own data when the code is in the image.
     VOLUME_PATH = FILES_PATH
-    # Seconds the container gets to become ready.
+    # Seconds to become ready.
     START_TIMEOUT = 60
-    # Paths in the shop's volume left out of backups: caches the platform builds again by itself.
+    # Volume paths left out of backups: caches the platform rebuilds by itself.
     BACKUP_EXCLUDES = ()
-    # Seconds one backup or restore may take, waiting for a busy repository included (up to 30 minutes).
+    # Seconds per backup or restore, including waiting for a busy repository (up to 30 minutes).
     BACKUP_TIMEOUT = 3600
 
     @cached_property
@@ -102,7 +92,7 @@ class ContainerProvisioner(BaseProvisioner):
         raise NotImplementedError
 
     def ready_command(self):
-        """A command that succeeds inside the container once its entrypoint has set things up."""
+        """Succeeds inside the container once its entrypoint has set things up."""
         raise NotImplementedError
 
     def default_admin_login(self, shop):
@@ -113,13 +103,10 @@ class ContainerProvisioner(BaseProvisioner):
         return container_memory(shop)
 
     def after_restore(self, shop):
-        """Bring what lives outside the shop's files and database (e.g. its search index) in line with them."""
+        """Sync what lives outside files and DB (e.g. a search index) with them."""
 
     def healthcheck(self, shop):
-        """
-        Docker's healthcheck of the shop's container: its home page, as the shop's address. Any answer below 500
-        counts, and 503 too, so a redirect or a closed shop (PrestaShop's maintenance mode) keeps its visitors.
-        """
+        """Any answer below 500 counts, 503 too, so a redirect or closed shop (PrestaShop maintenance) stays routed."""
         host = shop.url.split("://", 1)[1]
         test = (
             f"code=$(curl -s -o /dev/null -w '%{{http_code}}' --max-time {HEALTH_TIMEOUT - 5} "
@@ -179,7 +166,7 @@ class ContainerProvisioner(BaseProvisioner):
         container = self._find_container(shop)
         memory = self.memory(shop)
         healthcheck = self.healthcheck(shop)
-        # The files live in the volume, so an outdated container can be replaced without losing anything.
+        # Files live in the volume, so an outdated container can be replaced without losing anything.
         if container is not None and self._outdated(container, environment, labels, memory, healthcheck):
             container.remove(force=True)
             container = None
@@ -205,7 +192,7 @@ class ContainerProvisioner(BaseProvisioner):
         raise ProvisioningError(self.START_FAILED)
 
     def container_outdated(self, shop):
-        """Whether the shop's container is not as step_start_container would make it now (False without one)."""
+        """Whether the container differs from what step_start_container would make now (False without one)."""
         container = self._find_container(shop)
         if container is None:
             return False
@@ -221,26 +208,22 @@ class ContainerProvisioner(BaseProvisioner):
             # Outdated env or Traefik labels (a new domain).
             container_env(container, self.ENV_KEYS) != environment
             or not labels.items() <= container.labels.items()
-            # A different plan means a different memory limit.
             or container.attrs.get("HostConfig", {}).get("Memory") != memory_bytes(memory)
-            # Containers from before the healthcheck, or with an older one.
+            # No healthcheck yet, or an older one.
             or any(current_health.get(key) != value for key, value in healthcheck.items())
             # A rebuilt image (e.g. new platform code) reaches running shops this way.
             or self._image_changed(container)
         )
 
     def _wait_until_routed(self, shop, timeout=None):
-        """
-        Wait until the shop's container is healthy and Traefik sends visitors to it (it skips containers that are
-        starting or unhealthy). Returns whether it happened within `timeout` seconds; the caller finds out what's wrong.
-        """
+        """Wait until the container is healthy and Traefik routes to it. Returns whether it did within `timeout` s."""
         deadline = time.monotonic() + (timeout or HEALTH_START_PERIOD)
         container = self._find_container(shop)
         while container is not None and time.monotonic() < deadline:
             container.reload()
             health = (container.attrs.get("State", {}).get("Health") or {}).get("Status")
             if health is None:
-                # A container from before the healthcheck: Traefik sends visitors to it as soon as it runs.
+                # No healthcheck (older container): Traefik routes to it as soon as it runs.
                 return container.status == "running"
             if health == "healthy":
                 break
@@ -258,7 +241,7 @@ class ContainerProvisioner(BaseProvisioner):
 
     def _check_pages(self, shop, checks):
         """Fetch `checks` ([(label, [curl args… url])]) through the proxy like a visitor would; each must be 200."""
-        # The shop may have just started: until its first healthcheck passes, the proxy shows the platform's page.
+        # Until the first healthcheck passes, the proxy shows the platform's page.
         self._wait_until_routed(shop)
         host = shop.url.split("://", 1)[1]
         for label, args in checks:
@@ -272,8 +255,6 @@ class ContainerProvisioner(BaseProvisioner):
     @staticmethod
     def proxy_url(path="/"):
         return f"http://{settings.SHOPS_PROXY_CONTAINER}{path}"
-
-    # --- lifecycle ---
 
     def cleanup(self, shop):
         # Keep everything: a retry continues from what's already there.
@@ -306,7 +287,7 @@ class ContainerProvisioner(BaseProvisioner):
         relay = mail_relay(shop)
         if relay is None or self._find_container(shop) is None:
             return False
-        # A container of an older image is replaced first, so the shop runs the current mail code.
+        # Replaces an older-image container first, so the shop runs the current mail code.
         self.step_start_container(shop)
         self._configure_mail(shop, relay)
         return True
@@ -315,7 +296,7 @@ class ContainerProvisioner(BaseProvisioner):
         """Point the platform at `relay` ({host, port, sender}); see mail_relay."""
         raise NotImplementedError
 
-    # --- backups: a throwaway container of infra/shops/backup does the work, next to the shop's volume ---
+    # --- backups: run in a throwaway infra/shops/backup container ---
 
     def can_back_up(self):
         return bool(settings.SHOPS_BACKUP_PASSWORD)
@@ -332,12 +313,12 @@ class ContainerProvisioner(BaseProvisioner):
         container = self._find_container(shop)
         if container is not None:
             container.stop()
-        # A deleted shop being brought back has no database or database user any more.
+        # A deleted shop has no database or database user any more.
         self.step_create_database(shop)
         self._backup_tool(["restore", snapshot_id], shop=shop, files="rw")
         self.step_start_container(shop)
         self.after_restore(shop)
-        # The backup may be from before the shop moved to another domain, got another mail relay or a new password.
+        # The backup may predate a domain move, a mail relay change or a new password.
         self.update_address(shop)
         self.configure_mail(shop)
         password = self._credentials(shop).admin_password
@@ -345,7 +326,7 @@ class ContainerProvisioner(BaseProvisioner):
             self.set_admin_password(shop, password)
 
     def list_backups(self):
-        # Runs every night, so it also clears containers left behind by a worker that died waiting for one.
+        # Runs nightly, so it also clears containers left by a worker that died waiting for one.
         for leftover in self.client.containers.list(all=True, filters={"label": BACKUP_LABEL, "status": "exited"}):
             leftover.remove(force=True)
         return [snapshot_of(item) for item in json.loads(self._backup_tool(["snapshots"]) or "[]")]
@@ -358,7 +339,7 @@ class ContainerProvisioner(BaseProvisioner):
     def prune_backups(self):
         self._backup_tool(["prune"])
 
-    # --- health: what the monitor checks (monitoring/) ---
+    # --- health (monitoring/) ---
 
     def can_monitor(self):
         return True
@@ -395,8 +376,7 @@ class ContainerProvisioner(BaseProvisioner):
 
     def start_shop(self, shop):
         if self._find_container(shop) is None and not self._volume_exists(shop):
-            # A new container would start an empty shop in place of the lost one: that is for a person to decide
-            # (e.g. python manage.py restore_shop).
+            # A new container would start an empty shop in place of the lost one: a person decides (restore_shop).
             raise ProvisioningError(f"Nie ma kontenera ani wolumenu {container_name(shop)} z plikami sklepu.")
         self.step_start_container(shop)
         return self._wait_until_routed(shop)
@@ -431,7 +411,7 @@ class ContainerProvisioner(BaseProvisioner):
         return problems
 
     def disk_space(self):
-        # The shops' database and Docker volumes are on one disk; the database container can say how full it is.
+        # The DB and Docker volumes share one disk, so the DB container can tell how full it is.
         try:
             output = self._exec(settings.SHOPS_DB_CONTAINER, ["df", "-Pk", "/var/lib/mysql"])
             fields = output.splitlines()[-1].split()
@@ -448,10 +428,7 @@ class ContainerProvisioner(BaseProvisioner):
         return True
 
     def _backup_tool(self, command, shop=None, files=None):
-        """
-        Runs shop-backup `command` in a throwaway container and returns what it printed. With `shop` it reaches
-        the shop's database, and with `files` ("ro" or "rw") the shop's volume too.
-        """
+        """Returns shop-backup's stdout. `shop` gives it the shop's DB, `files` ("ro"/"rw") the shop's volume too."""
         if not settings.SHOPS_BACKUP_PASSWORD:
             raise CommandError("SHOPS_BACKUP_PASSWORD is not set")
         environment = {
@@ -487,8 +464,6 @@ class ContainerProvisioner(BaseProvisioner):
         finally:
             container.remove(force=True)
 
-    # --- helpers ---
-
     def _credentials(self, shop):
         credentials, _ = ShopCredentials.objects.get_or_create(
             shop=shop, defaults={"admin_login": self.default_admin_login(shop)},
@@ -509,7 +484,7 @@ class ContainerProvisioner(BaseProvisioner):
             return False
 
     def _write_file(self, shop, path, content):
-        """Write `content` to `path` inside the shop's container, as the web server's user, creating folders."""
+        """Write `content` to `path` in the shop's container as www-data, creating folders."""
         # Through the environment, so the content needs no quoting.
         self._exec(
             container_name(shop),
@@ -519,7 +494,7 @@ class ContainerProvisioner(BaseProvisioner):
         )
 
     def _upload(self, shop, path, data):
-        """Put `data` (bytes) in the shop's container as the file `path`, readable for everyone."""
+        """Put `data` (bytes) at `path` in the shop's container."""
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode="w") as archive:
             info = tarfile.TarInfo(posixpath.basename(path))
@@ -552,7 +527,6 @@ class ContainerProvisioner(BaseProvisioner):
         )
 
 
-# Why curl got no answer, by its exit code.
 CURL_ERRORS = {
     6: "Nie da się ustalić adresu serwera proxy.",
     7: "Serwer proxy nie przyjmuje połączeń.",
@@ -584,7 +558,7 @@ def db_name(shop):
 
 
 def backup_summary(output):
-    """restic's summary of a backup, from the JSON lines shop-backup printed."""
+    """restic's summary object from shop-backup's JSON lines."""
     for line in reversed(output.splitlines()):
         try:
             data = json.loads(line)
@@ -596,7 +570,7 @@ def backup_summary(output):
 
 
 def snapshot_of(item):
-    """A Snapshot from one item of `restic snapshots --json`."""
+    """From one item of `restic snapshots --json`."""
     return Snapshot(
         id=item["id"], host=item.get("hostname", ""), time=parse_datetime(item["time"]),
         tags=tuple(item.get("tags") or ()), size=(item.get("summary") or {}).get("total_bytes_processed"),
@@ -604,21 +578,21 @@ def snapshot_of(item):
 
 
 def mail_relay(shop):
-    """Where the shop sends e-mail and from which address, or None when shops get no mail server."""
+    """{host, port, sender} for the shop's e-mail, or None when shops get no mail server."""
     if not settings.SHOPS_SMTP_HOST:
         return None
     return {"host": settings.SHOPS_SMTP_HOST, "port": settings.SHOPS_SMTP_PORT, "sender": shop.mail_sender}
 
 
 def container_env(container, keys):
-    """The container's values of `keys`; None for those it doesn't have."""
+    """The container's values of `keys`; None for missing ones."""
     pairs = (item.split("=", 1) for item in container.attrs["Config"]["Env"])
     current = dict(pair for pair in pairs if len(pair) == 2)
     return {key: current.get(key) for key in keys}
 
 
 def container_memory(shop):
-    """The owner's plan sets how much memory a shop gets; test shops and shops without a plan get the default."""
+    """From the owner's plan; test shops and shops without a plan get the default."""
     from billing.models import Subscription
 
     subscription = Subscription.objects.select_related("plan").filter(user_id=shop.owner_id).first()

@@ -85,7 +85,7 @@ def _update_settings(provisioner, shop, changes, keys):
 
 
 def _publish_documents(provisioner, shop, values):
-    """Write the terms and privacy policy for `values` into the shop; `values` get where they are."""
+    """Publish the terms and privacy policy for `values` in the shop and store their URLs in `values`."""
     try:
         published = provisioner.publish_documents(shop, documents.render(values, shop.url))
     except Exception as exc:
@@ -97,7 +97,7 @@ def _publish_documents(provisioner, shop, values):
 
 
 def _publish_again(provisioner, shop):
-    """The documents from the current templates, e.g. after a change in the law (publish_shop_documents)."""
+    """Republish from the current templates, e.g. after a change in the law (publish_shop_documents)."""
     stored = _stored(shop)
     values = shop_settings.complete(stored.values, shop_settings.default_settings(shop))
     if not values["documents"]["managed"]:
@@ -125,10 +125,7 @@ def _apply_to_shop(shop, changes):
 
 
 def read_back(shop):
-    """
-    For a shop changed outside these operations (a restored backup): its settings are read again, and the documents
-    the platform writes are published again, as the shop may have older ones or none.
-    """
+    """For a shop changed outside these operations (restored backup): re-read settings, republish documents."""
     provisioner = get_provisioner(shop.platform)
     _sync_quietly(provisioner, shop)
     _follow_settings(shop)
@@ -139,10 +136,7 @@ def read_back(shop):
 
 
 def _follow_settings(shop):
-    """
-    The shop's own fields (its name in the app, language, theme...) take what the shop has now: after a restore,
-    what the backup had, not what was changed after it.
-    """
+    """Copy what the shop has now (name, language, theme...) into its own fields; after a restore, the backup's."""
     values = _stored(shop).values
     changes = {"general": values["general"], "region": values["region"]}
     # Only a theme of the shop's platform: Shop.config.template is what the shop is set up with again.

@@ -5,24 +5,24 @@ from shops.models import Shop
 
 
 class ShopHealth(models.Model):
-    """How the monitor last found a running shop (monitoring/checks.py)."""
+    """The monitor's last finding for a running shop (monitoring/checks.py)."""
 
     shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name="health")
-    # Failed checks in a row, and when the first of them was: from then on the shop counts as down.
+    # Failed checks in a row and when the first one was; down_since dates from it.
     failures = models.PositiveIntegerField(default=0)
     failing_since = models.DateTimeField(null=True, blank=True)
-    # What the last failed check found, for the staff (the owner only hears that the shop doesn't work).
+    # Staff only; the owner just hears the shop doesn't work.
     problem = models.CharField(max_length=300, blank=True)
-    # The owner and the staff were told the shop is down; they hear when it works again.
+    # Owner and staff were told it's down, so they'll hear when it works again.
     alerted = models.BooleanField(default=False)
-    # What the monitor did in this run of failures (once per run): "start" or "restart" of the shop's container.
+    # "start" or "restart": at most one repair per run of failures.
     repaired = models.CharField(max_length=10, blank=True)
     repaired_at = models.DateTimeField(null=True, blank=True)
-    # The repair is under way (it waits for the container's healthcheck); it says how it went.
+    # Waiting for the container's healthcheck; the repair records the outcome.
     repairing = models.BooleanField(default=False)
     checked_at = models.DateTimeField(null=True, blank=True)
     last_ok_at = models.DateTimeField(null=True, blank=True)
-    # How long the home page took at the last successful check.
+    # Home page time at the last successful check.
     response_ms = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
@@ -34,15 +34,12 @@ class ShopHealth(models.Model):
 
     @property
     def down_since(self):
-        """Since when the shop doesn't work, as its owner was told; None while it works (or nobody was told yet)."""
+        """None until the owner has been told the shop is down."""
         return self.failing_since if self.alerted else None
 
 
 class Incident(models.Model):
-    """
-    Something that didn't work, from when it was noticed until it worked again. The staff hears about both,
-    unless it was over before the next check (or, for a shop, before the owner had to be told).
-    """
+    """Staff hear when it starts and ends, unless it ended before the next check (for a shop: before the alert)."""
 
     class Kind(models.TextChoices):
         SHOP = "shop", "Sklep nie działa"
@@ -52,14 +49,14 @@ class Incident(models.Model):
         BACKUPS = "backups", "Kopie zapasowe"
 
     kind = models.CharField(max_length=20, choices=Kind.choices)
-    # What it is about, one open incident each: "shop:24", "service:shops-db", "disk", "server:1", "backups:failed".
+    # One open incident per key: "shop:24", "service:shops-db", "disk", "server:1", "backups:failed".
     key = models.CharField(max_length=100)
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, null=True, blank=True, related_name="incidents")
     summary = models.CharField(max_length=500)
     started_at = models.DateTimeField(default=timezone.now)
     resolved_at = models.DateTimeField(null=True, blank=True)
     alerted_at = models.DateTimeField(null=True, blank=True)
-    # What the monitor did about it by itself, e.g. restarted the shop's container.
+    # Automatic repair done, e.g. "restart".
     repaired = models.CharField(max_length=100, blank=True)
 
     class Meta:
@@ -78,7 +75,7 @@ class Incident(models.Model):
 
 
 class Heartbeat(models.Model):
-    """When something that runs on a schedule last ran: the monitor itself and the nightly backups."""
+    """Last run of scheduled jobs: the monitor itself and the nightly backups."""
 
     name = models.CharField(max_length=50, unique=True)
     beat_at = models.DateTimeField()

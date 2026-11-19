@@ -6,7 +6,7 @@ from shops.fields import EncryptedTextField
 
 
 class Plan(models.Model):
-    """What a subscription buys. Prices are gross (VAT included), as customers see them."""
+    """Prices are gross (VAT included), as customers see them."""
 
     code = models.SlugField(unique=True)
     name = models.CharField(max_length=60)
@@ -16,11 +16,9 @@ class Plan(models.Model):
     vat_rate = models.DecimalField(max_digits=4, decimal_places=2, default=23)
     interval_months = models.PositiveSmallIntegerField(default=1)
     max_shops = models.PositiveSmallIntegerField()
-    # How many of those shops may run on Magento, which needs about three times the memory of the others.
+    # Of max_shops; Magento needs about three times the memory of the others.
     max_magento_shops = models.PositiveSmallIntegerField(default=0)
-    # Memory limit of each shop's container; more memory serves more visitors at once.
     shop_memory_mb = models.PositiveIntegerField(default=512)
-    # Highlighted on the pricing page as the usual choice.
     is_featured = models.BooleanField(default=False)
     # Benefits shown on the pricing page, one per line.
     features = models.JSONField(default=list, blank=True)
@@ -35,8 +33,6 @@ class Plan(models.Model):
 
 
 class BillingProfile(models.Model):
-    """Who pays and invoice details: a person or a company."""
-
     class Kind(models.TextChoices):
         INDIVIDUAL = "individual", "Osoba prywatna"
         COMPANY = "company", "Firma"
@@ -62,7 +58,7 @@ class BillingProfile(models.Model):
         return self.company_name if self.kind == self.Kind.COMPANY else self.full_name
 
     def snapshot(self):
-        """The details as they were when a payment was made, kept with the payment for invoices."""
+        """Copy kept with a payment, for its invoice."""
         return {
             "kind": self.kind,
             "full_name": self.full_name,
@@ -76,7 +72,7 @@ class BillingProfile(models.Model):
 
 
 class Subscription(models.Model):
-    """A user's plan. One per user; re-subscribing reuses it."""
+    """One per user; re-subscribing reuses it."""
 
     class Status(models.TextChoices):
         INCOMPLETE = "incomplete", "Czeka na pierwszą płatność"
@@ -90,14 +86,13 @@ class Subscription(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.INCOMPLETE)
     current_period_start = models.DateTimeField(null=True, blank=True)
     current_period_end = models.DateTimeField(null=True, blank=True)
-    # The owner cancelled: the plan works until the period ends, then is not renewed.
     cancel_at_period_end = models.BooleanField(default=False)
-    # The saved card, charged at each renewal. The token is a secret, so it is encrypted at rest.
+    # Saved card, charged at each renewal; the token is encrypted at rest.
     card_token = EncryptedTextField(blank=True)
     card_brand = models.CharField(max_length=20, blank=True)
     card_tail = models.CharField(max_length=4, blank=True)
     card_expiry = models.CharField(max_length=4, blank=True, help_text="MMRR")
-    # Paid but unused money, e.g. after moving to a cheaper plan mid-period; renewals use it first.
+    # Paid but unused money (e.g. after a downgrade mid-period); renewals use it first.
     credit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     # Failed renewal charges in a row, and when to try again.
     failed_attempts = models.PositiveSmallIntegerField(default=0)
@@ -119,8 +114,6 @@ class Subscription(models.Model):
 
 
 class Payment(models.Model):
-    """One charge: the first payment (the owner pays on the gateway's page) or a renewal of the saved card."""
-
     class Kind(models.TextChoices):
         INITIAL = "initial", "Pierwsza płatność"
         RENEWAL = "renewal", "Odnowienie"
@@ -147,7 +140,7 @@ class Payment(models.Model):
     gateway_title = models.CharField(max_length=100, blank=True)
     redirect_url = models.URLField(max_length=500, blank=True)
     return_url = models.CharField(max_length=500, blank=True)
-    # What the payment pays for; set when it is paid.
+    # Period paid for; set when paid.
     period_start = models.DateTimeField(null=True, blank=True)
     period_end = models.DateTimeField(null=True, blank=True)
     billing_details = models.JSONField(default=dict, blank=True)
@@ -174,10 +167,7 @@ class Payment(models.Model):
 
 
 class Invoice(models.Model):
-    """
-    The VAT invoice for a paid payment. Who issues it is set by INVOICE_ISSUER: the platform itself (its own numbers
-    and PDF) or an invoicing service that also sends it to KSeF. Kept for tax law, like the payment.
-    """
+    """VAT invoice for a paid payment, issued by INVOICE_ISSUER. Kept for tax law, like the payment."""
 
     class Status(models.TextChoices):
         PENDING = "pending", "Do wystawienia"
@@ -189,12 +179,9 @@ class Invoice(models.Model):
         ACCEPTED = "accepted", "Przyjęta w KSeF"
         REJECTED = "rejected", "Odrzucona przez KSeF"
 
-    # Rates as printed: a percentage, or "np" (not subject to Polish VAT, e.g. a company from abroad).
-    NOT_SUBJECT = "np"
-
     payment = models.OneToOneField(Payment, on_delete=models.PROTECT, related_name="invoice")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
-    # Who issued it (the issuer's name), and its id there.
+    # The issuer's name, and the invoice's id there.
     issuer = models.CharField(max_length=30, blank=True)
     external_id = models.CharField(max_length=60, blank=True)
     number = models.CharField(max_length=60, blank=True)
@@ -203,23 +190,23 @@ class Invoice(models.Model):
     seller = models.JSONField(default=dict, blank=True)
     buyer = models.JSONField(default=dict)
     item = models.CharField(max_length=250)
+    # As printed: a percentage, or "np" (not subject to Polish VAT, e.g. a company from abroad).
     vat_rate = models.CharField(max_length=4)
     net = models.DecimalField(max_digits=10, decimal_places=2)
     vat = models.DecimalField(max_digits=10, decimal_places=2)
     gross = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3)
-    # The document as it was issued; stored, because an issued invoice never changes.
+    # Stored as issued: an issued invoice never changes.
     pdf = models.BinaryField(default=b"", blank=True, editable=False)
     ksef_status = models.CharField(max_length=20, choices=Ksef.choices, default=Ksef.NONE, blank=True)
     ksef_number = models.CharField(max_length=60, blank=True)
-    # The last thing that went wrong, for the admin: the issuer refusing it or KSeF rejecting it.
+    # Last error, for the admin: the issuer refusing it or KSeF rejecting it.
     error = models.CharField(max_length=1000, blank=True)
     attempts = models.PositiveSmallIntegerField(default=0)
-    # The last try at issuing it or asking KSeF about it.
     checked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     issued_at = models.DateTimeField(null=True, blank=True)
-    # When it was e-mailed to the payer.
+    # E-mailed to the payer.
     sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -235,7 +222,7 @@ class Invoice(models.Model):
 
     @property
     def is_final(self):
-        """Issued and, when it goes to KSeF, accepted there: only then the payer gets it."""
+        """Issued and, if it goes to KSeF, accepted there: only then the payer gets it."""
         return self.status == self.Status.ISSUED and self.ksef_status in (self.Ksef.NONE, self.Ksef.ACCEPTED)
 
     @property
@@ -244,7 +231,7 @@ class Invoice(models.Model):
 
 
 class InvoiceSequence(models.Model):
-    """The last number used in a month, for invoices the platform numbers itself."""
+    """Last number used in a month, for invoices the platform numbers itself."""
 
     period = models.CharField(max_length=7, unique=True, help_text="RRRR-MM")
     last = models.PositiveIntegerField(default=0)

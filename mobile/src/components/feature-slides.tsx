@@ -17,21 +17,15 @@ import { useWindowDimensions } from '@/hooks/use-window-dimensions';
 
 const AUTOPLAY_MS = 7000;
 const SWIPE_DISTANCE = 50;
-// On narrow screens the card sits under the picture instead of on it, overlapping by this much.
+// Narrow screens: the card sits under the picture, overlapping it.
 const NARROW_PICTURE_HEIGHT = 340;
 const CARD_OVERLAP = 48;
-// Used until the narrow slides have been measured.
 const NARROW_CARD_ESTIMATE = 300;
-// Share of the width over which a photo fades into the page at each side.
+// Fractions of the width a photo fades over at each side.
 const SIDE_FADE_WIDE = 0.2;
 const SIDE_FADE_NARROW = 0.12;
 
-/**
- * Features as a full-width shop window under the awning: one slide per feature, with a photo or a drawn
- * backdrop and a card describing it. While the page scrolls through the section, its header and the window
- * stay pinned and a short scroll swaps to the next slide (PinnedSequence). With reduced motion, or outside
- * a Page, it is a slideshow with arrows and dots instead.
- */
+/** One slide per feature, pinned while scrolling (PinnedSequence); a slideshow with reduced motion or outside a Page. */
 export function FeatureSlides({ features, title }: { features: Feature[]; title: string }) {
   const reduceMotion = useReducedMotion();
   const page = usePageScroll();
@@ -99,7 +93,6 @@ function PinnedSlides({ header, features, page }: { header: ReactNode; features:
                 </View>
               </SwapLayer>
             ))}
-            {/* The awning stays put while the slides change under it. */}
             <View style={styles.awning}>
               <Awning />
             </View>
@@ -110,7 +103,6 @@ function PinnedSlides({ header, features, page }: { header: ReactNode; features:
   );
 }
 
-/** Drawn slides take turns through these backgrounds; photo slides get none. */
 function drawnTones(features: Feature[], theme: ReturnType<typeof useTheme>) {
   const tones = [theme.primary, '#14213D', theme.primaryMuted];
   return (index: number) =>
@@ -139,7 +131,7 @@ function SlideText({ feature, index, count, wide }: { feature: Feature; index: n
   );
 }
 
-/** The slideshow used with reduced motion: advances on its own until hovered or paused, plus arrows and dots. */
+/** The reduced-motion version: advances on its own until hovered or paused. */
 function SlideShow({ features }: { features: Feature[] }) {
   const theme = useTheme();
   const { height } = useWindowDimensions();
@@ -267,16 +259,15 @@ function SlideShow({ features }: { features: Feature[] }) {
 type BackdropProps = {
   feature: Feature;
   active: boolean;
-  /** Background of a drawn slide; photo slides leave it out. */
+  /** Undefined for photo slides. */
   tone: string | undefined;
   wide: boolean;
-  /** Size of the picture area the backdrop fills. */
   width: number;
   height: number;
   inset: number;
 };
 
-/** One slide's background. All of them stay mounted so changing slides is a cross-fade. */
+/** All backdrops stay mounted, so changing slides is a cross-fade. */
 function Backdrop({ feature, active, tone, wide, width, height, inset }: BackdropProps) {
   const theme = useTheme();
   const fade = useAnimatedStyle(() => ({ opacity: withTiming(active ? 1 : 0, { duration: 600 }) }), [active]);
@@ -302,7 +293,6 @@ function Backdrop({ feature, active, tone, wide, width, height, inset }: Backdro
             height: photoHeight,
           }}
         />
-        {/* Both sides fade into the page, so the photo blends in instead of ending at a hard edge. */}
         <LinearGradient
           colors={[theme.background, clear]}
           start={{ x: 0, y: 0 }}
@@ -319,10 +309,9 @@ function Backdrop({ feature, active, tone, wide, width, height, inset }: Backdro
     );
   }
 
-  // A drawn slide: the feature's icon in a large disc, where a photo would show the product.
   const light = tone === theme.primaryMuted;
   const disc = wide ? Math.round(height * 0.66) : 190;
-  // Centre the disc in the part of the picture left visible by the awning and the card.
+  // Centre the disc in the part left visible by the awning and the card.
   const discPosition = wide
     ? { right: inset + Spacing.five, top: (height - disc + AWNING_HEIGHT) / 2 }
     : { alignSelf: 'center' as const, top: (height - disc + AWNING_HEIGHT - CARD_OVERLAP) / 2 };

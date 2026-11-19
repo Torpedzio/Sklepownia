@@ -1,5 +1,3 @@
-"""Invoices the platform numbers and renders itself. They do not go to KSeF."""
-
 from django.conf import settings
 from django.utils import timezone
 
@@ -27,11 +25,11 @@ class PlatformIssuer(BaseIssuer):
         invoice.pdf = render(invoice, notes=tax.notes(invoice))
 
     def check_ksef(self, invoice):
-        """Nothing to follow: these invoices are not sent to KSeF."""
+        """Not sent to KSeF."""
 
 
 def next_number(day):
-    """The next number in the day's month. Call inside a transaction: the month's counter stays locked until it ends."""
+    """Call inside a transaction: the month's counter stays locked until it ends."""
     sequence, _ = InvoiceSequence.objects.select_for_update().get_or_create(period=day.strftime("%Y-%m"))
     sequence.last += 1
     sequence.save(update_fields=["last"])

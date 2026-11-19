@@ -6,7 +6,6 @@ from django.template.loader import render_to_string
 
 from .platforms import platform_info
 
-# Why the e-mail goes out; each one says it in its own words.
 REASONS = {
     "ready": {
         "subject": "Sklep „{name}” jest gotowy",
@@ -28,13 +27,11 @@ REASONS = {
 }
 
 
-# What the owner sets up first, by settings section, in the order the e-mail names them. The app covers different
-# sections on each platform (settings_sections); the rest is set in the shop's panel.
+# (section, name) in the order the e-mail lists them; sections the platform's app lacks go to "in the panel".
 FIRST_SETTINGS = (("payments", "płatności"), ("shipping", "wysyłkę"), ("taxes", "podatki"), ("documents", "regulamin"))
 
 
 def admin_access_message(shop, reason):
-    """The e-mail with the shop's details and its admin panel login, ready to send."""
     texts = REASONS[reason]
     config = shop.config
     credentials = shop.credentials
@@ -68,7 +65,6 @@ def admin_access_message(shop, reason):
 
 
 def settings_note(platform):
-    """Where the owner sets payments, shipping, taxes and the terms: in the app or in the shop's panel."""
     sections = platform_info(platform).settings_sections
     in_app = [name for section, name in FIRST_SETTINGS if section in sections]
     in_panel = [name for section, name in FIRST_SETTINGS if section not in sections]
@@ -79,6 +75,6 @@ def settings_note(platform):
 
 
 def _listed(names):
-    """Names in a sentence, capitalized: "Płatności, wysyłkę i podatki"."""
+    """E.g. "Płatności, wysyłkę i podatki"."""
     text = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} i {names[-1]}"
     return text[0].upper() + text[1:]
