@@ -3,6 +3,7 @@
 import base64
 import json
 import secrets
+import string
 from decimal import Decimal
 from pathlib import Path
 
@@ -20,6 +21,8 @@ from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_name, db_name, mail_relay,
 )
 from ..provisioning.packages import Package
+from ..remote import KEY_NAME
+from ..remote.prestashop import PrestaShopApi
 
 SAMPLE_PRODUCT_CATEGORIES = 3
 SAMPLE_PRODUCTS_PER_CATEGORY = 2
@@ -90,6 +93,22 @@ function sklepownia_module($name, $enabled) {
 
 # Some services (currencies) need the Symfony kernel of the back office.
 KERNEL_PHP = "global $kernel; $kernel = new AdminKernel('prod', false); $kernel->boot();"
+
+# A key with every method on every resource, replacing the platform's earlier one.
+WEBSERVICE_PHP = """
+Configuration::updateValue('PS_WEBSERVICE', 1);
+$old = Db::getInstance()->executeS('SELECT id_webservice_account FROM `' . _DB_PREFIX_ . 'webservice_account`'
+    . " WHERE description = '" . pSQL($d['name']) . "'");
+foreach ($old as $row) { (new WebserviceKey((int) $row['id_webservice_account']))->delete(); }
+$key = new WebserviceKey();
+$key->key = $d['key'];
+$key->description = $d['name'];
+$key->active = 1;
+$key->add();
+$methods = array_fill_keys(['GET', 'PUT', 'POST', 'PATCH', 'DELETE', 'HEAD'], 1);
+$resources = array_keys(WebserviceRequest::getResources());
+WebserviceKey::setPermissionForAccount($key->id, array_fill_keys($resources, $methods));
+"""
 
 ADMIN_PHP = """
 $employee = $context->employee;
@@ -511,6 +530,7 @@ echo "\\n%(marker)s" . $row['domain'];
 
 class PrestaShopProvisioner(ContainerProvisioner):
     ENV_KEYS = tuple(CONTAINER_ENV)
+    API = PrestaShopApi
     START_FAILED = "PrestaShop nie wystartował."
     # Symfony and Smarty caches, rebuilt on the first visit.
     BACKUP_EXCLUDES = ("var/cache",)
@@ -606,11 +626,18 @@ class PrestaShopProvisioner(ContainerProvisioner):
     def step_configure_navigation(self, shop):
         self._php(shop, NAVIGATION_PHP, {"template_name": "Sklepownia"})
 
+    def step_generate_api_keys(self, shop):
+        credentials = self._credentials(shop)
+        credentials.api_key = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(32))
+        credentials.save(update_fields=["api_key", "updated_at"])
+        self._php(shop, WEBSERVICE_PHP, {"key": credentials.api_key, "name": KEY_NAME})
+
     def step_health_check(self, shop):
         self._check_pages(shop, [
             ("strona sklepu", [self.proxy_url("/")]),
             ("panel sklepu", [self.proxy_url(f"/{shop.admin_path}/login")]),
         ])
+        self._check_api(shop)
 
     # --- running shops ---
 

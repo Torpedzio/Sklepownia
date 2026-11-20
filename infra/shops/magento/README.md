@@ -49,7 +49,8 @@ Baza i miejsce na serwerze jak w [README serwera](../README.md). Czasy z laptopa
 | Waluta, płatności i dostawa | nazwa, e-maile nadawcy, opis; wyłączenie płatności czekiem, przelewem i przy odbiorze oraz wszystkich dostaw; kurier za zamówienie, nie za sztukę; nazwy płatności i dostaw w języku sklepu; strona główna z nazwą, opisem i najnowszymi produktami; nazwa sklepu zamiast napisów Luma | ~2 s |
 | Kategorie produktów | kategorie pod kategorią główną sklepu i opcjonalnie 6 przykładowych produktów | ~2 s |
 | Menu, wyszukiwarka i filtry | Luma sama pokazuje kategorie w menu i filtry w kategoriach; `indexer:reindex` buduje indeksy wyszukiwarki i filtrów | ~3 s |
-| Końcowe sprawdzenie | strona główna, wyniki wyszukiwania i strona logowania panelu przez proxy, wszystkie 200 | ~4 s |
+| Połączenie z aplikacją | `sklepownia:run api`: integracja `Sklepownia` z dostępem do wszystkiego (poprzednia o tej nazwie jest usuwana) i jej token; tokeny integracji jako Bearer (`oauth/consumer/enable_integration_as_bearer`) | ~3 s |
+| Końcowe sprawdzenie | strona główna, wyniki wyszukiwania i strona logowania panelu przez proxy, wszystkie 200; backend pod adresem sklepu odczytuje `V1/store/storeViews` z tokenem | ~4 s |
 | **Razem** | | **~50 s** |
 
 Z aplikacji zmienia się podstawowe dane, płatności, wysyłkę, podatki i region.

@@ -65,6 +65,7 @@ PLATFORMS = {
             ("configure_shop", "Waluta, koszyk i zamówienia"),
             ("create_categories", "Kategorie produktów"),
             ("configure_navigation", "Menu, wyszukiwarka i filtry"),
+            ("generate_api_keys", "Połączenie z aplikacją"),
             ("health_check", "Końcowe sprawdzenie"),
         ],
         # Shipping, taxes, region and the shopping rules are set in the PrestaShop panel for now.
@@ -83,6 +84,7 @@ PLATFORMS = {
             ("configure_shop", "Waluta, płatności i dostawa"),
             ("create_categories", "Kategorie produktów"),
             ("configure_navigation", "Menu, wyszukiwarka i filtry"),
+            ("generate_api_keys", "Połączenie z aplikacją"),
             ("health_check", "Końcowe sprawdzenie"),
         ],
         # Opening/closing, shopping rules, theme and (for now) online payments are set in the Magento panel.

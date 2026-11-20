@@ -12,6 +12,7 @@ from accounts.models import User
 from shops.models import Server, Shop, ShopConfig, ShopCredentials, ShopTemplate
 from shops.provisioning.base import ProvisioningError
 from shops.provisioning.container import container_env
+from shops.remote import ShopRejected
 from shops.documents import Document
 from shops.platforms.woocommerce import (
     DOCUMENTS_PLUGIN,
@@ -562,21 +563,34 @@ def test_generate_api_keys_replaces_the_old_one(provisioner, shell, shop):
     provisioner.step_generate_api_keys(shop)
 
     assert shell.ran("user", "application-password", "delete", "admin", "uuid-1")
-    assert ShopCredentials.objects.get(shop=shop).wp_application_password == "nowe-haslo"
+    assert ShopCredentials.objects.get(shop=shop).api_key == "nowe-haslo"
 
 
-def test_health_check_passes_when_shop_and_api_answer(provisioner, shell, shop):
+def test_health_check_passes_when_shop_and_api_answer(provisioner, shell, shop, monkeypatch):
     shell.on("curl", output="200")
+    api = MagicMock()
+    monkeypatch.setattr(provisioner, "api", lambda shop: api)
 
     provisioner.step_health_check(shop)
 
     assert all(f"Host: {shop.domain}" in " ".join(call["args"]) for call in shell.calls)
+    api.ping.assert_called_once_with()
 
 
 def test_health_check_reports_what_failed(provisioner, shell, shop):
     shell.on("curl", output="500")
 
     with pytest.raises(ProvisioningError, match="strona sklepu: HTTP 500"):
+        provisioner.step_health_check(shop)
+
+
+def test_health_check_fails_when_the_app_cannot_use_the_api(provisioner, shell, shop, monkeypatch):
+    shell.on("curl", output="200")
+    api = MagicMock()
+    api.ping.side_effect = ShopRejected("Sklep nie przyjął klucza aplikacji.")
+    monkeypatch.setattr(provisioner, "api", lambda shop: api)
+
+    with pytest.raises(ProvisioningError, match="Aplikacja nie łączy się ze sklepem: Sklep nie przyjął klucza"):
         provisioner.step_health_check(shop)
 
 
@@ -644,8 +658,9 @@ def test_mail_plugin_keeps_the_owner_as_reply_to():
 
 
 def test_configure_mail_on_a_running_shop_replaces_a_container_of_an_older_image(provisioner, shell, shop, relay):
-    old = MagicMock(labels={}, attrs={"Config": {"Env": []}})
-    old.image.id = "sha256:stary"
+    old = MagicMock(labels={}, attrs={"Config": {"Env": []}, "Image": "sha256:stary"})
+    # Docker may have removed the old image after the rebuild: only its id is left.
+    del old.image
     provisioner.client.containers.get.return_value = old
     provisioner.client.images.get.return_value.id = "sha256:nowy"
     provisioner.client.containers.run.return_value.exec_run.return_value.exit_code = 0
@@ -668,8 +683,7 @@ def test_configure_mail_skips_shops_without_a_container_or_a_mail_server(provisi
 
 
 def test_a_container_of_the_current_image_is_kept(provisioner, shop):
-    current = MagicMock(labels={}, attrs={"Config": {"Env": []}})
-    current.image.id = "sha256:ten-sam"
+    current = MagicMock(labels={}, attrs={"Config": {"Env": []}, "Image": "sha256:ten-sam"})
     provisioner.client.images.get.return_value.id = "sha256:ten-sam"
     provisioner.client.containers.get.return_value = current
     current.exec_run.return_value.exit_code = 0

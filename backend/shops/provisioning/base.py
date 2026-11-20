@@ -97,6 +97,10 @@ class BaseProvisioner:
 
     # --- running shops (see provisioning/operations.py) ---
 
+    def api(self, shop):
+        """The shop's REST API (shops.remote); raises ShopNotConnected while the shop has no key."""
+        raise NotImplementedError
+
     def read_settings(self, shop):
         """{section: {field: value}}, as in shops/shop_settings.py."""
         raise NotImplementedError

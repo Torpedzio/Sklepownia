@@ -145,8 +145,8 @@ class ShopCredentials(models.Model):
     # A username (WordPress) or an e-mail (PrestaShop).
     admin_login = models.CharField(max_length=254)
     admin_password = EncryptedTextField(blank=True)
-    # WooCommerce only: Application Password for the REST API (Basic Auth).
-    wp_application_password = EncryptedTextField(blank=True)
+    # For the shop's REST API: WooCommerce application password, PrestaShop webservice key, Magento integration token.
+    api_key = EncryptedTextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

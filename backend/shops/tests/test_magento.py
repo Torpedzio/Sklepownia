@@ -254,9 +254,12 @@ def test_navigation_builds_the_indexes(provisioner, shell, shop):
     assert shell.magento("indexer:reindex")
 
 
-def test_health_check_opens_the_shop_search_and_panel(provisioner, shell, shop):
+def test_health_check_opens_the_shop_search_and_panel(provisioner, shell, shop, monkeypatch):
     shop.admin_path = "admin_4f7k"
     shell.on_command("curl", output="200")
+
+    api = MagicMock()
+    monkeypatch.setattr(provisioner, "api", lambda shop: api)
 
     provisioner.step_health_check(shop)
 
@@ -264,6 +267,20 @@ def test_health_check_opens_the_shop_search_and_panel(provisioner, shell, shop):
     assert urls == [
         "http://shops-proxy/", "http://shops-proxy/catalogsearch/result/?q=produkt", "http://shops-proxy/admin_4f7k/",
     ]
+    api.ping.assert_called_once_with()
+
+
+def test_api_key_is_the_token_of_a_new_integration(provisioner, shell, shop, monkeypatch):
+    started = []
+    monkeypatch.setattr(provisioner, "step_start_container", lambda shop: started.append(shop.pk))
+    shell.on_run("api", {"token": "token-integracji"})
+
+    provisioner.step_generate_api_keys(shop)
+
+    # A container from an older image has no `api` action.
+    assert started == [shop.pk]
+    assert shell.runs("api") == [{"name": "Sklepownia"}]
+    assert ShopCredentials.objects.get(shop=shop).api_key == "token-integracji"
 
 
 def test_health_check_reports_what_failed(provisioner, shell, shop):

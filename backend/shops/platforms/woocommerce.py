@@ -20,6 +20,7 @@ from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_name, db_name, mail_relay,
 )
 from ..provisioning.packages import Package
+from ..remote.woocommerce import WooCommerceApi
 
 
 WP_PATH = FILES_PATH
@@ -447,6 +448,7 @@ class WooCommerceProvisioner(ContainerProvisioner):
     """WordPress with WooCommerce; mirrors infra/shops/woocommerce/provision-shop.sh step by step."""
 
     ENV_KEYS = WORDPRESS_ENV_KEYS
+    API = WooCommerceApi
     START_FAILED = "WordPress nie wystartował."
     # Caching plugins' page caches and WordPress's update leftovers.
     BACKUP_EXCLUDES = ("wp-content/cache", "wp-content/upgrade")
@@ -622,18 +624,14 @@ class WooCommerceProvisioner(ContainerProvisioner):
                             "--name=platform", "--field=uuid").split()
         for uuid in existing:
             self._wp(shop, "user", "application-password", "delete", username, uuid)
-        credentials.wp_application_password = self._wp(
+        credentials.api_key = self._wp(
             shop, "user", "application-password", "create", username, "platform", "--porcelain",
         )
-        credentials.save(update_fields=["wp_application_password", "updated_at"])
+        credentials.save(update_fields=["api_key", "updated_at"])
 
     def step_health_check(self, shop):
-        credentials = self._credentials(shop)
-        self._check_pages(shop, [
-            ("strona sklepu", [self.proxy_url("/")]),
-            ("API sklepu", ["-u", f"{credentials.admin_login}:{credentials.wp_application_password}",
-                            self.proxy_url("/wp-json/wc/v3/system_status")]),
-        ])
+        self._check_pages(shop, [("strona sklepu", [self.proxy_url("/")])])
+        self._check_api(shop)
 
     # --- running shops ---
 

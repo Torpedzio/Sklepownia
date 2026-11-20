@@ -82,6 +82,34 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
 - **Porady PrestaShop i Magento otwierają stronę startową panelu.** Adresy stron w ich panelach zawierają token sesji
   albo tajny klucz, więc przycisk przy poradzie nie przeniesie od razu na właściwą stronę.
 
+## Plan: obsługa sklepu w aplikacji i zespół
+
+Cel: najważniejsze czynności prowadzenia sklepu są w aplikacji, a panel sklepu zostaje opcją awaryjną; do obsługi
+sklepu właściciel dodaje inne osoby. Ustalenia: dwie stałe role (właściciel, obsługa) bez wybierania uprawnień;
+liczba osób w zespole według planu (start do 5, standard do 20, business bez limitu); wszystko od razu na trzech
+platformach; dostęp obsługi do panelu sklepu później. Podstawą jest API sklepów
+([architektura.md](architektura.md#api-sklepów)). Kolejne kroki:
+
+1. **Zespół:** członkowie sklepu z rolą (`Shop.owner` zostaje płacącym właścicielem), jedno sprawdzanie uprawnień
+   zamiast `owner=request.user`. Obsługa: zamówienia, produkty, stany, klienci, rabaty, sprzedaż. Tylko właściciel:
+   plan, klucze operatorów płatności, dokumenty, kopie, dane do panelu, zespół, usunięcie sklepu.
+2. **Zaproszenia** e-mailem z linkiem do aplikacji (ważne do terminu, jednorazowe, także dla osób bez konta),
+   cofanie i usuwanie członków, limit osób z planu.
+3. **Rejestracja:** wybór „Zakładam sklep” albo „Dołączam do zespołu” (bez cennika, ekran czekania na zaproszenie).
+4. **Ekrany zespołu** w sklepie i oznaczenie cudzych sklepów na liście; przyciski spoza roli ukryte.
+5. **Historia działań:** kto co zmienił w sklepie.
+6. **Zamówienia:** lista z filtrami, szczegóły, zmiana statusu, numer przesyłki dla klienta, notatka, push o nowym
+   zamówieniu.
+7. **Produkty:** lista, dodawanie i edycja (cena, promocja, opis, kategoria, SKU, stan), zdjęcia z aparatu,
+   ukrywanie i usuwanie; warianty na razie w panelu. Do tego szybka zmiana stanów magazynowych.
+8. **Powiadomienia według osoby** (nowe zamówienia, awarie) i przypadki brzegowe zespołu (usunięcie konta członka,
+   sklepu z zespołem).
+9. **Kategorie, klienci (z wnioskami RODO) i kody rabatowe.**
+10. **Co zostaje w panelu:** lista z linkami „Otwórz w panelu” i poradami.
+
+Klucz API sklepu może usunąć właściciel w panelu; aplikacja zgłasza wtedy odrzucony klucz, a naprawia to dopiero
+`connect_shop_api`. Do rozważenia: samoczynne odnowienie klucza przez worker.
+
 ## Inne platformy sklepów
 
 Działają WooCommerce, PrestaShop i Magento ([architektura.md](architektura.md#platformy-sklepów)). Kandydaci na kolejne:

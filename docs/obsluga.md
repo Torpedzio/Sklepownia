@@ -101,6 +101,20 @@ sklepem. Taki sklep przywróć z kopii (`restore_shop`) albo usuń.
 usługi typu „dead man's switch” (np. Healthchecks.io z okresem 5 minut): monitor pinguje ją po każdej rundzie, a ona
 alarmuje, gdy pingi ustaną.
 
+## Połączenie aplikacji ze sklepem
+
+Aplikacja wykonuje czynności w sklepie przez jego API ([architektura.md](architektura.md#api-sklepów)).
+
+```bash
+docker compose exec worker python manage.py connect_shop_api --check [<slug>…]   # tylko sprawdzenie połączenia
+docker compose exec worker python manage.py connect_shop_api [<slug>…]           # nowy klucz i sprawdzenie
+```
+
+Nowy klucz jest potrzebny sklepom PrestaShop i Magento sprzed tej funkcji i każdemu sklepowi, w którym właściciel
+usunął klucz w panelu (hasło aplikacji `platform` w profilu administratora WordPressa, klucz webservice
+`Sklepownia` w PrestaShop, integracja `Sklepownia` w Magento). Sklep Magento dostaje przy tym kontener
+z aktualnego obrazu i nie odpowiada przez kilkanaście sekund. Sklepy, w których worker coś robi, polecenie pomija.
+
 ## Kopie zapasowe
 
 Jak działają: [infra/shops/README.md](../infra/shops/README.md#kopie-zapasowe). Kopie i ich błędy widać w panelu

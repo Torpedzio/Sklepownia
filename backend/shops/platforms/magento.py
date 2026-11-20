@@ -20,6 +20,8 @@ from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_memory, container_name, db_name, mail_relay,
     memory_bytes,
 )
+from ..remote import KEY_NAME
+from ..remote.magento import MagentoApi
 from .woocommerce import _money
 
 SAMPLE_PRODUCT_CATEGORIES = 3
@@ -95,6 +97,7 @@ ORDER_STATES = {
 
 class MagentoProvisioner(ContainerProvisioner):
     START_FAILED = "Magento nie wystartował."
+    API = MagentoApi
     VOLUME_PATH = DATA_PATH
     # Caches and sessions; logs, env.php and media/ are kept.
     BACKUP_EXCLUDES = ("var/cache", "var/page_cache", "var/session", "var/view_preprocessed")
@@ -210,12 +213,20 @@ class MagentoProvisioner(ContainerProvisioner):
         self._magento(shop, ["indexer:reindex"])
         self._magento(shop, ["cache:flush"])
 
+    def step_generate_api_keys(self, shop):
+        # Containers from older images lack this action, so they are replaced first.
+        self.step_start_container(shop)
+        credentials = self._credentials(shop)
+        credentials.api_key = self._run(shop, "api", {"name": KEY_NAME})["token"]
+        credentials.save(update_fields=["api_key", "updated_at"])
+
     def step_health_check(self, shop):
         self._check_pages(shop, [
             ("strona sklepu", [self.proxy_url("/")]),
             ("wyszukiwarka", [self.proxy_url("/catalogsearch/result/?q=produkt")]),
             ("panel sklepu", [self.proxy_url(f"/{shop.admin_path}/")]),
         ])
+        self._check_api(shop)
 
     # --- running shops ---
 

@@ -20,6 +20,10 @@ use Magento\Framework\App\Config\Storage\WriterInterface;
 use Magento\Framework\App\ObjectManager;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\App\State;
+use Magento\Integration\Api\AuthorizationServiceInterface;
+use Magento\Integration\Api\IntegrationServiceInterface;
+use Magento\Integration\Api\OauthServiceInterface;
+use Magento\Integration\Model\Integration;
 use Magento\Store\Model\ScopeInterface;
 use Magento\Store\Model\Store;
 use Magento\Store\Model\StoreManagerInterface;
@@ -101,6 +105,7 @@ class RunCommand extends Command
             'admin' => $this->admin($data),
             'remove_samples' => $this->removeSamples(),
             'documents' => $this->documents($data),
+            'api' => $this->api($data),
             default => throw new \InvalidArgumentException('Unknown action'),
         };
         if ($action !== 'read') {
@@ -306,6 +311,31 @@ class RunCommand extends Command
         $connection->delete($connection->getTableName('admin_user_session'), ['user_id = ?' => (int) $user->getId()]);
         $user->getResource()->unlock([(int) $user->getId()]);
         return ['user' => (int) $user->getId()];
+    }
+
+    /** A new integration with access to everything, replacing the platform's earlier one; returns its token. */
+    private function api(array $data): array
+    {
+        $integrations = $this->get(IntegrationServiceInterface::class);
+        $old = $integrations->findByName($data['name']);
+        if ($old->getId()) {
+            $integrations->delete($old->getId());
+        }
+        $integration = $integrations->create([
+            'name' => $data['name'],
+            'status' => Integration::STATUS_ACTIVE,
+            'setup_type' => Integration::TYPE_MANUAL,
+        ]);
+        $this->get(AuthorizationServiceInterface::class)->grantAllPermissions($integration->getId());
+        $oauth = $this->get(OauthServiceInterface::class);
+        $oauth->createAccessToken($integration->getConsumerId(), true);
+        // Integration tokens work as Bearer tokens only with this on (off by default since 2.4.4).
+        $this->write(['oauth/consumer/enable_integration_as_bearer' => '1']);
+        // The API's permissions are cached outside the cache types, so cleaning them would keep the old
+        // integration's: a new key would be refused until a full flush.
+        $cache = $this->get(CacheManager::class);
+        $cache->flush($cache->getAvailableTypes());
+        return ['token' => $oauth->getAccessToken($integration->getConsumerId())->getToken()];
     }
 
     private function removeSamples(): array

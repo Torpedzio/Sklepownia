@@ -16,7 +16,8 @@ Baza i miejsce na serwerze jak w [README serwera](../README.md).
 | Waluta, koszyk i zamówienia | waluta (import z `localization/<kraj>.xml`, gdy jej nie ma), nazwa i e-mail sklepu, zakupy bez konta, stany magazynowe; wyłączenie płatności czekiem, przelewem i przy odbiorze oraz treści demo na stronie głównej (`ps_imageslider`, `ps_customtext`, `ps_banner`) | ~15 s |
 | Kategorie produktów | kategorie pod „Strona główna” i opcjonalnie 6 przykładowych produktów (też na stronie głównej) | ~2 s |
 | Menu, wyszukiwarka i filtry | menu górne z kategorii (`MOD_BLOCKTOPMENU_ITEMS`), szablon filtrów `ps_facetedsearch` (kategorie, cena, dostępność), indeks cen | ~3 s |
-| Końcowe sprawdzenie | strona główna i strona logowania panelu (`/<folder>/login`) przez proxy, obie 200 | ~6 s |
+| Połączenie z aplikacją | webservice włączony (`PS_WEBSERVICE`), klucz `Sklepownia` z dostępem do wszystkich zasobów; poprzedni klucz o tej nazwie jest usuwany | ~2 s |
+| Końcowe sprawdzenie | strona główna i strona logowania panelu (`/<folder>/login`) przez proxy, obie 200; backend pod adresem sklepu odczytuje zasób `shops` webservice | ~6 s |
 
 Z aplikacji zmienia się podstawowe dane, otwarcie sklepu, płatności i motyw; resztę w panelu PrestaShop.
 

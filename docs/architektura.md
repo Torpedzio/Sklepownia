@@ -115,6 +115,32 @@ wejść do kontenera sklepu. Podsumowanie liczy się z kopii, więc otwiera się
 
 Usunięcie sklepu usuwa też kopię jego zamówień.
 
+## API sklepów
+
+Codzienna obsługa sklepu w aplikacji (zamówienia, produkty, klienci) korzysta z REST API samej platformy sklepu,
+a nie z poleceń w jego kontenerze. Dzięki temu backend wykonuje ją od razu, w zapytaniu aplikacji, bez kolejki i bez
+dostępu do Dockera ([shops/remote/](../backend/shops/remote/)).
+
+- Backend łączy się z sklepem pod jego publicznym adresem (`Shop.url`), tak jak przeglądarka klienta, więc działa
+  tak samo, gdy sklepy stoją na osobnym serwerze.
+- Każda platforma ma swój klucz w `ShopCredentials.api_key` (zaszyfrowany):
+
+  | Platforma | API | Klucz |
+  |---|---|---|
+  | WooCommerce | `/wp-json/wc/v3/` | hasło aplikacji `platform` administratora (Basic Auth) |
+  | PrestaShop | webservice przez `/webservice/dispatcher.php` (odpowiedzi w JSON, zapis w XML) | klucz webservice `Sklepownia` |
+  | Magento | `/rest/all/V1/` | token integracji `Sklepownia` (Bearer) |
+
+- Klucz powstaje w kroku zakładania „Połączenie z aplikacją”, a „Końcowe sprawdzenie” wymaga, żeby API go przyjęło.
+  Przywrócenie kopii daje sklepowi nowy klucz, bo przywrócona baza ma klucz z dnia kopii. Sklepom sprzed tej funkcji
+  albo takim, w których właściciel usunął klucz w panelu, nowy daje `connect_shop_api`
+  ([obsluga.md](obsluga.md#połączenie-aplikacji-ze-sklepem)).
+- Błędy są komunikatami dla właściciela (`ShopApiError`): sklep niedostępny (brak odpowiedzi albo strona „Sklep
+  chwilowo niedostępny” z proxy), sklep bez klucza, klucz odrzucony, brak rzeczy w sklepie i błąd platformy z jej
+  własnym opisem. Przekierowań klient nie wykonuje, żeby zapis nie zamienił się w odczyt ani klucz nie poszedł gdzie
+  indziej.
+- `FakeProvisioner` daje symulowane API (`shops.remote.fake.FakeApi`).
+
 ## Kopie zapasowe
 
 Kopia to zrzut bazy sklepu i pliki z jego wolumenu, zapisane jako snapshot w repozytorium restic na serwerze sklepów
@@ -247,7 +273,7 @@ więc po zmianie domeny trzeba przenieść istniejące sklepy poleceniem `update
 
 ## Bezpieczeństwo
 
-- Hasła sklepów (baza, administrator panelu, hasło API WordPressa) są zaszyfrowane w bazie kluczem Fernet `FIELD_ENCRYPTION_KEY`
+- Hasła sklepów (baza, administrator panelu, klucz API sklepu) są zaszyfrowane w bazie kluczem Fernet `FIELD_ENCRYPTION_KEY`
   (`EncryptedTextField`). Każde hasło jest zapisywane, zanim zostanie użyte, żeby ponowiona próba go nie zgubiła.
 - Klucze płatności online sklepów są tylko w sklepie. Platforma trzyma je zaszyfrowane wyłącznie do końca operacji,
   która je zapisuje, i nigdy nie oddaje ich w API ani w panelu admina.

@@ -11,6 +11,7 @@ from .. import shop_settings
 from ..models import Server, Shop, ShopChecklist, ShopCredentials, ShopSettings
 from ..orders import Order, Status
 from ..platforms import platform_info
+from ..remote.fake import FakeApi
 from .base import (
     Backup, BaseProvisioner, ContainerState, NothingToBackUp, PageCheck, ProductCount, ProvisioningError, Snapshot,
 )
@@ -65,14 +66,15 @@ class FakeProvisioner(BaseProvisioner):
         )
 
     def step_generate_api_keys(self, shop):
-        ShopCredentials.objects.update_or_create(
-            shop=shop,
-            defaults={
-                "admin_login": "admin",
-                "admin_password": secrets.token_urlsafe(24),
-                "wp_application_password": secrets.token_urlsafe(24),
-            },
+        # WooCommerce's administrator is only made here.
+        credentials, _ = ShopCredentials.objects.get_or_create(
+            shop=shop, defaults={"admin_login": "admin", "admin_password": secrets.token_urlsafe(24)},
         )
+        credentials.api_key = secrets.token_urlsafe(24)
+        credentials.save(update_fields=["api_key", "updated_at"])
+
+    def api(self, shop):
+        return FakeApi(shop)
 
     # Settings live only in the platform's database: what was saved is what the shop "has".
 

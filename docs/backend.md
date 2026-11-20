@@ -15,8 +15,10 @@ backend/
 │   ├── provisioning/  base.py (kroki), container.py (wspólne dla kontenerów), runner.py (zakładanie),
 │   │                  operations.py (operacje na działającym sklepie), packages.py (wtyczki pobierane od producentów),
 │   │                  fake.py (symulacja)
+│   ├── remote/        REST API sklepów: wspólny klient i błędy (__init__.py), woocommerce.py, prestashop.py,
+│   │                  magento.py, fake.py (symulacja)
 │   ├── management/    polecenia update_shop_addresses, configure_shop_mail, publish_shop_documents, backup_shops,
-│   │                  restore_shop i update_shop_containers
+│   │                  restore_shop, update_shop_containers i connect_shop_api
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
 │   ├── orders.py      zamówienie odczytane ze sklepu (Order), wspólne dla platform
@@ -426,6 +428,7 @@ docker compose exec worker  python manage.py backup_shops [slug…]     # kopie 
 docker compose exec worker  python manage.py restore_shop <id|slug> [--backup N]   # przywrócenie, też usuniętego sklepu
 docker compose exec worker  python manage.py check_shops [slug…]      # runda monitora teraz
 docker compose exec worker  python manage.py update_shop_containers [slug…] [--dry-run]   # kontenery jak nowe (np. z healthcheckiem)
+docker compose exec worker  python manage.py connect_shop_api [slug…] [--check]   # nowy klucz API sklepu i test połączenia
 docker compose exec backend python manage.py spectacular --file schema.yml   # schemat OpenAPI do pliku
 ```
 
@@ -442,7 +445,8 @@ Publikuje worker, więc polecenie działa w każdym kontenerze backendu. Sklep z
 z komunikatem; wystarczy uruchomić polecenie jeszcze raz.
 
 `backup_shops` i `restore_shop` opisuje [obsluga.md](obsluga.md#kopie-zapasowe), `check_shops`
-i `update_shop_containers` [obsluga.md](obsluga.md#monitorowanie).
+i `update_shop_containers` [obsluga.md](obsluga.md#monitorowanie), a `connect_shop_api`
+[obsluga.md](obsluga.md#połączenie-aplikacji-ze-sklepem).
 
 ## Panel admina
 

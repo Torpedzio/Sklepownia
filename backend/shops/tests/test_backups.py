@@ -543,7 +543,10 @@ def test_restoring_puts_files_and_database_back_and_starts_the_shop_again(shop, 
     steps = []
     monkeypatch.setattr(provisioner, "_find_container", lambda shop: container)
     container.stop.side_effect = lambda: steps.append("stop")
-    for name in ("step_create_database", "step_start_container", "after_restore", "update_address", "configure_mail"):
+    for name in (
+        "step_create_database", "step_start_container", "after_restore", "update_address", "configure_mail",
+        "step_generate_api_keys",
+    ):
         monkeypatch.setattr(provisioner, name, lambda shop, name=name: steps.append(name))
     monkeypatch.setattr(provisioner, "set_admin_password", lambda shop, password: steps.append(("password", password)))
     monkeypatch.setattr(
@@ -555,7 +558,7 @@ def test_restoring_puts_files_and_database_back_and_starts_the_shop_again(shop, 
 
     assert steps == [
         "stop", "step_create_database", ("restore", "abc123", "rw"), "step_start_container", "after_restore",
-        "update_address", "configure_mail", ("password", "obecne-haslo"),
+        "update_address", "configure_mail", ("password", "obecne-haslo"), "step_generate_api_keys",
     ]
 
 

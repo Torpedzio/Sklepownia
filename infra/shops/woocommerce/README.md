@@ -20,7 +20,7 @@ Czasy są orientacyjne, zmierzone na zwykłym laptopie.
 | Kategorie produktów | kategorie (pierwsza zastępuje domyślne „Bez kategorii”) i opcjonalnie 6 przykładowych produktów | ~25 s |
 | Wyszukiwarka i filtry | lewy pasek boczny sklepu: wyszukiwarka, menu kategorii, aktywne filtry, filtr ceny i ocen; ustawienia zależne od motywu | ~15 s |
 | Połączenie z aplikacją | Application Password `platform` dla admina | ~3 s |
-| Końcowe sprawdzenie | strona główna 200 i `wc/v3/system_status` z hasłem API | ~4 s |
+| Końcowe sprawdzenie | strona główna przez proxy 200; backend pod adresem sklepu odczytuje `wc/v3/data/currencies/current` z hasłem API | ~4 s |
 | **Razem** | | **~105 s** |
 
 ## Zakładanie i usuwanie sklepu ręcznie

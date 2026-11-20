@@ -211,14 +211,28 @@ def test_categories_and_samples(provisioner, shell, shop):
     assert data["samples"] is True
 
 
-def test_health_check_opens_the_shop_and_its_panel(provisioner, shell, shop):
+def test_health_check_opens_the_shop_and_its_panel(provisioner, shell, shop, monkeypatch):
     shop.admin_path = "admin4f7k2x"
     shell.on_command("curl", output="200")
+
+    api = MagicMock()
+    monkeypatch.setattr(provisioner, "api", lambda shop: api)
 
     provisioner.step_health_check(shop)
 
     urls = [call["command"][-1] for call in shell.calls]
     assert urls == ["http://shops-proxy/", "http://shops-proxy/admin4f7k2x/login"]
+    api.ping.assert_called_once_with()
+
+
+def test_api_key_opens_the_webservice_to_the_platform(provisioner, shell, shop):
+    provisioner.step_generate_api_keys(shop)
+
+    key = ShopCredentials.objects.get(shop=shop).api_key
+    assert re.fullmatch(r"[A-Z0-9]{32}", key)
+    [(script, data)] = shell.php("WebserviceKey")
+    assert data == {"key": key, "name": "Sklepownia"}
+    assert "PS_WEBSERVICE" in script
 
 
 def test_health_check_reports_what_failed(provisioner, shell, shop):

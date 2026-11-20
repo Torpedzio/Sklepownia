@@ -16,6 +16,7 @@ from django.utils.dateparse import parse_datetime
 from docker.errors import DockerException, NotFound
 
 from ..models import Server, Shop, ShopCredentials
+from ..remote import ShopApiError
 from ..unavailable import UNAVAILABLE_HEADER
 from .base import (
     Backup, BaseProvisioner, ContainerState, NothingToBackUp, PageCheck, ProvisioningError, Snapshot,
@@ -77,6 +78,8 @@ class ContainerProvisioner(BaseProvisioner):
     BACKUP_EXCLUDES = ()
     # Seconds per backup or restore, including waiting for a busy repository (up to 30 minutes).
     BACKUP_TIMEOUT = 3600
+    # shops.remote.ShopApi subclass for the platform's REST API.
+    API = None
 
     @cached_property
     def client(self):
@@ -96,6 +99,10 @@ class ContainerProvisioner(BaseProvisioner):
         raise NotImplementedError
 
     def default_admin_login(self, shop):
+        raise NotImplementedError
+
+    def step_generate_api_keys(self, shop):
+        """Give the platform a new key for its API (shops.remote), replacing the old one."""
         raise NotImplementedError
 
     def memory(self, shop):
@@ -252,6 +259,15 @@ class ContainerProvisioner(BaseProvisioner):
             if status != "200":
                 raise ProvisioningError(f"Sklep nie odpowiada poprawnie ({label}: HTTP {status}).")
 
+    def _check_api(self, shop):
+        try:
+            self.api(shop).ping()
+        except ShopApiError as exc:
+            raise ProvisioningError(f"Aplikacja nie łączy się ze sklepem: {exc}") from exc
+
+    def api(self, shop):
+        return self.API(shop)
+
     @staticmethod
     def proxy_url(path="/"):
         return f"http://{settings.SHOPS_PROXY_CONTAINER}{path}"
@@ -324,6 +340,8 @@ class ContainerProvisioner(BaseProvisioner):
         password = self._credentials(shop).admin_password
         if password:
             self.set_admin_password(shop, password)
+        # The restored database has the API key of its day, or none.
+        self.step_generate_api_keys(shop)
 
     def list_backups(self):
         # Runs nightly, so it also clears containers left by a worker that died waiting for one.
@@ -478,10 +496,12 @@ class ContainerProvisioner(BaseProvisioner):
 
     def _image_changed(self, container):
         try:
-            return container.image.id != self.client.images.get(self.image()).id
+            current = self.client.images.get(self.image()).id
         except NotFound:
-            # The image is gone (e.g. renamed); keep the container rather than fail.
+            # The configured image is gone (e.g. renamed); keep the container rather than fail.
             return False
+        # By id, not container.image: Docker may already have removed the old image after a rebuild.
+        return container.attrs.get("Image") != current
 
     def _write_file(self, shop, path, content):
         """Write `content` to `path` in the shop's container as www-data, creating folders."""
