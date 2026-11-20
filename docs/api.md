@@ -43,9 +43,11 @@ Limity zapytań: logowanie, rejestracja i ustawianie nowego hasła 10 na minutę
 
 ## Sklepy: `/api/shops/`
 
+Obsługa sklepu (`role: staff`) może tylko oglądać sklep (`GET shops/`, `GET shops/{id}/`) i sprzedaż (`sales/`, `sales/refresh/`). Pozostałe akcje na sklepie dają jej `403` z „Tylko właściciel sklepu może to zrobić.”. Osoba spoza sklepu dostaje `404`.
+
 | Metoda i ścieżka | Opis |
 |---|---|
-| `GET shops/` | Sklepy użytkownika (bez usuniętych): `id, name, slug, url, status, status_display, platform, platform_display, is_test, created_at, down_since`. `platform`: `woocommerce`, `prestashop` albo `magento`. `is_test`: sklep sprzed płatnych planów. `down_since`: od kiedy działający sklep nie odpowiada klientom (gdy monitor już powiadomił właściciela), inaczej `null` |
+| `GET shops/` | Sklepy użytkownika, własne i te, które obsługuje (bez usuniętych): `id, name, slug, url, status, status_display, platform, platform_display, is_test, created_at, down_since, role`. `role`: `owner` (właściciel) albo `staff` (obsługa). `platform`: `woocommerce`, `prestashop` albo `magento`. `is_test`: sklep sprzed płatnych planów. `down_since`: od kiedy działający sklep nie odpowiada klientom (gdy monitor już powiadomił właściciela), inaczej `null` |
 | `POST shops/` | Założenie sklepu (wymaga potwierdzonego e-maila i aktywnego planu). `201` ze szczegółami sklepu. `402` bez planu, `400` przy zajętym adresie albo osiągniętym limicie planu (sklepy testowe się nie liczą); limit sklepów Magento daje błąd pola `platform`. |
 | `GET shops/{id}/` | Szczegóły: pola z listy plus `panel_name` (np. „panel PrestaShop”), `setup_time` (ile trwa zakładanie, np. „około dwóch minut”), `config` (wybory z formularza) i `provisioning` (ostatnie zadanie z krokami; kroki zależą od platformy) |
 | `DELETE shops/{id}/` | Usunięcie, `204`. W trakcie zakładania `409`. |

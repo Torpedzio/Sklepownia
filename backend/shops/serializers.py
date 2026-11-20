@@ -3,8 +3,8 @@ from rest_framework import serializers
 
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
 from .models import (
-    ProvisioningJob, ProvisioningStep, Shop, ShopBackup, ShopChecklist, ShopConfig, ShopOperation, ShopOrder,
-    ShopTemplate,
+    ProvisioningJob, ProvisioningStep, Shop, ShopBackup, ShopChecklist, ShopConfig, ShopMember, ShopOperation,
+    ShopOrder, ShopTemplate,
 )
 from .platforms import Platform, platform_info
 from .shop_settings import OPERATORS, SECTIONS, describe
@@ -60,11 +60,16 @@ class ShopSerializer(serializers.ModelSerializer):
         "działa.",
     )
 
+    role = serializers.ChoiceField(
+        choices=ShopMember.Role.choices, read_only=True,
+        help_text="Rola zalogowanej osoby w sklepie: owner (właściciel, płaci za plan) albo staff (obsługa).",
+    )
+
     class Meta:
         model = Shop
         fields = [
             "id", "name", "slug", "url", "status", "status_display", "platform", "platform_display",
-            "is_test", "created_at", "down_since",
+            "is_test", "created_at", "down_since", "role",
         ]
 
     @extend_schema_field(serializers.DateTimeField(allow_null=True))

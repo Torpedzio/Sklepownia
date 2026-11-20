@@ -90,22 +90,22 @@ liczba osób w zespole według planu (start do 5, standard do 20, business bez l
 platformach; dostęp obsługi do panelu sklepu później. Podstawą jest API sklepów
 ([architektura.md](architektura.md#api-sklepów)). Kolejne kroki:
 
-1. **Zespół:** członkowie sklepu z rolą (`Shop.owner` zostaje płacącym właścicielem), jedno sprawdzanie uprawnień
-   zamiast `owner=request.user`. Obsługa: zamówienia, produkty, stany, klienci, rabaty, sprzedaż. Tylko właściciel:
-   plan, klucze operatorów płatności, dokumenty, kopie, dane do panelu, zespół, usunięcie sklepu.
-2. **Zaproszenia** e-mailem z linkiem do aplikacji (ważne do terminu, jednorazowe, także dla osób bez konta),
+Role już są ([backend.md](backend.md#zespół)): obsługa ogląda sklep i sprzedaż, resztę robi właściciel; nowe
+czynności (zamówienia, produkty, stany, klienci, rabaty) trafią do `STAFF_ACTIONS`.
+
+1. **Zaproszenia** e-mailem z linkiem do aplikacji (ważne do terminu, jednorazowe, także dla osób bez konta),
    cofanie i usuwanie członków, limit osób z planu.
-3. **Rejestracja:** wybór „Zakładam sklep” albo „Dołączam do zespołu” (bez cennika, ekran czekania na zaproszenie).
-4. **Ekrany zespołu** w sklepie i oznaczenie cudzych sklepów na liście; przyciski spoza roli ukryte.
-5. **Historia działań:** kto co zmienił w sklepie.
-6. **Zamówienia:** lista z filtrami, szczegóły, zmiana statusu, numer przesyłki dla klienta, notatka, push o nowym
+2. **Rejestracja:** wybór „Zakładam sklep” albo „Dołączam do zespołu” (bez cennika, ekran czekania na zaproszenie).
+3. **Ekrany zespołu** w sklepie i oznaczenie cudzych sklepów na liście; przyciski spoza roli ukryte.
+4. **Historia działań:** kto co zmienił w sklepie.
+5. **Zamówienia:** lista z filtrami, szczegóły, zmiana statusu, numer przesyłki dla klienta, notatka, push o nowym
    zamówieniu.
-7. **Produkty:** lista, dodawanie i edycja (cena, promocja, opis, kategoria, SKU, stan), zdjęcia z aparatu,
+6. **Produkty:** lista, dodawanie i edycja (cena, promocja, opis, kategoria, SKU, stan), zdjęcia z aparatu,
    ukrywanie i usuwanie; warianty na razie w panelu. Do tego szybka zmiana stanów magazynowych.
-8. **Powiadomienia według osoby** (nowe zamówienia, awarie) i przypadki brzegowe zespołu (usunięcie konta członka,
+7. **Powiadomienia według osoby** (nowe zamówienia, awarie) i przypadki brzegowe zespołu (usunięcie konta członka,
    sklepu z zespołem).
-9. **Kategorie, klienci (z wnioskami RODO) i kody rabatowe.**
-10. **Co zostaje w panelu:** lista z linkami „Otwórz w panelu” i poradami.
+8. **Kategorie, klienci (z wnioskami RODO) i kody rabatowe.**
+9. **Co zostaje w panelu:** lista z linkami „Otwórz w panelu” i poradami.
 
 Klucz API sklepu może usunąć właściciel w panelu; aplikacja zgłasza wtedy odrzucony klucz, a naprawia to dopiero
 `connect_shop_api`. Do rozważenia: samoczynne odnowienie klucza przez worker.

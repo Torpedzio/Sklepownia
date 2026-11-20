@@ -133,6 +133,7 @@ def delete_account(user):
     from billing.services import close_account
     from shops.services import ShopBeingSetUp, delete_all_shops
     from push.models import PushPreferences
+    from shops.models import ShopMember
 
     with transaction.atomic():
         # Same lock as creating a shop, so no shop appears meanwhile.
@@ -158,6 +159,7 @@ def delete_account(user):
         PasswordResetCode.objects.filter(user=user).delete()
         sign_out_everywhere(user)
         PushPreferences.objects.filter(user=user).delete()
+        ShopMember.objects.filter(user=user).delete()
         if avatar:
             transaction.on_commit(lambda: default_storage.delete(avatar))
         transaction.on_commit(lambda: send_account_deleted_email.delay(email, shops))

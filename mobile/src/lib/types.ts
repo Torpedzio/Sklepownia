@@ -33,7 +33,11 @@ export type Shop = {
   created_at: string;
   /** Since when the running shop doesn't answer; null while it works. */
   down_since: string | null;
+  /** The signed-in person's role: owner (pays for the plan) or staff, who can only view the shop and its sales. */
+  role: ShopRole;
 };
+
+export type ShopRole = 'owner' | 'staff';
 
 export type ShopTemplate = {
   slug: string;

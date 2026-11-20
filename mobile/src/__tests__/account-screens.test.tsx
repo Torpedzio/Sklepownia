@@ -218,6 +218,7 @@ describe('shop list', () => {
     platform_display: 'WooCommerce',
     is_test: false,
     down_since: null,
+    role: 'owner',
     created_at: '2026-11-01T10:00:00Z',
   });
 
@@ -429,6 +430,7 @@ describe('account overview and security', () => {
     platform_display: platform,
     is_test: isTest,
     down_since: null,
+    role: 'owner' as const,
     created_at: '2026-11-01T10:00:00Z',
   });
 

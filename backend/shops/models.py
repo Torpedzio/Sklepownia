@@ -120,6 +120,24 @@ class Shop(models.Model):
         self.save(update_fields=["status", "updated_at"])
 
 
+class ShopMember(models.Model):
+    """Runs the shop with its owner (the staff role). The owner is Shop.owner, never a member."""
+
+    class Role(models.TextChoices):
+        OWNER = "owner", "Właściciel"
+        STAFF = "staff", "Obsługa"
+
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="members")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="shop_memberships")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["shop", "user"], name="unique_shop_member")]
+
+    def __str__(self):
+        return f"{self.user} w {self.shop}"
+
+
 class ShopConfig(models.Model):
     """Creation form input for provisioning; settings changed in the app are written back here."""
 

@@ -75,8 +75,9 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 | `Server` | Serwer, na którym działają kontenery sklepów, z limitem `max_shops`. `public_ip` to adres, z którego sklepy łączą się z operatorami płatności (aplikacja pokazuje go przy Przelewy24). Migracja tworzy serwer `local`. |
 | `ShopTemplate` | Motyw do wyboru w formularzu, dla jednej platformy (`platform`). `theme` to nazwa motywu w systemie sklepu. Migracje dodają Storefront, Astrę i Kadence (WooCommerce) oraz Hummingbird i Classic (PrestaShop). |
 | `Shop` | Sklep: właściciel, nazwa, `slug` (część adresu), platforma, status z maszyną stanów, serwer. `url` i `admin_url` są liczone z ustawień; folder panelu PrestaShop jest w `admin_path`. |
+| `ShopMember` | Osoba z obsługi sklepu (rola `staff`), unikalna w sklepie. Właściciel to `Shop.owner`, nigdy członek: płaci za plan i tylko jego sklepy liczą się do limitów. Na razie dodaje się ją w panelu admina (sklep → obsługa sklepu). |
 | `ShopConfig` | Wybory z formularza: branża, motyw, liczba kategorii, język, waluta, kraj, e-mail, produkty przykładowe. Zmiany z ustawień (opis, e-mail, język, waluta, kraj, motyw) są tu dopisywane. |
-| `ShopCredentials` | Login administratora (`admin_login`: nazwa użytkownika w WordPressie, e-mail w PrestaShop) i hasła: bazy, administratora, API WordPressa. Hasła zaszyfrowane. |
+| `ShopCredentials` | Login administratora (`admin_login`: nazwa użytkownika w WordPressie, e-mail w PrestaShop) i hasła: bazy, administratora i klucz API sklepu (`api_key`). Hasła zaszyfrowane. |
 | `ProvisioningJob` | Jedna próba założenia sklepu (status, błąd, czasy). Ponowienie tworzy nowe zadanie. |
 | `ProvisioningStep` | Krok zadania: klucz, etykieta dla użytkownika, status, błąd, czasy. |
 | `ShopSettings` | Ostatnio odczytane albo zapisane ustawienia sklepu (`values`, JSON w sekcjach) i czas odczytu ze sklepu. |
@@ -89,6 +90,14 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 `slug` musi być unikalny tylko wśród sklepów, które nie są usunięte (ograniczenie `unique_slug_for_live_shops`).
 Zasady adresu: 3–30 znaków, małe litery, cyfry i pojedyncze myślniki, nie na początku ani na końcu,
 bez adresów zarezerwowanych dla platformy ([slugs.py](../backend/shops/slugs.py)).
+
+### Zespół
+
+[team.py](../backend/shops/team.py): sklep prowadzi właściciel (`Shop.owner`) i obsługa (`ShopMember`).
+`visible_shops(user)` to sklepy własne i obsługiwane z adnotacją `role` (`owner` albo `staff`), z których korzysta
+`ShopViewSet`. Uprawnienie `StaffActions` przepuszcza obsługę tylko przez `STAFF_ACTIONS` z
+[views.py](../backend/shops/views.py) (lista, szczegóły, sprzedaż), a resztę zostawia właścicielowi. Usunięcie konta
+usuwa też jego członkostwa. Powiadomienia (nowe zamówienia, awarie) i e-maile o sklepie dostaje na razie tylko właściciel.
 
 ### Zakładanie sklepu
 

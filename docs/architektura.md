@@ -281,7 +281,8 @@ więc po zmianie domeny trzeba przenieść istniejące sklepy poleceniem `update
 - Login i hasło administratora sklepu nie wychodzą przez API. Trafiają tylko e-mailem na adres konta właściciela:
   po założeniu sklepu, po zmianie hasła i na prośbę (`send-admin-access`, najwyżej 5 razy na godzinę).
   Aplikacja pokazuje tylko adres panelu i adres, na który wysłano dane.
-- Użytkownik widzi tylko swoje sklepy (`ShopViewSet.get_queryset`). Zakładanie i ponawianie wymaga potwierdzonego e-maila.
+- Użytkownik widzi tylko sklepy, które ma albo obsługuje (`team.visible_shops`); obsługa może w nich tylko to, co
+  wymienia `STAFF_ACTIONS` ([backend.md](backend.md#zespół)). Zakładanie i ponawianie wymaga potwierdzonego e-maila.
 - Komunikaty błędów kroków pokazywane użytkownikowi pochodzą tylko z `ProvisioningError`; inne wyjątki
   (mogące zawierać hasła lub nazwy hostów) zastępuje ogólny komunikat, a szczegóły trafiają do logów workera.
 - Endpointy logowania, weryfikacji e-maila i formularza kontaktowego mają limity zapytań (throttling).

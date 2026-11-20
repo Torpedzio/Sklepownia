@@ -140,6 +140,7 @@ export function shopDetail(overrides: Partial<ShopDetail> = {}): ShopDetail {
     setup_time: 'około dwóch minut',
     is_test: false,
     down_since: null,
+    role: 'owner',
     created_at: '2026-11-05T10:00:00Z',
     config: {
       industry: 'food',

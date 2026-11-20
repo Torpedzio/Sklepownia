@@ -9,7 +9,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from accounts.permissions import IsEmailVerified
 from billing.models import Plan
 
-from . import backups, checklist, documents, sales, services, shop_settings
+from . import backups, checklist, documents, sales, services, shop_settings, team
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import InvalidTransition, Shop, ShopCredentials, ShopOperation, ShopTemplate
 from .platforms import PLATFORMS, Platform, platform_info
@@ -42,6 +42,8 @@ VERIFIED_ACTIONS = (
     "remove_sample_products", "operations", "operation", "shop_sales", "refresh_sales", "shop_backups",
     "restore_backup",
 )
+# What the staff may do in a shop they serve; the rest (settings, backups, panel access, deletion…) is the owner's.
+STAFF_ACTIONS = ("list", "retrieve", "shop_sales", "refresh_sales")
 OPERATION_HISTORY_LENGTH = 20
 BACKUPS_DISABLED = "Kopie zapasowe są chwilowo wyłączone."
 BACKUP_LIMIT = "Na dziś to już wszystkie kopie, które możesz zrobić sam. Kolejną zrobisz jutro, a w nocy powstanie kopia nocna."
@@ -181,10 +183,11 @@ class ShopViewSet(
     queryset = Shop.objects.none()
     # Set per action; without a scope ScopedRateThrottle lets everything through.
     throttle_scope = None
+    STAFF_ACTIONS = STAFF_ACTIONS
 
     def get_queryset(self):
         return (
-            Shop.objects.filter(owner=self.request.user)
+            team.visible_shops(self.request.user)
             .exclude(status=Shop.Status.DELETED)
             .select_related("config__template", "health")
         )
@@ -198,8 +201,10 @@ class ShopViewSet(
 
     def get_permissions(self):
         if self.action in VERIFIED_ACTIONS:
-            return [IsAuthenticated(), IsEmailVerified()]
-        return super().get_permissions()
+            permissions = [IsAuthenticated(), IsEmailVerified()]
+        else:
+            permissions = super().get_permissions()
+        return [*permissions, team.StaffActions()]
 
     @extend_schema(request=ShopCreateSerializer, responses={201: ShopDetailSerializer})
     def create(self, request):
