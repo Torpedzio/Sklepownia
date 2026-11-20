@@ -282,6 +282,7 @@ describe('team', () => {
 
     expect(await screen.findByText('Sklep działa')).toBeTruthy();
     expect(screen.getByText('Obsługujesz')).toBeTruthy();
+    expect(screen.queryByText('Gotowe kroki')).toBeNull();
     expect(screen.getByText(/Sklep należy do: Anna Kowalska \(anna@example.com\)/)).toBeTruthy();
     for (const name of ['Ustawienia sklepu', 'Panel WordPressa', 'Usuń sklep', 'Zarządzaj zespołem', 'Historia działań']) {
       expect(screen.queryByRole('button', { name })).toBeNull();
@@ -307,6 +308,7 @@ describe('team', () => {
     await open(shopDetail({ role: 'staff', status: 'failed' }));
 
     expect(await screen.findByText('Ponowić zakładanie może właściciel sklepu.')).toBeTruthy();
+    expect(screen.queryByText('Zakładanie sklepu')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Spróbuj ponownie' })).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import json
 import re
 import secrets
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -11,7 +12,10 @@ from django.conf import settings
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
-from ..orders import Order, Status as OrderStatus, customer_label, from_timestamp
+from ..orders import (
+    Address, Order, OrderDetail, OrderLine, Status as OrderStatus, amount, country_name, customer_label, from_timestamp,
+    full_name, quantity,
+)
 from ..shop_settings import OPERATORS
 from . import Platform
 from ..provisioning import packages
@@ -20,6 +24,7 @@ from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_name, db_name, mail_relay,
 )
 from ..provisioning.packages import Package
+from ..remote import NotInShop
 from ..remote.woocommerce import WooCommerceApi
 
 
@@ -812,6 +817,46 @@ class WooCommerceProvisioner(ContainerProvisioner):
             if row["status"] not in SKIPPED_ORDER_STATUSES
         ]
 
+    def read_order(self, shop, external_id):
+        data = self.api(shop).get(f"orders/{int(external_id)}")
+        if data["status"] in SKIPPED_ORDER_STATUSES:
+            raise NotInShop("Nie ma tego zamówienia w sklepie.")
+        billing, shipping = data.get("billing") or {}, data.get("shipping") or {}
+        lines = []
+        for item in data.get("line_items") or []:
+            # Before the coupon: the discount is shown on its own.
+            gross = amount(item.get("subtotal")) + amount(item.get("subtotal_tax"))
+            lines.append(OrderLine(
+                name=item.get("name") or "",
+                sku=item.get("sku") or "",
+                quantity=quantity(item.get("quantity")),
+                price=_unit_price(gross, item.get("quantity")),
+                total=gross,
+            ))
+        return OrderDetail(
+            external_id=str(data["id"]),
+            number=str(data.get("number") or data["id"]),
+            status=ORDER_STATUSES.get(data["status"], OrderStatus.NEW),
+            currency=data.get("currency") or shop.config.currency,
+            products_total=sum((line.total for line in lines), amount(0)),
+            shipping_total=amount(data.get("shipping_total")) + amount(data.get("shipping_tax")),
+            discount_total=amount(data.get("discount_total")) + amount(data.get("discount_tax")),
+            total=amount(data.get("total")),
+            payment_method=data.get("payment_method_title") or "",
+            shipping_method=", ".join(
+                line["method_title"] for line in data.get("shipping_lines") or [] if line.get("method_title")
+            ),
+            customer_name=full_name(billing.get("first_name"), billing.get("last_name"))
+            or full_name(shipping.get("first_name"), shipping.get("last_name")),
+            email=billing.get("email") or "",
+            phone=billing.get("phone") or shipping.get("phone") or "",
+            billing=_order_address(billing),
+            shipping=_order_address(shipping),
+            lines=tuple(lines),
+            customer_note=data.get("customer_note") or "",
+            placed_at=datetime.fromisoformat(data["date_created_gmt"]).replace(tzinfo=UTC),
+        )
+
     def _configure_mail(self, shop, relay):
         # A must-use plugin: WordPress loads it on its own and the panel can't switch it off.
         self._write_file(shop, MAIL_PLUGIN_PATH, MAIL_PLUGIN.read_text())
@@ -966,6 +1011,26 @@ def _int(value, fallback):
         return int(value)
     except (TypeError, ValueError):
         return fallback
+
+
+def _order_address(address):
+    """An Address from WooCommerce's billing or shipping; None when it was left empty."""
+    if not any(address.get(key) for key in ("first_name", "last_name", "company", "address_1", "city")):
+        return None
+    return Address(
+        name=full_name(address.get("first_name"), address.get("last_name")),
+        company=address.get("company") or "",
+        lines=tuple(line for line in (address.get("address_1"), address.get("address_2")) if line),
+        postcode=address.get("postcode") or "",
+        city=address.get("city") or "",
+        country=country_name(address.get("country")),
+        phone=address.get("phone") or "",
+    )
+
+
+def _unit_price(total, count):
+    count = quantity(count)
+    return amount(total / count) if count else total
 
 
 def _order_total(value):

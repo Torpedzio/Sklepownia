@@ -92,8 +92,8 @@ def test_opening_the_overview_reads_the_shop_and_counts_sales(auth_client, shop,
     assert data["to_handle"] == {"new": 1, "processing": 1}
     assert [o["number"] for o in data["recent"]] == ["2", "1", "6", "8", "3", "4", "5"]
     assert data["recent"][0] == {
-        "number": "2", "status": "processing", "status_display": "W realizacji", "total": "70.00", "currency": "PLN",
-        "items": 1, "customer": "Anna N.", "placed_at": data["recent"][0]["placed_at"],
+        "external_id": "2", "number": "2", "status": "processing", "status_display": "W realizacji", "total": "70.00",
+        "currency": "PLN", "items": 1, "customer": "Anna N.", "placed_at": data["recent"][0]["placed_at"],
     }
 
 

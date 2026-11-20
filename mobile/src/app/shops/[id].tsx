@@ -122,7 +122,8 @@ export default function ShopScreen() {
   const missing = settings ? missingForSales(settings) : [];
   const closed = settings ? !settings.values.availability.is_open : false;
 
-  const receipt = job ? (
+  // The setup receipt is the owner's; the staff only needs the shop as it is now.
+  const receipt = job && owner ? (
     <View style={[styles.receipt, wide && active && settings && styles.receiptWide]}>
       <Receipt
         title={inProgress ? 'Zakładamy Twój sklep…' : 'Zakładanie sklepu'}

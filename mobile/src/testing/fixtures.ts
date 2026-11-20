@@ -196,12 +196,12 @@ export function shopSales(overrides: Partial<ShopSales> = {}): ShopSales {
     daily,
     to_handle: { new: 1, processing: 1 },
     recent: [
-      { number: '1042', status: 'processing', status_display: 'W realizacji', total: '70.00', currency: 'PLN',
-        items: 2, customer: 'Anna N.', placed_at: '2026-11-18T12:40:00Z' },
-      { number: '1041', status: 'new', status_display: 'Nowe', total: '50.00', currency: 'PLN', items: 1,
-        customer: 'Jan K.', placed_at: '2026-11-18T09:15:00Z' },
-      { number: '1040', status: 'completed', status_display: 'Zrealizowane', total: '200.00', currency: 'PLN',
-        items: 4, customer: 'Ola W.', placed_at: '2026-11-03T17:00:00Z' },
+      { external_id: '42', number: '1042', status: 'processing', status_display: 'W realizacji', total: '70.00',
+        currency: 'PLN', items: 2, customer: 'Anna N.', placed_at: '2026-11-18T12:40:00Z' },
+      { external_id: '41', number: '1041', status: 'new', status_display: 'Nowe', total: '50.00', currency: 'PLN',
+        items: 1, customer: 'Jan K.', placed_at: '2026-11-18T09:15:00Z' },
+      { external_id: '40', number: '1040', status: 'completed', status_display: 'Zrealizowane', total: '200.00',
+        currency: 'PLN', items: 4, customer: 'Ola W.', placed_at: '2026-11-03T17:00:00Z' },
     ],
     ...overrides,
   };

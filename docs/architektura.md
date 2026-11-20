@@ -140,6 +140,8 @@ dostępu do Dockera ([shops/remote/](../backend/shops/remote/)).
   własnym opisem. Przekierowań klient nie wykonuje, żeby zapis nie zamienił się w odczyt ani klucz nie poszedł gdzie
   indziej.
 - `FakeProvisioner` daje symulowane API (`shops.remote.fake.FakeApi`).
+- Pierwszy użytek: szczegóły zamówienia (`read_order` w provisionerze platformy, [backend.md](backend.md#zamówienia)).
+  Lista zamówień i sprzedaż zostają przy kopii czytanej przez worker, bo liczą się z niej sumy i powiadomienia.
 
 ## Kopie zapasowe
 

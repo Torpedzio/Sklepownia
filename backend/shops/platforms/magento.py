@@ -8,13 +8,17 @@ import json
 import re
 import secrets
 import string
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from django.conf import settings
 
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
-from ..orders import Order, Status as OrderStatus, customer_label, from_timestamp
+from ..orders import (
+    Address, Order, OrderDetail, OrderLine, Status as OrderStatus, amount, country_name, customer_label, from_timestamp,
+    full_name, quantity,
+)
 from ..provisioning.base import ProductCount
 from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_memory, container_name, db_name, mail_relay,
@@ -418,6 +422,46 @@ class MagentoProvisioner(ContainerProvisioner):
             ))
         return orders
 
+    def read_order(self, shop, external_id):
+        data = self.api(shop).get(f"orders/{int(external_id)}")
+        billing = data.get("billing_address") or {}
+        assignments = (data.get("extension_attributes") or {}).get("shipping_assignments") or []
+        shipping = ((assignments[0].get("shipping") or {}).get("address") or {}) if assignments else {}
+        payment = data.get("payment") or {}
+        titles = [title for title in payment.get("additional_information") or [] if isinstance(title, str) and title]
+        return OrderDetail(
+            external_id=str(data["entity_id"]),
+            number=data.get("increment_id") or str(data["entity_id"]),
+            status=ORDER_STATES.get(data.get("state"), OrderStatus.NEW),
+            currency=data.get("order_currency_code") or shop.config.currency,
+            products_total=amount(data.get("subtotal_incl_tax")),
+            shipping_total=amount(data.get("shipping_incl_tax")),
+            discount_total=abs(amount(data.get("discount_amount"))),
+            total=amount(data.get("grand_total")),
+            payment_method=titles[0] if titles else payment.get("method") or "",
+            shipping_method=data.get("shipping_description") or "",
+            customer_name=full_name(data.get("customer_firstname"), data.get("customer_lastname"))
+            or full_name(billing.get("firstname"), billing.get("lastname")),
+            email=data.get("customer_email") or billing.get("email") or "",
+            phone=billing.get("telephone") or shipping.get("telephone") or "",
+            billing=_order_address(billing),
+            shipping=_order_address(shipping),
+            # A configurable product's chosen variant comes as its child item, at no price of its own.
+            lines=tuple(
+                OrderLine(
+                    name=item.get("name") or "",
+                    sku=item.get("sku") or "",
+                    quantity=quantity(item.get("qty_ordered")),
+                    price=amount(item.get("price_incl_tax")),
+                    total=amount(item.get("row_total_incl_tax")),
+                )
+                for item in data.get("items") or []
+                if not item.get("parent_item_id")
+            ),
+            customer_note=data.get("customer_note") or "",
+            placed_at=datetime.fromisoformat(data["created_at"]).replace(tzinfo=UTC),
+        )
+
     def _installed(self, shop):
         """The installation writes its date into env.php last."""
         try:
@@ -454,6 +498,20 @@ class MagentoProvisioner(ContainerProvisioner):
 
 def index_prefix(shop):
     return f"shop_{shop.pk}"
+
+
+def _order_address(address):
+    if not any(address.get(key) for key in ("firstname", "lastname", "company", "street", "city")):
+        return None
+    return Address(
+        name=full_name(address.get("firstname"), address.get("lastname")),
+        company=address.get("company") or "",
+        lines=tuple(line for line in address.get("street") or [] if line),
+        postcode=address.get("postcode") or "",
+        city=address.get("city") or "",
+        country=country_name(address.get("country_id")),
+        phone=address.get("telephone") or "",
+    )
 
 
 def _base_url(shop):

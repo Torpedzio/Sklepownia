@@ -21,7 +21,7 @@ backend/
 │   │                  restore_shop, update_shop_containers i connect_shop_api
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
-│   ├── orders.py      zamówienie odczytane ze sklepu (Order), wspólne dla platform
+│   ├── orders.py      zamówienia wspólne dla platform: do kopii (Order) i szczegóły (OrderDetail), lista z kopii
 │   ├── sales.py       kopia zamówień ze sklepów i podsumowanie sprzedaży dla aplikacji
 │   ├── checklist.py   lista startowa nowego sklepu: kroki odhaczane same i liczenie produktów
 │   ├── backups.py     kopie zapasowe: kopia, przywrócenie, nocny przebieg, przechowywanie, lista dla aplikacji
@@ -252,6 +252,22 @@ Przebieg: [architektura.md](architektura.md#sprzedaż-w-aplikacji). Pola odpowie
   w skrypcie PHP, czasy przeliczone ze strefy sklepu. Magento: SQL na `sales_order` (`JSON_OBJECT`), bez PHP.
   Statusy platform są mapowane na `new`, `processing`, `completed`, `cancelled`, `unfinished`; nieznane trafiają do
   `new`. Symulacja (`FakeProvisioner`) daje powtarzalne zamówienia, wyliczone z `pk` sklepu.
+
+### Zamówienia
+
+Pola odpowiedzi: [api.md](api.md#zamówienia).
+
+- Lista (`orders.listing`) to kopia z `ShopOrder`, stronicowana kursorem `(placed_at, id)`, więc zamówienia złożone
+  w tej samej chwili nie giną między stronami.
+- Szczegóły (`orders.read`) czyta proces WWW przez REST API sklepu (`read_order` w provisionerze platformy, klient
+  z `shops/remote`), bo potrzebny jest stan z tej chwili i dane klienta, których platforma nie przechowuje. Po
+  odczycie status w kopii przyjmuje ten ze sklepu. Odpowiedź w nieoczekiwanym kształcie (`KeyError`, `TypeError`…)
+  staje się `ShopApiError`, a ostrzeżenie trafia do logu.
+- WooCommerce: `orders/{id}`, ceny pozycji z `subtotal` + `subtotal_tax` (przed rabatem); `checkout-draft` jest
+  traktowany jak brak zamówienia. PrestaShop: `orders/{id}` i kilka zasobów z `filter[id]` (stan zamówienia,
+  konfiguracja `PS_OS_*` i `PS_TIMEZONE`, adresy, kraje, klient, przewoźnik, waluta, wiadomość klienta z `messages`);
+  pusty wynik przychodzi jako `[]`. Magento: `orders/{id}`, adres dostawy z `shipping_assignments`, bez pozycji
+  podrzędnych (`parent_item_id`). Symulacja dopowiada szczegóły do zamówienia z kopii, powtarzalnie.
 
 ### Lista startowa
 

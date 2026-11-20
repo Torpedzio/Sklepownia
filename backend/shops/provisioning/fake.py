@@ -9,8 +9,9 @@ from django.utils import timezone
 
 from .. import shop_settings
 from ..models import Server, Shop, ShopChecklist, ShopCredentials, ShopSettings
-from ..orders import Order, Status
+from ..orders import Address, Order, OrderDetail, OrderLine, Status, customer_label
 from ..platforms import platform_info
+from ..remote import NotInShop
 from ..remote.fake import FakeApi
 from .base import (
     Backup, BaseProvisioner, ContainerState, NothingToBackUp, PageCheck, ProductCount, ProvisioningError, Snapshot,
@@ -18,7 +19,13 @@ from .base import (
 
 
 FAKE_STATUSES = (Status.NEW, Status.PROCESSING, Status.COMPLETED, Status.CANCELLED, Status.UNFINISHED)
-FAKE_CUSTOMERS = ("Anna N.", "Jan K.", "Ewa W.", "Piotr Z.", "Maria L.", "Tomasz B.")
+FAKE_PEOPLE = (
+    ("Anna", "Nowak"), ("Jan", "Kowalski"), ("Ewa", "Wiśniewska"), ("Piotr", "Zieliński"), ("Maria", "Lewandowska"),
+    ("Tomasz", "Bąk"),
+)
+FAKE_CUSTOMERS = tuple(customer_label(first, last) for first, last in FAKE_PEOPLE)
+FAKE_PRODUCTS = ("Kubek ceramiczny", "Świeca sojowa", "Notes w kratkę", "Torba lniana", "Herbata zielona")
+FAKE_SHIPPING = Decimal("14.99")
 
 
 class FakeProvisioner(BaseProvisioner):
@@ -202,6 +209,40 @@ class FakeProvisioner(BaseProvisioner):
             ))
             placed += timedelta(hours=rng.randint(5, 30))
         return [order for order in orders if order.changed_at >= since][:limit]
+
+    def read_order(self, shop, external_id):
+        """The order from the local copy, filled in with made-up details that are the same on every read."""
+        FakeApi(shop).ping()
+        order = shop.orders.filter(external_id=str(external_id)).first()
+        if order is None:
+            raise NotInShop("Nie ma tego zamówienia w sklepie.")
+        rng = random.Random(f"{shop.pk}:{order.external_id}")
+        first, last = next(
+            (person for person in FAKE_PEOPLE if customer_label(*person) == order.customer), rng.choice(FAKE_PEOPLE),
+        )
+        shipping = FAKE_SHIPPING if order.total > FAKE_SHIPPING * 2 else Decimal("0.00")
+        products = order.total - shipping
+        count = max(order.items, 1)
+        names = rng.sample(FAKE_PRODUCTS, min(count, len(FAKE_PRODUCTS)))
+        prices = [(products / len(names)).quantize(Decimal("0.01"))] * len(names)
+        prices[-1] = products - sum(prices[:-1])
+        address = Address(
+            name=f"{first} {last}", company="", lines=(f"ul. Polna {rng.randint(1, 80)}",), postcode="00-950",
+            city="Warszawa", country="Polska", phone=f"+48 600 {rng.randint(100, 999)} {rng.randint(100, 999)}",
+        )
+        return OrderDetail(
+            external_id=order.external_id, number=order.number, status=order.status, currency=order.currency,
+            products_total=products, shipping_total=shipping, discount_total=Decimal("0.00"), total=order.total,
+            payment_method="Przelew bankowy", shipping_method="Kurier" if shipping else "Odbiór osobisty",
+            customer_name=address.name, email=f"{first.lower()}@example.com", phone=address.phone,
+            billing=address, shipping=address,
+            lines=tuple(
+                OrderLine(name=name, sku=f"SKU-{index + 1:03}", quantity=1, price=price, total=price)
+                for index, (name, price) in enumerate(zip(names, prices))
+            ),
+            customer_note="Proszę o kontakt przed wysyłką." if rng.random() < 0.3 else "",
+            placed_at=order.placed_at,
+        )
 
     def _simulate(self, key):
         time.sleep(settings.FAKE_PROVISIONER_STEP_DELAY)

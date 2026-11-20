@@ -130,7 +130,7 @@ def test_a_new_order_is_announced(shop, shop_orders, push_outbox, django_capture
     sync(shop, django_capture_on_commit_callbacks)
 
     assert push_outbox == [Message(token=TOKEN, title="Nowe zamówienie: Palarnia", body="Nr 2 na 1 234,50 zł, Anna N.",
-                                   url=f"/shops/{shop.pk}/sales", topic="new_orders")]
+                                   url=f"/shops/{shop.pk}/orders/2", topic="new_orders")]
 
 
 def test_several_new_orders_come_as_one_notification(shop, shop_orders, push_outbox,
@@ -143,6 +143,7 @@ def test_several_new_orders_come_as_one_notification(shop, shop_orders, push_out
 
     (message,) = push_outbox
     assert (message.title, message.body) == ("3 nowe zamówienia: Palarnia", "Razem 60,00 zł. Najnowsze: nr 7.")
+    assert message.url == f"/shops/{shop.pk}/orders"
 
 
 def test_an_order_is_announced_once_it_is_paid(shop, shop_orders, push_outbox, django_capture_on_commit_callbacks):

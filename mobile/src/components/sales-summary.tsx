@@ -47,13 +47,20 @@ export function SalesSummary({ shopId }: { shopId: number }) {
           />
         </View>
       )}
-      <Button
-        title="Zobacz sprzedaż"
-        icon="chart"
-        variant="secondary"
-        style={styles.button}
-        onPress={() => router.push({ pathname: '/shops/[id]/sales', params: { id: String(shopId) } })}
-      />
+      <View style={styles.actions}>
+        <Button
+          title="Zobacz sprzedaż"
+          icon="chart"
+          variant="secondary"
+          onPress={() => router.push({ pathname: '/shops/[id]/sales', params: { id: String(shopId) } })}
+        />
+        <Button
+          title="Zamówienia"
+          icon="cart"
+          variant="secondary"
+          onPress={() => router.push({ pathname: '/shops/[id]/orders', params: { id: String(shopId) } })}
+        />
+      </View>
     </View>
   );
 }
@@ -93,7 +100,9 @@ const styles = StyleSheet.create({
   digits: {
     fontVariant: ['tabular-nums'],
   },
-  button: {
-    alignSelf: 'flex-start',
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
   },
 });

@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Count, Q
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -10,12 +10,13 @@ from rest_framework.throttling import ScopedRateThrottle
 from accounts.permissions import IsEmailVerified
 from billing.models import Plan
 
-from . import backups, checklist, documents, history, sales, services, shop_settings, team
+from . import backups, checklist, documents, history, orders, sales, services, shop_settings, team
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import (
-    InvalidTransition, Shop, ShopCredentials, ShopEvent, ShopInvitation, ShopOperation, ShopTemplate,
+    InvalidTransition, Shop, ShopCredentials, ShopEvent, ShopInvitation, ShopOperation, ShopOrder, ShopTemplate,
 )
 from .platforms import PLATFORMS, Platform, platform_info
+from .remote import NotInShop, ShopApiError
 from .shop_settings import DocumentsSection, SellerRegister, SettingsUpdateSerializer
 from .tasks import send_admin_access_email
 from .serializers import (
@@ -33,6 +34,8 @@ from .serializers import (
     ShopDetailSerializer,
     ShopHistorySerializer,
     ShopOperationSerializer,
+    ShopOrderDetailSerializer,
+    ShopOrdersSerializer,
     ShopSalesSerializer,
     ShopSettingsSerializer,
     ShopSerializer,
@@ -48,16 +51,18 @@ from .slugs import normalize_slug, slug_error
 VERIFIED_ACTIONS = (
     "create", "retry", "resume", "admin_access", "send_admin_access", "shop_settings", "refresh_settings", "reset_admin_password",
     "remove_sample_products", "operations", "operation", "shop_sales", "refresh_sales", "shop_backups",
-    "restore_backup", "team", "invite", "revoke_invitation", "remove_member", "shop_history",
+    "restore_backup", "team", "invite", "revoke_invitation", "remove_member", "shop_history", "shop_orders",
+    "shop_order",
 )
 # What the staff may do in a shop they serve; the rest (settings, backups, panel access, deletion…) is the owner's.
-STAFF_ACTIONS = ("list", "retrieve", "shop_sales", "refresh_sales", "leave")
+STAFF_ACTIONS = ("list", "retrieve", "shop_sales", "refresh_sales", "shop_orders", "shop_order", "leave")
 OPERATION_HISTORY_LENGTH = 20
 HISTORY_PAGE = 30
 BACKUPS_DISABLED = "Kopie zapasowe są chwilowo wyłączone."
 BACKUP_LIMIT = "Na dziś to już wszystkie kopie, które możesz zrobić sam. Kolejną zrobisz jutro, a w nocy powstanie kopia nocna."
 
 NOT_ACTIVE = "Ustawienia można zmieniać, gdy sklep działa."
+ORDER_NOT_ACTIVE = "Szczegóły zamówienia zobaczysz, gdy sklep działa."
 PANEL_NOT_READY = "Panel będzie dostępny, gdy sklep zostanie założony."
 PLAN_REQUIRED = "Wybierz plan, żeby zakładać sklepy."
 BUSY = "Sklep jeszcze zapisuje poprzednie zmiany. Spróbuj za chwilę."
@@ -468,6 +473,70 @@ class ShopViewSet(
         """No-op if the orders were read in the last half minute."""
         shop = self.get_object()
         return Response(_sales_payload(shop, sales.request_refresh(shop, force=True)), status=status.HTTP_202_ACCEPTED)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "status", str, enum=ShopOrder.Status.values, description="Tylko zamówienia w tym statusie.",
+            ),
+            OpenApiParameter("q", str, description="Numer zamówienia albo imię klienta."),
+            OpenApiParameter("before", str, description="external_id ostatniego zamówienia z poprzedniej strony."),
+        ],
+        responses={200: ShopOrdersSerializer},
+        operation_id="shops_orders_list",
+    )
+    @action(detail=True, methods=["get"], url_path="orders")
+    def shop_orders(self, request, pk=None):
+        """From the local copy (90 days), like the sales; a stale copy is read again in the background."""
+        shop = self.get_object()
+        status_filter = request.query_params.get("status", "")
+        if status_filter and status_filter not in ShopOrder.Status.values:
+            return Response({"status": ["Nie ma takiego statusu."]}, status=status.HTTP_400_BAD_REQUEST)
+        before = None
+        if request.query_params.get("before"):
+            before = shop.orders.filter(external_id=request.query_params["before"]).first()
+            if before is None:
+                return Response({"before": ["Nie ma takiego zamówienia."]}, status=status.HTTP_400_BAD_REQUEST)
+        page, has_more = orders.listing(
+            shop, status=status_filter, query=request.query_params.get("q", "")[:80], before=before,
+        )
+        state = sales.request_refresh(shop)
+        counts = dict.fromkeys(ShopOrder.Status.values, 0)
+        for row in shop.orders.values("status").annotate(count=Count("id")):
+            counts[row["status"]] = row["count"]
+        return Response(ShopOrdersSerializer({
+            "available": shop.status == Shop.Status.ACTIVE,
+            "synced_at": state.synced_at,
+            "refreshing": sales.is_refreshing(state),
+            "error": state.error,
+            "counts": counts,
+            "orders": page,
+            "has_more": has_more,
+        }).data)
+
+    @extend_schema(
+        parameters=[OpenApiParameter("order_id", str, OpenApiParameter.PATH, description="external_id zamówienia.")],
+        responses={
+            200: ShopOrderDetailSerializer,
+            404: OpenApiResponse(description="Sklep nie ma takiego zamówienia."),
+            409: OpenApiResponse(description="Sklep nie działa."),
+            503: OpenApiResponse(description="Sklep nie odpowiada albo nie przyjął klucza aplikacji."),
+        },
+        operation_id="shops_order_retrieve",
+    )
+    @action(detail=True, methods=["get"], url_path=r"orders/(?P<order_id>[0-9]{1,20})")
+    def shop_order(self, request, pk=None, order_id=None):
+        """Read from the shop now, with the customer's contact data and addresses, which the platform doesn't keep."""
+        shop = self.get_object()
+        if shop.status != Shop.Status.ACTIVE:
+            return Response({"detail": ORDER_NOT_ACTIVE}, status=status.HTTP_409_CONFLICT)
+        try:
+            order = orders.read(shop, order_id)
+        except NotInShop:
+            return Response({"detail": "Sklep nie ma takiego zamówienia."}, status=status.HTTP_404_NOT_FOUND)
+        except ShopApiError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(ShopOrderDetailSerializer(order).data)
 
     @extend_schema(methods=["GET"], responses={200: ShopChecklistSerializer})
     @extend_schema(methods=["PATCH"], request=ChecklistUpdateSerializer, responses={200: ShopChecklistSerializer})

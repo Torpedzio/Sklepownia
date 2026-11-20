@@ -177,6 +177,7 @@ SPECTACULAR_SETTINGS = {
         'PushDevicePlatformEnum': 'push.models.PushDevice.Platform',
         'PlatformEnum': 'shops.platforms.Platform',
         'ChecklistStepEnum': 'shops.models.ShopChecklist.Step',
+        'ShopOrderStatusEnum': 'shops.models.ShopOrder.Status',
     },
 }
 

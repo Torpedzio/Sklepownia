@@ -4,10 +4,10 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { backArrowOptions } from '@/components/back-link';
 import { Icon } from '@/components/icon';
+import { OrderRow } from '@/components/order-row';
 import { Page } from '@/components/page';
 import { PushPrompt } from '@/components/push-prompt';
 import { SalesChart } from '@/components/sales-chart';
-import { Badge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
@@ -16,9 +16,9 @@ import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
 import { formatMoney } from '@/lib/format';
-import { ORDER_STATUS_COLORS, ordersLabel, revenueChange, SALES_POLL_MS } from '@/lib/sales';
+import { ordersLabel, revenueChange, SALES_POLL_MS } from '@/lib/sales';
 import { formatTime } from '@/lib/settings-form';
-import type { SalesPeriod, ShopDetail, ShopOrder, ShopSales } from '@/lib/types';
+import type { SalesPeriod, ShopDetail, ShopSales } from '@/lib/types';
 
 export default function ShopSalesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -170,21 +170,34 @@ export default function ShopSalesScreen() {
                   <Count value={sales.to_handle.processing} label="W realizacji" note="opłacone, do wysłania" />
                 </View>
                 <ThemedText type="small" themeColor="textSecondary">
+                  Szczegóły zamówień zobaczysz tutaj, a status{' '}
                   {shop?.role === 'staff'
-                    ? `Zamówienia obsługuje się ${inPanel}, do którego dostęp ma właściciel sklepu.`
-                    : `Zamówienia obsłużysz ${inPanel}.`}
+                    ? `zmienia się na razie ${inPanel}, do którego dostęp ma właściciel sklepu.`
+                    : `zmienisz na razie ${inPanel}.`}
                 </ThemedText>
-                {shop?.role === 'staff' ? null : (
+                <View style={styles.actions}>
                   <Button
-                    title={panelName.charAt(0).toUpperCase() + panelName.slice(1)}
-                    icon="admin"
+                    title="Pokaż do obsłużenia"
+                    icon="cart"
                     variant="secondary"
-                    style={styles.start}
                     onPress={() =>
-                      router.push({ pathname: '/shops/[id]/settings', params: { id: String(id), section: 'reczne' } })
+                      router.push({
+                        pathname: '/shops/[id]/orders',
+                        params: { id: String(id), status: sales.to_handle.new ? 'new' : 'processing' },
+                      })
                     }
                   />
-                )}
+                  {shop?.role === 'staff' ? null : (
+                    <Button
+                      title={panelName.charAt(0).toUpperCase() + panelName.slice(1)}
+                      icon="admin"
+                      variant="ghost"
+                      onPress={() =>
+                        router.push({ pathname: '/shops/[id]/settings', params: { id: String(id), section: 'reczne' } })
+                      }
+                    />
+                  )}
+                </View>
               </>
             ) : (
               <ThemedText type="small" themeColor="textSecondary">
@@ -202,15 +215,22 @@ export default function ShopSalesScreen() {
               <ThemedText type="heading">Ostatnie zamówienia</ThemedText>
               <View style={[styles.list, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 {sales.recent.map((order, index) => (
-                  <OrderRow key={`${order.number}-${order.placed_at}`} order={order} first={index === 0} />
+                  <OrderRow key={order.external_id} shopId={id} order={order} first={index === 0} />
                 ))}
               </View>
+              <Button
+                title="Wszystkie zamówienia"
+                icon="cart"
+                variant="secondary"
+                style={styles.start}
+                onPress={() => router.push({ pathname: '/shops/[id]/orders', params: { id: String(id) } })}
+              />
             </View>
           ) : null}
 
           <ThemedText type="small" themeColor="textSecondary">
             Sumy obejmują zamówienia w walucie sklepu ({sales.currency}), bez anulowanych i bez tych z niedokończoną
-            płatnością. Z danych klienta pokazujemy tu tylko imię i inicjał. Resztę znajdziesz {inPanel}.
+            płatnością. Na listach pokazujemy z danych klienta tylko imię i inicjał, a resztę po otwarciu zamówienia.
           </ThemedText>
         </View>
       )}
@@ -271,29 +291,6 @@ function Count({ value, label, note }: { value: number; label: string; note: str
         <ThemedText type="small" themeColor="textSecondary">
           {note}
         </ThemedText>
-      </View>
-    </View>
-  );
-}
-
-function OrderRow({ order, first }: { order: ShopOrder; first: boolean }) {
-  const theme = useTheme();
-  const [color, background] = ORDER_STATUS_COLORS[order.status];
-  const details = [order.customer, `${order.items} szt.`, formatTime(order.placed_at)].filter(Boolean).join(', ');
-
-  return (
-    <View style={[styles.order, !first && { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
-      <View style={styles.flex}>
-        <ThemedText type="smallBold">Nr {order.number}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {details}
-        </ThemedText>
-      </View>
-      <View style={styles.orderEnd}>
-        <ThemedText type="smallBold" style={styles.digits}>
-          {formatMoney(order.total, order.currency)}
-        </ThemedText>
-        <Badge label={order.status_display} color={color} background={background} />
       </View>
     </View>
   );
@@ -384,14 +381,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: Spacing.three,
   },
-  order: {
+  actions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingVertical: Spacing.three,
-  },
-  orderEnd: {
-    alignItems: 'flex-end',
-    gap: Spacing.one,
+    flexWrap: 'wrap',
+    gap: Spacing.two,
   },
 });

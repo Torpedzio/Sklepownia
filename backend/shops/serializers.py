@@ -294,8 +294,70 @@ class ShopOrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ShopOrder
-        fields = ["number", "status", "status_display", "total", "currency", "items", "customer", "placed_at"]
-        extra_kwargs = {"customer": {"help_text": "Imię i inicjał nazwiska."}}
+        fields = [
+            "external_id", "number", "status", "status_display", "total", "currency", "items", "customer", "placed_at",
+        ]
+        extra_kwargs = {
+            "external_id": {"help_text": "Identyfikator w sklepie, do adresu szczegółów zamówienia."},
+            "customer": {"help_text": "Imię i inicjał nazwiska."},
+        }
+
+
+class ShopOrdersSerializer(serializers.Serializer):
+    available = serializers.BooleanField(help_text="Sklep działa, więc jego zamówienia są odczytywane.")
+    synced_at = serializers.DateTimeField(allow_null=True, help_text="Ostatni odczyt zamówień ze sklepu.")
+    refreshing = serializers.BooleanField(help_text="Trwa odczyt: zapytaj ponownie za kilka sekund.")
+    error = serializers.CharField(help_text="Dlaczego ostatni odczyt się nie udał; puste, gdy się udał.")
+    counts = serializers.DictField(
+        child=serializers.IntegerField(), help_text="Zamówienia z ostatnich 90 dni według statusu, bez wyszukiwania.",
+    )
+    orders = ShopOrderSerializer(many=True, help_text="Od najnowszego.")
+    has_more = serializers.BooleanField(help_text="Kolejne są pod ?before= z external_id ostatniego.")
+
+
+class OrderAddressSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    company = serializers.CharField()
+    lines = serializers.ListField(child=serializers.CharField(), help_text="Ulica, numer domu i lokalu.")
+    postcode = serializers.CharField()
+    city = serializers.CharField()
+    country = serializers.CharField()
+    phone = serializers.CharField()
+
+
+class OrderLineSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    sku = serializers.CharField()
+    quantity = serializers.IntegerField()
+    price = serializers.DecimalField(max_digits=12, decimal_places=2, help_text="Cena brutto sztuki, przed rabatem.")
+    total = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class ShopOrderDetailSerializer(serializers.Serializer):
+    """Read from the shop each time; the customer's data isn't stored by the platform."""
+
+    external_id = serializers.CharField()
+    number = serializers.CharField()
+    status = serializers.ChoiceField(choices=ShopOrder.Status.choices)
+    status_display = serializers.SerializerMethodField()
+    currency = serializers.CharField()
+    products_total = serializers.DecimalField(max_digits=12, decimal_places=2, help_text="Brutto, przed rabatem.")
+    shipping_total = serializers.DecimalField(max_digits=12, decimal_places=2)
+    discount_total = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total = serializers.DecimalField(max_digits=12, decimal_places=2, help_text="Do zapłaty przez klienta.")
+    payment_method = serializers.CharField()
+    shipping_method = serializers.CharField()
+    customer_name = serializers.CharField()
+    email = serializers.CharField()
+    phone = serializers.CharField()
+    billing = OrderAddressSerializer(allow_null=True)
+    shipping = OrderAddressSerializer(allow_null=True)
+    lines = OrderLineSerializer(many=True)
+    customer_note = serializers.CharField(help_text="Co klient napisał przy zamówieniu.")
+    placed_at = serializers.DateTimeField()
+
+    def get_status_display(self, order) -> str:
+        return ShopOrder.Status(order.status).label
 
 
 class ShopSalesSerializer(serializers.Serializer):

@@ -48,9 +48,11 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   - faktury korygujące (np. przy zwrocie) i własne połączenie z KSeF bez Fakturowni;
   - regulamin i polityka prywatności jako strony, do których prowadzą zgody przy płatności;
   - zniżki, okresy próbne, plany roczne, inne metody płatności (BLIK, przelew), wypłata salda przy rezygnacji.
-- **Sprzedaż w aplikacji** jest tylko do podglądu: zamówienia obsługuje się w panelu sklepu. Kopia obejmuje 90 dni,
-  sumy liczą tylko walutę sklepu, a nowe zamówienie pojawia się w aplikacji z opóźnieniem do 15 minut (od razu po
-  „Odśwież”). Brakuje zestawień dłuższych niż 30 dni.
+- **Sprzedaż i zamówienia w aplikacji** są na razie do podglądu: status zamówienia zmienia się w panelu sklepu.
+  Lista zamówień i sumy pochodzą z kopii z 90 dni (starsze są tylko w panelu), sumy liczą tylko walutę sklepu, a nowe
+  zamówienie pojawia się w aplikacji z opóźnieniem do 15 minut (od razu po „Odśwież”). Szczegóły zamówienia są
+  czytane ze sklepu przy otwarciu, więc nie otworzą się, gdy sklep nie działa. Brakuje zestawień dłuższych niż
+  30 dni.
 - **Powiadomienia push** o nowym zamówieniu przychodzą przy odczycie sklepu, więc do 15 minut po złożeniu.
   Od razu dawałby je webhook sklepu (WooCommerce `order.created`) wołający platformę. Aplikacja nie ma jeszcze
   projektu EAS ani kluczy FCM i APNs, więc powiadomienia działają dopiero po ich dodaniu i w buildzie, nie w Expo Go.
@@ -90,15 +92,16 @@ liczba osób w zespole według planu (start do 5, standard do 20, business bez l
 platformach; dostęp obsługi do panelu sklepu później. Podstawą jest API sklepów
 ([architektura.md](architektura.md#api-sklepów)). Kolejne kroki:
 
-Role i zaproszenia już są ([backend.md](backend.md#zespół)): obsługa ogląda sklep i sprzedaż, resztę robi
-właściciel; nowe czynności (zamówienia, produkty, stany, klienci, rabaty) trafią do `STAFF_ACTIONS`. Zaprasza się
+Role i zaproszenia już są ([backend.md](backend.md#zespół)): obsługa ogląda sklep, sprzedaż i zamówienia, resztę
+robi właściciel; nowe czynności (obsługa zamówień, produkty, stany, klienci, rabaty) trafią do `STAFF_ACTIONS`. Zaprasza się
 e-mailem z linkiem do aplikacji, a zaproszenie czeka na liście sklepów osoby zaproszonej. Przy rejestracji wybiera
 się „Zakładam sklep” albo „Dołączam do zespołu” (bez cennika, z ekranem czekania na zaproszenie). Właściciel
 prowadzi zespół na ekranie sklepu, a obsługa widzi tylko to, co może zrobić. Historia działań pokazuje właścicielowi,
-kto co zmienił; nowe czynności dopisują do niej swoje wpisy.
+kto co zmienił; nowe czynności dopisują do niej swoje wpisy. Lista zamówień z filtrami i szczegóły zamówienia
+czytane ze sklepu też już są ([backend.md](backend.md#zamówienia)).
 
-1. **Zamówienia:** lista z filtrami, szczegóły, zmiana statusu, numer przesyłki dla klienta, notatka, push o nowym
-   zamówieniu.
+1. **Zamówienia, dalej:** zmiana statusu, numer przesyłki dla klienta, notatka (z wpisami w historii działań);
+   push o nowym zamówieniu dla obsługi razem z punktem 3.
 2. **Produkty:** lista, dodawanie i edycja (cena, promocja, opis, kategoria, SKU, stan), zdjęcia z aparatu,
    ukrywanie i usuwanie; warianty na razie w panelu. Do tego szybka zmiana stanów magazynowych.
 3. **Powiadomienia według osoby** (nowe zamówienia, awarie) i przypadki brzegowe zespołu (usunięcie konta członka,

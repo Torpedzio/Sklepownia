@@ -43,6 +43,22 @@ test('the overview shows the sales, what to handle and the latest orders', async
   });
 });
 
+test('the orders open from the overview', async () => {
+  await open(shopSales());
+
+  await fireEvent.press(await screen.findByRole('button', { name: /Zamówienie nr 1041/ }));
+  expect(router.push).toHaveBeenLastCalledWith({
+    pathname: '/shops/[id]/orders/[orderId]',
+    params: { id: '7', orderId: '41' },
+  });
+
+  await fireEvent.press(screen.getByRole('button', { name: 'Pokaż do obsłużenia' }));
+  expect(router.push).toHaveBeenLastCalledWith({ pathname: '/shops/[id]/orders', params: { id: '7', status: 'new' } });
+
+  await fireEvent.press(screen.getByRole('button', { name: 'Wszystkie zamówienia' }));
+  expect(router.push).toHaveBeenLastCalledWith({ pathname: '/shops/[id]/orders', params: { id: '7' } });
+});
+
 test('a bar tells its day, and the table has the same numbers', async () => {
   await open(shopSales());
 

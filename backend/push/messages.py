@@ -18,12 +18,15 @@ class Notice:
 
 
 def new_orders(shop, orders):
-    """`orders`: new `shops.orders.Order`s, newest last."""
-    url = f"/shops/{shop.pk}/sales"
+    """`orders`: new `shops.orders.Order`s, newest last. Opens the order, or the list when there are several."""
+    url = f"/shops/{shop.pk}/orders"
     if len(orders) == 1:
         order = orders[0]
         details = [f"Nr {order.number} na {money(order.total, order.currency)}", order.customer]
-        return Notice(Topic.NEW_ORDERS, f"Nowe zamówienie: {shop.name}", ", ".join(filter(None, details)), url)
+        return Notice(
+            Topic.NEW_ORDERS, f"Nowe zamówienie: {shop.name}", ", ".join(filter(None, details)),
+            f"{url}/{order.external_id}",
+        )
     body = f"Najnowsze: nr {orders[-1].number}."
     currencies = {order.currency for order in orders}
     if len(currencies) == 1:

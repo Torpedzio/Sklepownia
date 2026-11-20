@@ -404,6 +404,8 @@ export type OrderStatus = 'new' | 'processing' | 'completed' | 'cancelled' | 'un
 
 /** As last read from the shop; the customer is a first name and an initial. */
 export type ShopOrder = {
+  /** The shop's own id, for the order's details. */
+  external_id: string;
   number: string;
   status: OrderStatus;
   status_display: string;
@@ -411,6 +413,63 @@ export type ShopOrder = {
   currency: string;
   items: number;
   customer: string;
+  placed_at: string;
+};
+
+/** One page of the order list, from the same copy as the sales (90 days). */
+export type ShopOrders = {
+  available: boolean;
+  synced_at: string | null;
+  refreshing: boolean;
+  error: string;
+  /** Per status, of the whole copy: the search doesn't change them. */
+  counts: Record<OrderStatus, number>;
+  /** Newest first. */
+  orders: ShopOrder[];
+  /** More under `?before=` with the last order's external_id. */
+  has_more: boolean;
+};
+
+export type OrderAddress = {
+  name: string;
+  company: string;
+  /** Street, building and flat. */
+  lines: string[];
+  postcode: string;
+  city: string;
+  country: string;
+  phone: string;
+};
+
+export type OrderLine = {
+  name: string;
+  sku: string;
+  quantity: number;
+  /** Gross, before the order's discount. */
+  price: string;
+  total: string;
+};
+
+/** Read from the shop each time it's opened; the platform doesn't keep the customer's data. */
+export type ShopOrderDetail = {
+  external_id: string;
+  number: string;
+  status: OrderStatus;
+  status_display: string;
+  currency: string;
+  products_total: string;
+  shipping_total: string;
+  discount_total: string;
+  total: string;
+  payment_method: string;
+  shipping_method: string;
+  customer_name: string;
+  email: string;
+  phone: string;
+  billing: OrderAddress | null;
+  shipping: OrderAddress | null;
+  lines: OrderLine[];
+  customer_note: string;
   placed_at: string;
 };
 

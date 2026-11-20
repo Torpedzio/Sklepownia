@@ -136,6 +136,13 @@ class BaseProvisioner:
         """shops.orders.Order changed at/after `since` (aware datetime), oldest first, at most `limit`. Read-only."""
         raise NotImplementedError
 
+    def read_order(self, shop, external_id):
+        """
+        shops.orders.OrderDetail through the shop's API, so in a web request. Raises shops.remote.ShopApiError,
+        NotInShop for an id the shop doesn't have. Read-only.
+        """
+        raise NotImplementedError
+
     # --- backups (see shops/backups.py) ---
 
     def can_back_up(self):

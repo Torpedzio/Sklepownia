@@ -43,7 +43,7 @@ Limity zapytań: logowanie, rejestracja i ustawianie nowego hasła 10 na minutę
 
 ## Sklepy: `/api/shops/`
 
-Obsługa sklepu (`role: staff`) może tylko oglądać sklep (`GET shops/`, `GET shops/{id}/`) i sprzedaż (`sales/`, `sales/refresh/`) oraz opuścić zespół (`leave/`). Pozostałe akcje na sklepie dają jej `403` z „Tylko właściciel sklepu może to zrobić.”. Osoba spoza sklepu dostaje `404`.
+Obsługa sklepu (`role: staff`) może tylko oglądać sklep (`GET shops/`, `GET shops/{id}/`), sprzedaż (`sales/`, `sales/refresh/`) i zamówienia (`orders/`, `orders/{order_id}/`) oraz opuścić zespół (`leave/`). Pozostałe akcje na sklepie dają jej `403` z „Tylko właściciel sklepu może to zrobić.”. Osoba spoza sklepu dostaje `404`.
 
 | Metoda i ścieżka | Opis |
 |---|---|
@@ -85,12 +85,22 @@ razu, także gdy sklep jest wolny. Klient jest zapisany jako imię i inicjał na
 
 | Metoda i ścieżka | Opis |
 |---|---|
-| `GET shops/{id}/sales/` | `{available, synced_at, refreshing, error, currency, today, last_7_days, last_30_days, previous_30_days, daily, to_handle, recent}`. Okresy to `{orders, revenue, average}` w walucie sklepu, liczone z zamówień nowych, w realizacji i zrealizowanych (bez anulowanych i nieopłaconych) według dnia złożenia w strefie platformy. `daily`: 30 dni od najstarszego, `{date, orders, revenue}`. `to_handle`: `{new, processing}`. `recent`: 10 ostatnich zamówień (bez nieopłaconych) z `number, status, status_display, total, currency, items, customer, placed_at`. Gdy kopia ma ponad 2 minuty, zleca odczyt i zwraca `refreshing: true`: aplikacja pyta ponownie co kilka sekund. `available: false` dla sklepu, który nie działa. |
+| `GET shops/{id}/sales/` | `{available, synced_at, refreshing, error, currency, today, last_7_days, last_30_days, previous_30_days, daily, to_handle, recent}`. Okresy to `{orders, revenue, average}` w walucie sklepu, liczone z zamówień nowych, w realizacji i zrealizowanych (bez anulowanych i nieopłaconych) według dnia złożenia w strefie platformy. `daily`: 30 dni od najstarszego, `{date, orders, revenue}`. `to_handle`: `{new, processing}`. `recent`: 10 ostatnich zamówień (bez nieopłaconych) z `external_id, number, status, status_display, total, currency, items, customer, placed_at`. Gdy kopia ma ponad 2 minuty, zleca odczyt i zwraca `refreshing: true`: aplikacja pyta ponownie co kilka sekund. `available: false` dla sklepu, który nie działa. |
 | `POST shops/{id}/sales/refresh/` | Odczyt zamówień teraz (przycisk „Odśwież”), `202` z tym samym kształtem. Gdy odczyt był przed chwilą (30 s) albo już trwa, nic nowego nie zleca. |
 
 Statusy zamówień (`status`): `new` (złożone, czeka na płatność albo potwierdzenie), `processing` (opłacone, do
 wysłania), `completed`, `cancelled` (także zwrócone i nieudane), `unfinished` (płatność online niedokończona).
-Każda platforma ma własne statusy, mapowane w `read_orders` jej provisionera.
+Każda platforma ma własne statusy, mapowane w `read_orders` i `read_order` jej provisionera.
+
+### Zamówienia
+
+Wymaga potwierdzonego e-maila. Lista pochodzi z tej samej kopii co sprzedaż (90 dni). Szczegóły czyta API sklepu
+przy każdym otwarciu, z pełnymi danymi klienta i adresami, i niczego z nich nie zapisuje.
+
+| Metoda i ścieżka | Opis |
+|---|---|
+| `GET shops/{id}/orders/` | `{available, synced_at, refreshing, error, counts, orders, has_more}`. `orders`: 30 zamówień od najnowszego, w kształcie jak `recent` w sprzedaży (także nieopłacone). Parametry: `status` (jeden ze statusów niżej), `q` (fragment numeru albo imienia klienta, `#` na początku jest pomijany), `before` (`external_id` ostatniego zamówienia z poprzedniej strony). `counts`: liczba zamówień w każdym statusie w całej kopii, bez filtrów, do przycisków statusów. Nieznany status albo `before` daje `400`. Jak sprzedaż zleca odczyt starej kopii (`refreshing`). |
+| `GET shops/{id}/orders/{order_id}/` | Zamówienie odczytane teraz ze sklepu: `{external_id, number, status, status_display, currency, products_total, shipping_total, discount_total, total, payment_method, shipping_method, customer_name, email, phone, billing, shipping, lines, customer_note, placed_at}`. Kwoty brutto; produkty i dostawa przed rabatem, `total` tak, jak płaci klient. `lines`: `[{name, sku, quantity, price, total}]`. Adresy (`billing`, `shipping`, mogą być `null`): `{name, company, lines, postcode, city, country, phone}`, `country` to nazwa kraju albo kod ISO. Status w kopii przyjmuje odczytany. `404`, gdy sklep nie ma zamówienia; `409`, gdy sklep nie działa; `503` z `detail`, gdy sklep nie odpowiada, nie przyjął klucza aplikacji albo odpowiedział w nieoczekiwany sposób. |
 
 ### Lista startowa
 
@@ -225,7 +235,7 @@ i wybiera tematy.
 | `PATCH push/preferences/` | Dowolne z `new_orders`, `shops`, `billing`; zwraca to samo co `GET` |
 
 Tematy: `new_orders` (nowe zamówienie w sklepie), `shops` (sklep gotowy, błąd zakładania), `billing` (nieudana opłata,
-koniec planu). Powiadomienie ma w `data.url` ścieżkę ekranu aplikacji, który otwiera, np. `/shops/7/sales`.
+koniec planu). Powiadomienie ma w `data.url` ścieżkę ekranu aplikacji, który otwiera, np. `/shops/7/orders/15` (nowe zamówienie; kilka naraz otwiera `/shops/7/orders`).
 Wylogowanie ze wszystkich urządzeń, zmiana i reset hasła oraz usunięcie konta usuwają wszystkie telefony konta.
 
 ## Płatności: `/api/billing/`

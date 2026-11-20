@@ -4,15 +4,20 @@ import base64
 import json
 import secrets
 import string
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
 
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
-from ..orders import Order, customer_label, from_timestamp
+from ..orders import (
+    Address, Order, OrderDetail, OrderLine, Status as OrderStatus, amount, country_name, customer_label, from_timestamp,
+    full_name, quantity,
+)
 from ..shop_settings import OPERATORS
 from . import Platform
 from ..provisioning import packages
@@ -735,6 +740,100 @@ class PrestaShopProvisioner(ContainerProvisioner):
             for row in rows
         ]
 
+    def read_order(self, shop, external_id):
+        api = self.api(shop)
+        order = api.get(f"orders/{int(external_id)}")["order"]
+        config = {
+            row["name"]: row["value"]
+            for row in _rows(api.get("configurations", {
+                "filter[name]": f"[{'|'.join(ORDER_CONFIGURATION)}]", "display": "[name,value]",
+            }), "configurations")
+        }
+        state = _first(api.get("order_states", {
+            "filter[id]": f"[{int(order['current_state'])}]", "display": "[id,paid,shipped,delivery]",
+        }), "order_states")
+        address_ids = {int(order["id_address_delivery"]), int(order["id_address_invoice"])}
+        addresses = {
+            int(row["id"]): row
+            for row in _rows(api.get("addresses", {"filter[id]": _ids(address_ids), "display": "full"}), "addresses")
+        }
+        countries = {
+            int(row["id"]): row["iso_code"]
+            for row in _rows(api.get("countries", {
+                "filter[id]": _ids(int(row["id_country"]) for row in addresses.values()), "display": "[id,iso_code]",
+            }), "countries")
+        } if addresses else {}
+        # The webservice leaves out a link that is 0, e.g. an order without a customer; an address may still have one.
+        customer_id = order.get("id_customer") or next(
+            (row.get("id_customer") for row in addresses.values() if int(row.get("id_customer") or 0)), 0,
+        )
+        customer = _first(api.get("customers", {
+            "filter[id]": f"[{int(customer_id)}]", "display": "[id,email,firstname,lastname]",
+        }), "customers") if int(customer_id or 0) else {}
+        carrier = _first(api.get("carriers", {
+            "filter[id]": f"[{int(order['id_carrier'])}]", "display": "[id,name]",
+        }), "carriers") if int(order.get("id_carrier") or 0) else {}
+        messages = _rows(api.get("messages", {
+            "filter[id_order]": f"[{int(order['id'])}]", "filter[private]": "[0]", "display": "[id,message]",
+        }), "messages")
+
+        def address(address_id):
+            row = addresses.get(int(address_id))
+            if row is None:
+                return None
+            return Address(
+                name=full_name(row.get("firstname"), row.get("lastname")),
+                company=row.get("company") or "",
+                lines=tuple(line for line in (row.get("address1"), row.get("address2")) if line),
+                postcode=row.get("postcode") or "",
+                city=row.get("city") or "",
+                country=country_name(countries.get(int(row.get("id_country") or 0), "")),
+                phone=row.get("phone_mobile") or row.get("phone") or "",
+            )
+
+        delivery, invoice = address(order["id_address_delivery"]), address(order["id_address_invoice"])
+        rows = (order.get("associations") or {}).get("order_rows") or []
+        try:
+            zone = ZoneInfo(config.get("PS_TIMEZONE") or "UTC")
+        except (ZoneInfoNotFoundError, ValueError):
+            zone = ZoneInfo("UTC")
+        return OrderDetail(
+            external_id=str(order["id"]),
+            number=order.get("reference") or str(order["id"]),
+            status=_order_status(order["current_state"], state, config),
+            currency=self._currency(api, order) or shop.config.currency,
+            products_total=amount(order.get("total_products_wt")),
+            shipping_total=amount(order.get("total_shipping_tax_incl")),
+            discount_total=amount(order.get("total_discounts_tax_incl")),
+            total=amount(order.get("total_paid_tax_incl")),
+            payment_method=order.get("payment") or "",
+            shipping_method=carrier.get("name") or "",
+            customer_name=full_name(customer.get("firstname"), customer.get("lastname")),
+            email=customer.get("email") or "",
+            phone=(delivery or invoice).phone if delivery or invoice else "",
+            billing=invoice,
+            shipping=delivery,
+            lines=tuple(
+                OrderLine(
+                    name=row.get("product_name") or "",
+                    sku=row.get("product_reference") or "",
+                    quantity=quantity(row.get("product_quantity")),
+                    price=amount(row.get("unit_price_tax_incl")),
+                    total=amount(amount(row.get("unit_price_tax_incl")) * quantity(row.get("product_quantity"))),
+                )
+                for row in rows
+            ),
+            customer_note="\n\n".join(message["message"].strip() for message in messages if message.get("message")),
+            placed_at=datetime.fromisoformat(order["date_add"]).replace(tzinfo=zone),
+        )
+
+    @staticmethod
+    def _currency(api, order):
+        currency = _first(api.get("currencies", {
+            "filter[id]": f"[{int(order['id_currency'])}]", "display": "[id,iso_code]",
+        }), "currencies")
+        return currency.get("iso_code") or ""
+
     def update_address(self, shop):
         if self._find_container(shop) is None:
             return None
@@ -819,3 +918,36 @@ class PrestaShopProvisioner(ContainerProvisioner):
 def _host(shop):
     """Without the scheme, with a non-default port: what PrestaShop stores."""
     return shop.url.split("://", 1)[1]
+
+
+# Read with an order: the states that cancel it (as READ_ORDERS_PHP) and the zone its dates are in.
+ORDER_CONFIGURATION = ("PS_OS_CANCELED", "PS_OS_REFUND", "PS_OS_ERROR", "PS_TIMEZONE")
+
+
+def _order_status(state_id, state, config):
+    cancelled = {config.get(name) for name in ORDER_CONFIGURATION[:3]} - {None, ""}
+    if str(state_id) in {str(value) for value in cancelled}:
+        return OrderStatus.CANCELLED
+    if _yes(state.get("shipped")) or _yes(state.get("delivery")):
+        return OrderStatus.COMPLETED
+    if _yes(state.get("paid")):
+        return OrderStatus.PROCESSING
+    return OrderStatus.NEW
+
+
+def _yes(value):
+    return str(value) == "1"
+
+
+def _ids(ids):
+    return "[" + "|".join(str(int(value)) for value in sorted(set(ids))) + "]"
+
+
+def _rows(body, resource):
+    """A webservice list; it comes as [] instead of {resource: []} when nothing matches."""
+    return (body.get(resource) or []) if isinstance(body, dict) else []
+
+
+def _first(body, resource):
+    rows = _rows(body, resource)
+    return rows[0] if rows else {}

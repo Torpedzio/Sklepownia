@@ -111,6 +111,8 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
         <Stack.Screen name="shops/[id]" options={{ title: 'Sklep' }} />
         <Stack.Screen name="shops/[id]/settings" options={{ title: 'Ustawienia sklepu' }} />
         <Stack.Screen name="shops/[id]/sales" options={{ title: 'Sprzedaż' }} />
+        <Stack.Screen name="shops/[id]/orders" options={{ title: 'Zamówienia' }} />
+        <Stack.Screen name="shops/[id]/orders/[orderId]" options={{ title: 'Zamówienie' }} />
         <Stack.Screen name="shops/[id]/team" options={{ title: 'Zespół' }} />
         <Stack.Screen name="shops/[id]/history" options={{ title: 'Historia' }} />
         <Stack.Screen name="billing/index" options={{ title: 'Plan i płatności' }} />
