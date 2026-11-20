@@ -141,6 +141,7 @@ export function shopDetail(overrides: Partial<ShopDetail> = {}): ShopDetail {
     is_test: false,
     down_since: null,
     role: 'owner',
+    owner: { id: 1, name: 'Anna Kowalska', email: 'anna@example.com' },
     created_at: '2026-11-05T10:00:00Z',
     config: {
       industry: 'food',

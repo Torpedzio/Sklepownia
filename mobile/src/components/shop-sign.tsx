@@ -16,7 +16,9 @@ export function ShopSign({ shop }: { shop: Shop }) {
     <Link href={{ pathname: '/shops/[id]', params: { id: shop.id } }} asChild>
       <Pressable
         accessibilityRole="link"
-        accessibilityLabel={`${shop.name}, ${shop.status_display}${shop.is_test ? ', sklep testowy' : ''}`}
+        accessibilityLabel={[shop.name, shop.status_display, shop.is_test && 'sklep testowy', shop.role === 'staff' && 'obsługujesz go w zespole']
+          .filter(Boolean)
+          .join(', ')}
         style={StyleSheet.flatten([
           styles.sign,
           { backgroundColor: theme.surface, borderColor: theme.border },
@@ -35,6 +37,7 @@ export function ShopSign({ shop }: { shop: Shop }) {
             <View style={styles.badges}>
               <ShopStatusBadge shop={shop} />
               {shop.is_test ? <TestBadge /> : null}
+              {shop.role === 'staff' ? <StaffBadge /> : null}
             </View>
           </View>
           <Icon name="chevron" size={18} color="textSecondary" />
@@ -45,11 +48,20 @@ export function ShopSign({ shop }: { shop: Shop }) {
 }
 
 export function TestBadge() {
+  return <OutlineBadge label="Testowy" accessibilityLabel="Sklep testowy" />;
+}
+
+/** Someone else's shop, run together with its owner. */
+export function StaffBadge() {
+  return <OutlineBadge label="Obsługujesz" accessibilityLabel="Obsługujesz ten sklep w zespole" />;
+}
+
+function OutlineBadge({ label, accessibilityLabel }: { label: string; accessibilityLabel: string }) {
   const theme = useTheme();
   return (
-    <View style={[styles.test, { borderColor: theme.border }]} accessibilityLabel="Sklep testowy">
+    <View style={[styles.outline, { borderColor: theme.border }]} accessibilityLabel={accessibilityLabel}>
       <ThemedText type="smallBold" themeColor="textSecondary">
-        Testowy
+        {label}
       </ThemedText>
     </View>
   );
@@ -64,7 +76,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.two,
   },
-  test: {
+  outline: {
     alignSelf: 'flex-start',
     paddingHorizontal: Spacing.two + Spacing.one,
     paddingVertical: Spacing.half - 1,

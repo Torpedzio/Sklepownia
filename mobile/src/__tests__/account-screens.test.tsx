@@ -350,6 +350,7 @@ describe('shop list', () => {
     await renderScreen(<ShopsScreen />);
 
     expect(await screen.findByText(/^1 sklep, w tym 1 otwarty\.$/)).toBeTruthy();
+    expect(screen.getByText('Obsługujesz')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Nowy sklep' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Chcę założyć własny sklep' })).toBeTruthy();
   });

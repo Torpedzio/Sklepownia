@@ -255,3 +255,56 @@ test('a Magento shop gets tips for its own panel, which open its start page', as
   expect(openURL).toHaveBeenCalledWith('http://palarnia.localhost:8080/admin_k3x9/');
   expect(screen.queryByText('WooCommerce → Ustawienia → Ogólne')).toBeNull();
 });
+
+describe('team', () => {
+  const team = {
+    owner: { id: 1, name: 'Anna Kowalska', email: 'anna@example.com' },
+    members: [{ id: 2, name: '', email: 'ola@example.com', joined_at: '2026-11-18T10:00:00Z' }],
+    invitations: [
+      { id: 5, email: 'jan@example.com', created_at: '2026-11-19T10:00:00Z', expires_at: '2026-11-26T10:00:00Z', expired: false },
+    ],
+    limit: 20,
+    used: 2,
+  };
+
+  test('the owner sees who is on the team and goes to manage it', async () => {
+    await open(shopDetail(), { 'GET /shops/7/settings/': shopSettings(), 'GET /shops/7/team/': team });
+
+    expect(await screen.findByText('1 osoba z obsługi, 1 zaproszenie czeka.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Zarządzaj zespołem' }));
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/shops/[id]/team', params: { id: '7' } });
+  });
+
+  test('the staff sees the shop and its sales, without what belongs to the owner', async () => {
+    const { api } = await open(shopDetail({ role: 'staff' }), { 'GET /shops/7/sales/': shopSales() });
+
+    expect(await screen.findByText('Sklep działa')).toBeTruthy();
+    expect(screen.getByText('Obsługujesz')).toBeTruthy();
+    expect(screen.getByText(/Sklep należy do: Anna Kowalska \(anna@example.com\)/)).toBeTruthy();
+    for (const name of ['Ustawienia sklepu', 'Panel WordPressa', 'Usuń sklep', 'Zarządzaj zespołem']) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
+    // Nothing asked of the owner-only endpoints.
+    expect(api.calls.map((call) => call.key).filter((key) => /settings|admin-access|checklist|team/.test(key))).toEqual([]);
+  });
+
+  test('the staff can leave the team', async () => {
+    const { api } = await open(shopDetail({ role: 'staff' }), {
+      'GET /shops/7/sales/': shopSales(),
+      'POST /shops/7/leave/': null,
+    });
+
+    await fireEvent.press(await screen.findByRole('button', { name: 'Opuść zespół' }));
+
+    expect(confirm).toHaveBeenCalledWith('Opuścić zespół?', expect.stringContaining('Palarnia'), 'Opuść zespół');
+    expect(api.sent('POST /shops/7/leave/')).toHaveLength(1);
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/shops'));
+  });
+
+  test('a failed shop tells the staff that the owner retries', async () => {
+    await open(shopDetail({ role: 'staff', status: 'failed' }));
+
+    expect(await screen.findByText('Ponowić zakładanie może właściciel sklepu.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Spróbuj ponownie' })).toBeNull();
+  });
+});

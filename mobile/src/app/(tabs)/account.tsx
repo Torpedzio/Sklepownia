@@ -214,14 +214,17 @@ function Overview({
   shops: Shop[] | undefined;
   billing: BillingOverview | undefined;
 }) {
-  const paid = shops?.filter((shop) => !shop.is_test) ?? [];
+  // Shops served in others' teams are on their owners' plans.
+  const own = shops?.filter((shop) => shop.role === 'owner') ?? [];
+  const served = (shops?.length ?? 0) - own.length;
+  const paid = own.filter((shop) => !shop.is_test);
   const counted = paid.filter((shop) => shop.status !== 'suspended');
   const suspended = paid.length - counted.length;
   // Only some of a plan's shops may run on Magento; show that count once there is one.
   const magento = counted.filter((shop) => shop.platform === 'magento').length;
   const magentoNote =
     user.plan && magento && user.magento_shop_limit ? `W tym ${magento} z ${user.magento_shop_limit} na Magento` : '';
-  const tests = (shops?.length ?? 0) - paid.length;
+  const tests = own.length - paid.length;
   const subscription = billing?.subscription;
   const running = subscription && ['active', 'past_due'].includes(subscription.status);
   const profile = billing?.profile;
@@ -229,6 +232,7 @@ function Overview({
   const shopNotes = [
     suspended ? `${suspended} ${plural(suspended, ['zawieszony', 'zawieszone', 'zawieszonych'])}` : '',
     tests ? `${tests} ${plural(tests, ['testowy', 'testowe', 'testowych'])} poza planem` : '',
+    served ? `${served} ${plural(served, ['obsługiwany', 'obsługiwane', 'obsługiwanych'])} w zespole` : '',
   ].filter(Boolean);
 
   // A team account serves others' shops; their owners pay.
@@ -260,7 +264,7 @@ function Overview({
           note={[
             magentoNote,
             shopNotes.join(', ') ||
-              (user.plan ? 'Wszystkie działają' : joining ? 'W zespołach, do których należysz' : 'Wybierz plan, żeby założyć nowy'),
+              (user.plan ? 'Wszystkie działają' : joining ? 'Czekasz na zaproszenie' : 'Wybierz plan, żeby założyć nowy'),
           ]
             .filter(Boolean)
             .join('. ')}

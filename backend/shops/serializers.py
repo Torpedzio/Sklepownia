@@ -13,6 +13,12 @@ from .slugs import normalize_slug, slug_error
 DEFAULT_CATEGORY_COUNT = 5
 
 
+class PersonSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField(source="get_full_name", help_text="Imię i nazwisko; puste, gdy nie podane.")
+    email = serializers.EmailField()
+
+
 class ShopTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShopTemplate
@@ -122,9 +128,10 @@ class ShopDetailSerializer(ShopSerializer):
     provisioning = serializers.SerializerMethodField()
     panel_name = serializers.SerializerMethodField(help_text="Jak właściciel zna panel sklepu, np. „panel WordPressa”.")
     setup_time = serializers.SerializerMethodField(help_text="Ile trwa zakładanie sklepu, np. „około dwóch minut”.")
+    owner = PersonSerializer(help_text="Właściciel sklepu (dla obsługi: kto ją zaprosił do zespołu).")
 
     class Meta(ShopSerializer.Meta):
-        fields = [*ShopSerializer.Meta.fields, "panel_name", "setup_time", "config", "provisioning"]
+        fields = [*ShopSerializer.Meta.fields, "panel_name", "setup_time", "owner", "config", "provisioning"]
 
     def get_panel_name(self, shop) -> str:
         return platform_info(shop.platform).panel_name
@@ -351,12 +358,6 @@ class ShopBackupsSerializer(serializers.Serializer):
     keep_weekly = serializers.IntegerField(help_text="Z ilu ostatnich tygodni zostaje najnowsza kopia.")
     nightly_at = serializers.DateTimeField(help_text="Kiedy powstaną następne kopie nocne.")
 
-
-
-class PersonSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    name = serializers.CharField(source="get_full_name", help_text="Imię i nazwisko; puste, gdy nie podane.")
-    email = serializers.EmailField()
 
 
 class TeamMemberSerializer(serializers.ModelSerializer):

@@ -170,17 +170,21 @@ export default function ShopSalesScreen() {
                   <Count value={sales.to_handle.processing} label="W realizacji" note="opłacone, do wysłania" />
                 </View>
                 <ThemedText type="small" themeColor="textSecondary">
-                  Zamówienia obsłużysz {inPanel}.
+                  {shop?.role === 'staff'
+                    ? `Zamówienia obsługuje się ${inPanel}, do którego dostęp ma właściciel sklepu.`
+                    : `Zamówienia obsłużysz ${inPanel}.`}
                 </ThemedText>
-                <Button
-                  title={panelName.charAt(0).toUpperCase() + panelName.slice(1)}
-                  icon="admin"
-                  variant="secondary"
-                  style={styles.start}
-                  onPress={() =>
-                    router.push({ pathname: '/shops/[id]/settings', params: { id: String(id), section: 'reczne' } })
-                  }
-                />
+                {shop?.role === 'staff' ? null : (
+                  <Button
+                    title={panelName.charAt(0).toUpperCase() + panelName.slice(1)}
+                    icon="admin"
+                    variant="secondary"
+                    style={styles.start}
+                    onPress={() =>
+                      router.push({ pathname: '/shops/[id]/settings', params: { id: String(id), section: 'reczne' } })
+                    }
+                  />
+                )}
               </>
             ) : (
               <ThemedText type="small" themeColor="textSecondary">

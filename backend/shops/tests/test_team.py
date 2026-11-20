@@ -41,7 +41,9 @@ def staff_client(shop, helper):
 def test_each_person_sees_their_role(auth_client, staff_client, shop):
     assert [item["role"] for item in auth_client.get("/api/shops/").data] == ["owner"]
     assert [(item["id"], item["role"]) for item in staff_client.get("/api/shops/").data] == [(shop.pk, "staff")]
-    assert staff_client.get(f"/api/shops/{shop.pk}/").data["role"] == "staff"
+    detail = staff_client.get(f"/api/shops/{shop.pk}/").data
+    assert detail["role"] == "staff"
+    assert detail["owner"]["email"] == "anna@example.com"
 
 
 def test_a_stranger_does_not_see_the_shop(shop):

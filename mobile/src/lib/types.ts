@@ -59,6 +59,8 @@ export type ProvisioningStep = {
 };
 
 export type ShopDetail = Shop & {
+  /** For the staff: who runs the shop and invited them. */
+  owner: Person;
   /** E.g. "panel WordPressa". */
   panel_name: string;
   /** E.g. "około dwóch minut". */
@@ -476,4 +478,26 @@ export type Invitation = {
   invited_by: Person | null;
   created_at: string;
   expires_at: string;
+};
+
+export type TeamMember = Person & { joined_at: string };
+
+export type TeamInvitation = {
+  id: number;
+  email: string;
+  created_at: string;
+  expires_at: string;
+  /** Past its term: inviting the address again sends a new one. */
+  expired: boolean;
+};
+
+/** `GET /shops/{id}/team/`, for the owner. */
+export type Team = {
+  owner: Person;
+  members: TeamMember[];
+  invitations: TeamInvitation[];
+  /** Staff the owner's plan allows, not counting the owner; null: no limit. */
+  limit: number | null;
+  /** Members and valid invitations. */
+  used: number;
 };

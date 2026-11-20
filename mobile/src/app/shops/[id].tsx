@@ -7,9 +7,10 @@ import { Page } from '@/components/page';
 import { Receipt, type ReceiptRow } from '@/components/receipt';
 import { SalesSummary } from '@/components/sales-summary';
 import { ShopChecklist } from '@/components/shop-checklist';
+import { LeaveTeam, TeamCard } from '@/components/shop-team';
 import { ShopGuidesPanel } from '@/components/shop-guides';
 import { missingForSales, ShopOverview } from '@/components/shop-overview';
-import { TestBadge } from '@/components/shop-sign';
+import { StaffBadge, TestBadge } from '@/components/shop-sign';
 import { ShopStatusBadge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -41,12 +42,14 @@ export default function ShopScreen() {
     refetchInterval: (data) =>
       data && IN_PROGRESS.includes(data.status) ? 1500 : data?.down_since ? DOWN_REFRESH : false,
   });
+  // Settings, the panel and the rest of running the shop are the owner's; the staff sees the shop and its sales.
+  const owner = shop?.role === 'owner';
   const { data: settings } = useApiQuery<ShopSettings>(`/shops/${id}/settings/`, {
-    enabled: shop?.status === 'active',
+    enabled: shop?.status === 'active' && owner,
   });
   // The tips open the shop's panel, whose address PrestaShop and Magento keep secret.
   const { data: access } = useApiQuery<ShopAdminAccess>(`/shops/${id}/admin-access/`, {
-    enabled: shop?.status === 'active',
+    enabled: shop?.status === 'active' && owner,
   });
   const notify = useNotify();
   const [busy, setBusy] = useState(false);
@@ -149,6 +152,7 @@ export default function ShopScreen() {
         <View style={styles.badges}>
           <ShopStatusBadge shop={shop} />
           {shop.is_test ? <TestBadge /> : null}
+          {owner ? null : <StaffBadge />}
         </View>
       </View>
 
@@ -161,31 +165,43 @@ export default function ShopScreen() {
               : { backgroundColor: theme.surface, borderColor: theme.border },
           ]}>
           <ThemedText type="heading">
-            {down ? 'Sklep nie działa' : closed ? 'Sklep jest zamknięty dla klientów' : 'Twój sklep działa'}
+            {down
+              ? 'Sklep nie działa'
+              : closed
+                ? 'Sklep jest zamknięty dla klientów'
+                : owner
+                  ? 'Twój sklep działa'
+                  : 'Sklep działa'}
           </ThemedText>
           <ThemedText type="small" themeColor={down ? undefined : 'textSecondary'}>
             {down
               ? `Od ${formatMoment(shop.down_since!)} klienci nie mogą wejść do sklepu. Już to sprawdzamy i damy znać, gdy znowu zadziała.`
-              : closed
-                ? 'Klienci widzą stronę „Wkrótce otwarcie”. Otworzysz sklep w ustawieniach, gdy będzie gotowy.'
-                : missing.length
-                  ? `Zanim ogłosisz sklep, ustaw ${missing.join(' i ')}. Bez tego klienci nie złożą zamówienia.`
-                  : `Klienci mogą już kupować. Produkty dodasz w ${panelLocative(shop.panel_name)}, a resztę zmienisz w ustawieniach.`}
+              : !owner
+                ? 'Sprzedaż sklepu sprawdzisz poniżej. Ustawieniami i panelem sklepu zajmuje się właściciel.'
+                : closed
+                  ? 'Klienci widzą stronę „Wkrótce otwarcie”. Otworzysz sklep w ustawieniach, gdy będzie gotowy.'
+                  : missing.length
+                    ? `Zanim ogłosisz sklep, ustaw ${missing.join(' i ')}. Bez tego klienci nie złożą zamówienia.`
+                    : `Klienci mogą już kupować. Produkty dodasz w ${panelLocative(shop.panel_name)}, a resztę zmienisz w ustawieniach.`}
           </ThemedText>
           <View style={styles.actions}>
             <Button title="Otwórz sklep" icon="external" onPress={() => Linking.openURL(shop.url)} />
-            <Button title="Ustawienia sklepu" icon="filter" variant="secondary" onPress={() => openSettings()} />
-            <Button
-              title={panelTitle(shop.panel_name)}
-              icon="admin"
-              variant="secondary"
-              onPress={() => openSettings('reczne')}
-            />
+            {owner ? (
+              <>
+                <Button title="Ustawienia sklepu" icon="filter" variant="secondary" onPress={() => openSettings()} />
+                <Button
+                  title={panelTitle(shop.panel_name)}
+                  icon="admin"
+                  variant="secondary"
+                  onPress={() => openSettings('reczne')}
+                />
+              </>
+            ) : null}
           </View>
         </View>
       ) : null}
 
-      {active ? <ShopChecklist shop={shop} onOpenSettings={openSettings} /> : null}
+      {active && owner ? <ShopChecklist shop={shop} onOpenSettings={openSettings} /> : null}
 
       {active ? <SalesSummary shopId={shop.id} /> : null}
 
@@ -193,45 +209,55 @@ export default function ShopScreen() {
         <View style={[styles.card, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
           <ThemedText type="heading">Sklep niedostępny w obecnym planie</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Klienci go nie widzą, ale nic z niego nie zniknęło: produkty, zamówienia i ustawienia czekają. Przywrócisz
-            go, gdy plan będzie miał miejsce, czyli po zmianie planu albo usunięciu innego sklepu.
+            {owner
+              ? 'Klienci go nie widzą, ale nic z niego nie zniknęło: produkty, zamówienia i ustawienia czekają. ' +
+                'Przywrócisz go, gdy plan będzie miał miejsce, czyli po zmianie planu albo usunięciu innego sklepu.'
+              : 'Klienci go nie widzą, ale nic z niego nie zniknęło. Przywrócić go może właściciel.'}
           </ThemedText>
-          <View style={styles.actions}>
-            <Button
-              title="Przywróć sklep"
-              icon="refresh"
-              loading={busy}
-              onPress={() =>
-                runAction(async () => {
-                  await api(`/shops/${id}/resume/`, { method: 'POST' });
-                  notify.success(`Sklep „${shop.name}” znów działa.`);
-                  await refresh();
-                })
-              }
-            />
-            <Link href="/billing/change" asChild>
-              <Button title="Zmień plan" icon="filter" variant="secondary" />
-            </Link>
-          </View>
+          {owner ? (
+            <View style={styles.actions}>
+              <Button
+                title="Przywróć sklep"
+                icon="refresh"
+                loading={busy}
+                onPress={() =>
+                  runAction(async () => {
+                    await api(`/shops/${id}/resume/`, { method: 'POST' });
+                    notify.success(`Sklep „${shop.name}” znów działa.`);
+                    await refresh();
+                  })
+                }
+              />
+              <Link href="/billing/change" asChild>
+                <Button title="Zmień plan" icon="filter" variant="secondary" />
+              </Link>
+            </View>
+          ) : null}
         </View>
       ) : null}
 
       {shop.status === 'failed' ? (
         <View style={[styles.card, { backgroundColor: theme.dangerMuted, borderColor: theme.danger }]}>
           <ThemedText type="heading">Zakładanie zatrzymało się</ThemedText>
-          <ThemedText type="small">Spróbuj ponownie. Zaczniemy od kroku, który się nie udał.</ThemedText>
-          <Button
-            title="Spróbuj ponownie"
-            icon="refresh"
-            loading={busy}
-            onPress={() =>
-              runAction(async () => {
-                await api(`/shops/${id}/retry/`, { method: 'POST' });
-                notify.success('Wznawiamy zakładanie od kroku, który się nie udał.');
-                await refresh();
-              })
-            }
-          />
+          <ThemedText type="small">
+            {owner
+              ? 'Spróbuj ponownie. Zaczniemy od kroku, który się nie udał.'
+              : 'Ponowić zakładanie może właściciel sklepu.'}
+          </ThemedText>
+          {owner ? (
+            <Button
+              title="Spróbuj ponownie"
+              icon="refresh"
+              loading={busy}
+              onPress={() =>
+                runAction(async () => {
+                  await api(`/shops/${id}/retry/`, { method: 'POST' });
+                  notify.success('Wznawiamy zakładanie od kroku, który się nie udał.');
+                  await refresh();
+                })
+              }
+            />
+          ) : null}
         </View>
       ) : null}
 
@@ -256,9 +282,11 @@ export default function ShopScreen() {
         {receipt}
       </View>
 
-      <ShopGuidesPanel platform={shop.platform} adminUrl={active ? access?.admin_url : undefined} />
+      {owner ? <TeamCard shopId={shop.id} /> : <LeaveTeam shop={shop} />}
 
-      {!inProgress ? (
+      {owner ? <ShopGuidesPanel platform={shop.platform} adminUrl={active ? access?.admin_url : undefined} /> : null}
+
+      {owner && !inProgress ? (
         <Button title="Usuń sklep" variant="danger" onPress={handleDelete} disabled={busy} style={styles.delete} />
       ) : null}
     </Page>
