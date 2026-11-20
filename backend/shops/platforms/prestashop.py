@@ -28,6 +28,7 @@ from ..provisioning.container import (
 from ..provisioning.packages import Package
 from ..remote import KEY_NAME, ShopApiError
 from ..remote.prestashop import PrestaShopApi
+from .prestashop_products import PrestaShopProducts, _first, _rows
 
 SAMPLE_PRODUCT_CATEGORIES = 3
 SAMPLE_PRODUCTS_PER_CATEGORY = 2
@@ -533,7 +534,7 @@ echo "\\n%(marker)s" . $row['domain'];
 """ % {"marker": OUTPUT_MARKER}
 
 
-class PrestaShopProvisioner(ContainerProvisioner):
+class PrestaShopProvisioner(PrestaShopProducts, ContainerProvisioner):
     ENV_KEYS = tuple(CONTAINER_ENV)
     API = PrestaShopApi
     START_FAILED = "PrestaShop nie wystartował."
@@ -984,11 +985,3 @@ def _ids(ids):
     return "[" + "|".join(str(int(value)) for value in sorted(set(ids))) + "]"
 
 
-def _rows(body, resource):
-    """A webservice list; it comes as [] instead of {resource: []} when nothing matches."""
-    return (body.get(resource) or []) if isinstance(body, dict) else []
-
-
-def _first(body, resource):
-    rows = _rows(body, resource)
-    return rows[0] if rows else {}

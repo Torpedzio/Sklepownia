@@ -151,6 +151,26 @@ class BaseProvisioner:
         """
         raise NotImplementedError
 
+    # --- products (see shops/products.py), through the shop's REST API ---
+
+    def read_products(self, shop, *, query, stock_filter, offset, limit):
+        """
+        shops.products.ProductPage: up to `limit` products from `offset`, newest first, with `has_more`. `query` looks
+        in the names (and SKUs where the API can); `stock_filter` is a products.Filter value. Read-only.
+        """
+        raise NotImplementedError
+
+    def read_product(self, shop, external_id):
+        """shops.products.ProductDetail; raises shops.remote.NotInShop when the shop has no such product."""
+        raise NotImplementedError
+
+    def set_product_stock(self, shop, product, quantity):
+        """
+        Sets the pieces in stock of `product` (a ProductDetail without variants) and starts counting them if the shop
+        didn't; at 0 it no longer sells, above it does. Raises shops.remote.ShopApiError.
+        """
+        raise NotImplementedError
+
     # --- backups (see shops/backups.py) ---
 
     def can_back_up(self):

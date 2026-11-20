@@ -10,7 +10,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from accounts.permissions import IsEmailVerified
 from billing.models import Plan
 
-from . import backups, checklist, documents, history, orders, sales, services, shop_settings, team
+from . import backups, checklist, documents, history, orders, products, sales, services, shop_settings, team
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import (
     InvalidTransition, Shop, ShopCredentials, ShopEvent, ShopInvitation, ShopOperation, ShopOrder, ShopOrderNote,
@@ -38,6 +38,9 @@ from .serializers import (
     OrderActionSerializer,
     OrderNoteCreateSerializer,
     OrderNoteSerializer,
+    ProductStockSerializer,
+    ShopProductDetailSerializer,
+    ShopProductsSerializer,
     ShopOrderDetailSerializer,
     ShopOrdersSerializer,
     ShopSalesSerializer,
@@ -56,12 +59,13 @@ VERIFIED_ACTIONS = (
     "create", "retry", "resume", "admin_access", "send_admin_access", "shop_settings", "refresh_settings", "reset_admin_password",
     "remove_sample_products", "operations", "operation", "shop_sales", "refresh_sales", "shop_backups",
     "restore_backup", "team", "invite", "revoke_invitation", "remove_member", "shop_history", "shop_orders",
-    "shop_order", "shop_order_action", "shop_order_notes", "shop_order_note",
+    "shop_order", "shop_order_action", "shop_order_notes", "shop_order_note", "shop_products", "shop_product",
+    "shop_product_stock",
 )
 # What the staff may do in a shop they serve; the rest (settings, backups, panel access, deletion…) is the owner's.
 STAFF_ACTIONS = (
     "list", "retrieve", "shop_sales", "refresh_sales", "shop_orders", "shop_order", "shop_order_action",
-    "shop_order_notes", "shop_order_note", "leave",
+    "shop_order_notes", "shop_order_note", "shop_products", "shop_product", "shop_product_stock", "leave",
 )
 OPERATION_HISTORY_LENGTH = 20
 HISTORY_PAGE = 30
@@ -71,6 +75,9 @@ BACKUP_LIMIT = "Na dziś to już wszystkie kopie, które możesz zrobić sam. Ko
 NOT_ACTIVE = "Ustawienia można zmieniać, gdy sklep działa."
 ORDER_NOT_ACTIVE = "Szczegóły zamówienia zobaczysz, gdy sklep działa."
 ORDER_CHANGE_NOT_ACTIVE = "Zamówienie zmienisz, gdy sklep działa."
+PRODUCTS_NOT_ACTIVE = "Produkty zobaczysz, gdy sklep działa."
+PRODUCT_NOT_FOUND = "Sklep nie ma już tego produktu."
+STOCK_OF_VARIANTS = "Ten produkt ma warianty: ich stany zmienisz na razie w panelu sklepu."
 ORDER_ACTION_GONE = "Tego nie da się już zrobić z tym zamówieniem. Sprawdź jego obecny stan."
 ORDER_NOT_FOUND = "Sklep nie ma takiego zamówienia."
 PANEL_NOT_READY = "Panel będzie dostępny, gdy sklep zostanie założony."
@@ -618,6 +625,95 @@ class ShopViewSet(
             )
         note.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("q", str, description="Fragment nazwy (w Magento także SKU)."),
+            OpenApiParameter("stock", str, enum=["out_of_stock"], description="Tylko produkty, których brakuje."),
+            OpenApiParameter("page", int, description="Strona listy, od 1."),
+        ],
+        responses={
+            200: ShopProductsSerializer,
+            409: OpenApiResponse(description="Sklep nie działa."),
+            503: OpenApiResponse(description="Sklep nie odpowiada albo nie przyjął klucza aplikacji."),
+        },
+        operation_id="shops_products_list",
+    )
+    @action(detail=True, methods=["get"], url_path="products")
+    def shop_products(self, request, pk=None):
+        """Read from the shop now, newest first; products live only in the shop."""
+        shop = self.get_object()
+        params = request.query_params
+        stock_filter = params.get("stock", "")
+        if stock_filter not in products.Filter.VALUES:
+            return Response({"stock": ["Nie ma takiego filtra."]}, status=status.HTTP_400_BAD_REQUEST)
+        page = params.get("page", "1")
+        if not page.isdigit() or not 1 <= int(page) <= 1000:
+            return Response({"page": ["Podaj numer strony od 1."]}, status=status.HTTP_400_BAD_REQUEST)
+        if shop.status != Shop.Status.ACTIVE:
+            return Response({"detail": PRODUCTS_NOT_ACTIVE}, status=status.HTTP_409_CONFLICT)
+        try:
+            result = products.listing(shop, query=params.get("q", "")[:80], stock_filter=stock_filter, page=int(page))
+        except ShopApiError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(ShopProductsSerializer({
+            "currency": shop.config.currency, "products": result.products, "has_more": result.has_more,
+        }).data)
+
+    @extend_schema(
+        parameters=[OpenApiParameter("product_id", str, OpenApiParameter.PATH, description="external_id produktu.")],
+        responses={
+            200: ShopProductDetailSerializer,
+            404: OpenApiResponse(description="Sklep nie ma takiego produktu."),
+            409: OpenApiResponse(description="Sklep nie działa."),
+            503: OpenApiResponse(description="Sklep nie odpowiada albo nie przyjął klucza aplikacji."),
+        },
+        operation_id="shops_product_retrieve",
+    )
+    @action(detail=True, methods=["get"], url_path=r"products/(?P<product_id>[0-9]{1,20})")
+    def shop_product(self, request, pk=None, product_id=None):
+        shop = self.get_object()
+        if shop.status != Shop.Status.ACTIVE:
+            return Response({"detail": PRODUCTS_NOT_ACTIVE}, status=status.HTTP_409_CONFLICT)
+        try:
+            product = products.read(shop, product_id)
+        except NotInShop:
+            return Response({"detail": PRODUCT_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+        except ShopApiError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(self._product_payload(shop, product))
+
+    @extend_schema(
+        parameters=[OpenApiParameter("product_id", str, OpenApiParameter.PATH, description="external_id produktu.")],
+        request=ProductStockSerializer,
+        responses={
+            200: ShopProductDetailSerializer,
+            404: OpenApiResponse(description="Sklep nie ma takiego produktu."),
+            409: OpenApiResponse(description="Sklep nie działa albo produkt ma warianty."),
+            503: OpenApiResponse(description="Sklep nie odpowiada albo odrzucił zmianę."),
+        },
+        operation_id="shops_product_stock",
+    )
+    @action(detail=True, methods=["post"], url_path=r"products/(?P<product_id>[0-9]{1,20})/stock")
+    def shop_product_stock(self, request, pk=None, product_id=None):
+        """Done in the shop now; answers with the product read again afterwards."""
+        shop = self.get_object()
+        serializer = ProductStockSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if shop.status != Shop.Status.ACTIVE:
+            return Response({"detail": PRODUCTS_NOT_ACTIVE}, status=status.HTTP_409_CONFLICT)
+        try:
+            product = products.set_stock(shop, product_id, serializer.validated_data["quantity"], request.user)
+        except products.StockNotEditable:
+            return Response({"detail": STOCK_OF_VARIANTS}, status=status.HTTP_409_CONFLICT)
+        except NotInShop:
+            return Response({"detail": PRODUCT_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+        except ShopApiError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(self._product_payload(shop, product))
+
+    def _product_payload(self, shop, product):
+        return ShopProductDetailSerializer(product, context={"currency": shop.config.currency}).data
 
     def _order_payload(self, shop, order):
         context = {"request": self.request, "notes": orders.notes(shop, order.external_id)}

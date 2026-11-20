@@ -26,6 +26,7 @@ from ..provisioning.container import (
 from ..provisioning.packages import Package
 from ..remote import NotInShop
 from ..remote.woocommerce import WooCommerceApi
+from .woocommerce_products import WooCommerceProducts
 
 
 WP_PATH = FILES_PATH
@@ -454,7 +455,7 @@ WORDPRESS_ENV_KEYS = (
 )
 
 
-class WooCommerceProvisioner(ContainerProvisioner):
+class WooCommerceProvisioner(WooCommerceProducts, ContainerProvisioner):
     """WordPress with WooCommerce; mirrors infra/shops/woocommerce/provision-shop.sh step by step."""
 
     ENV_KEYS = WORDPRESS_ENV_KEYS

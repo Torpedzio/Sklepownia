@@ -14,6 +14,7 @@ import { useNotify } from '@/context/notifications';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
+import { queryString } from '@/lib/format';
 import { SALES_POLL_MS } from '@/lib/sales';
 import { formatTime } from '@/lib/settings-form';
 import type { OrderStatus, ShopDetail, ShopOrders } from '@/lib/types';
@@ -214,12 +215,6 @@ export default function ShopOrdersScreen() {
       </ThemedText>
     </Page>
   );
-}
-
-/** React Native's URLSearchParams lacks most methods. */
-function queryString(pairs: [string, string][]) {
-  if (!pairs.length) return '';
-  return `?${pairs.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join('&')}`;
 }
 
 const styles = StyleSheet.create({

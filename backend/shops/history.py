@@ -55,6 +55,10 @@ def detail(event):
         if tracking and event.data.get("carrier"):
             tracking = f"{tracking} ({event.data['carrier']})"
         return ", ".join(filter(None, [f"Nr {event.data.get('number', '')}", f"przesyłka {tracking}" if tracking else ""]))
+    if event.kind == Kind.PRODUCT_STOCK:
+        before, after = event.data.get("before"), event.data.get("after")
+        count = f"{'bez liczenia' if before is None else before} → {after} szt."
+        return f"{event.data.get('name', '')}: {count}"
     if event.kind == Kind.MEMBER_REMOVED:
         return event.data.get("name") or event.data.get("email", "")
     return event.data.get("email", "")

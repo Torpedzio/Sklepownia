@@ -26,6 +26,7 @@ from ..provisioning.container import (
 )
 from ..remote import KEY_NAME, ShopApiError
 from ..remote.magento import MagentoApi
+from .magento_products import MagentoProducts
 from .woocommerce import _money
 
 SAMPLE_PRODUCT_CATEGORIES = 3
@@ -99,7 +100,7 @@ ORDER_STATES = {
 }
 
 
-class MagentoProvisioner(ContainerProvisioner):
+class MagentoProvisioner(MagentoProducts, ContainerProvisioner):
     START_FAILED = "Magento nie wystartował."
     API = MagentoApi
     VOLUME_PATH = DATA_PATH

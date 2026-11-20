@@ -578,3 +578,41 @@ class ShopEventSerializer(serializers.ModelSerializer):
 class ShopHistorySerializer(serializers.Serializer):
     events = ShopEventSerializer(many=True)
     has_more = serializers.BooleanField(help_text="Są starsze wpisy: następna strona z ?before=<id ostatniego>.")
+
+
+class ProductSerializer(serializers.Serializer):
+    external_id = serializers.CharField(help_text="Identyfikator w sklepie, do adresu szczegółów produktu.")
+    name = serializers.CharField()
+    sku = serializers.CharField()
+    price = serializers.DecimalField(
+        max_digits=12, decimal_places=2, allow_null=True,
+        help_text="Brutto, tak jak płaci klient; z wariantami najniższa. null, gdy sklep nie ma ceny.",
+    )
+    regular_price = serializers.DecimalField(
+        max_digits=12, decimal_places=2, allow_null=True, help_text="Cena przed promocją, gdy trwa promocja.",
+    )
+    stock = serializers.IntegerField(allow_null=True, help_text="Sztuki w magazynie; null, gdy sklep ich nie liczy.")
+    in_stock = serializers.BooleanField(help_text="Można go kupić.")
+    visible = serializers.BooleanField(help_text="Klienci go widzą i mogą kupić.")
+    image = serializers.CharField(help_text="Adres głównego zdjęcia albo pusty.")
+    has_variants = serializers.BooleanField(help_text="Warianty mają własne ceny i stany, zmieniane w panelu sklepu.")
+
+
+class ShopProductsSerializer(serializers.Serializer):
+    currency = serializers.CharField()
+    products = ProductSerializer(many=True, help_text="Od najnowszego.")
+    has_more = serializers.BooleanField(help_text="Kolejne są pod ?page= o jeden większym.")
+
+
+class ShopProductDetailSerializer(ProductSerializer):
+    currency = serializers.SerializerMethodField()
+    categories = serializers.ListField(child=serializers.CharField())
+    url = serializers.CharField(help_text="Strona produktu w sklepie; pusta, gdy jej nie ma (np. produkt ukryty).")
+
+    @extend_schema_field(str)
+    def get_currency(self, product):
+        return self.context["currency"]
+
+
+class ProductStockSerializer(serializers.Serializer):
+    quantity = serializers.IntegerField(min_value=0, max_value=999_999, help_text="Sztuki w magazynie.")

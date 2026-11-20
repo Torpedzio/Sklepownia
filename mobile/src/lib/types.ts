@@ -599,3 +599,34 @@ export type ShopEvent = {
 };
 
 export type ShopHistory = { events: ShopEvent[]; has_more: boolean };
+
+/** Read from the shop each time; the platform keeps no copy of the products. */
+export type Product = {
+  external_id: string;
+  name: string;
+  sku: string;
+  /** Gross, as the customer pays it; with variants, the lowest. */
+  price: string | null;
+  /** The price before the sale, while there is one. */
+  regular_price: string | null;
+  /** Null when the shop doesn't count the pieces. */
+  stock: number | null;
+  in_stock: boolean;
+  visible: boolean;
+  image: string;
+  /** Variants (or a set of products) keep their own stock, changed in the panel. */
+  has_variants: boolean;
+};
+
+export type ShopProducts = {
+  currency: string;
+  products: Product[];
+  has_more: boolean;
+};
+
+export type ProductDetail = Product & {
+  currency: string;
+  categories: string[];
+  /** The product's page in the shop; empty when it has none (e.g. hidden). */
+  url: string;
+};

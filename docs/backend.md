@@ -22,6 +22,7 @@ backend/
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
 │   ├── orders.py      zamówienia wspólne dla platform: do kopii (Order) i szczegóły (OrderDetail), lista z kopii
+│   ├── products.py    produkty wspólne dla platform (Product, ProductDetail), czytane z API sklepu, zmiana stanu
 │   ├── sales.py       kopia zamówień ze sklepów i podsumowanie sprzedaży dla aplikacji
 │   ├── checklist.py   lista startowa nowego sklepu: kroki odhaczane same i liczenie produktów
 │   ├── backups.py     kopie zapasowe: kopia, przywrócenie, nocny przebieg, przechowywanie, lista dla aplikacji
@@ -117,7 +118,7 @@ zakładania, zawieszeniu i przywróceniu (także przez zmianę planu, wtedy bez 
 odczytem ustawień (`record_operation` w `start_operation`), wysłaniu danych logowania do panelu oraz w zespole
 (zaproszenie i ponowne zaproszenie, cofnięcie, odrzucenie, dołączenie, usunięcie, odejście, także przez usunięcie
 konta), a także przy zmianie zamówienia z aplikacji (opłacenie, wysłanie z numerem przesyłki, anulowanie).
-`title` i `detail` układają z wpisu tekst dla aplikacji. Nowa czynność w sklepie dopisuje własny rodzaj do
+Zmiana stanu produktu z aplikacji też ma wpis (nazwa, stan przed i po). `title` i `detail` układają z wpisu tekst dla aplikacji. Nowa czynność w sklepie dopisuje własny rodzaj do
 `ShopEvent.Kind` i woła `record`. Historię czyta tylko właściciel.
 
 ### Zakładanie sklepu
@@ -291,6 +292,37 @@ Pola odpowiedzi: [api.md](api.md#zamówienia).
     `order/{id}/ship` z numerem przesyłki (`carrier_code: custom`, tytuł z przewoźnika albo metody dostawy).
 - Notatki zespołu (`ShopOrderNote`) są w bazie platformy, nie w sklepie: widać je przy szczegółach zamówienia, usuwa
   je autor albo właściciel.
+
+### Produkty
+
+Pola odpowiedzi: [api.md](api.md#produkty).
+
+- Produktów nie ma w bazie platformy: lista, szczegóły i zmiana stanu idą przez REST API sklepu w procesie WWW
+  ([products.py](../backend/shops/products.py), metody `read_products`, `read_product`, `set_product_stock`
+  w provisionerze). Kod platform jest w osobnych modułach dołączanych do provisionerów:
+  `platforms/woocommerce_products.py`, `prestashop_products.py`, `magento_products.py`. Odpowiedź w nieoczekiwanym
+  kształcie staje się `ShopApiError`, jak przy zamówieniach.
+- Lista jest stronicowana numerem strony (API sklepów liczą od przesunięcia) i czytana o jeden wiersz dalej, żeby
+  wiedzieć o następnej stronie (`products.page_of`); Magento podaje `total_count`.
+- Stan zmienia się tylko dla produktu bez wariantów; `set_stock` czyta produkt przed zmianą i po niej, a wpis
+  historii powstaje także wtedy, gdy ponowny odczyt się nie uda.
+- WooCommerce: `products` z `status=any` (także szkice i prywatne), wyszukiwanie po nazwie (`search`), braki przez
+  `stock_status=outofstock`. Stan: `PUT products/{id}` z `manage_stock` i `stock_quantity` (sklep sam ustawia
+  „brak” przy 0). Warianty, zestawy i produkty zewnętrzne (`type` inny niż `simple`) mają `has_variants`. Link
+  produktu tylko dla opublikowanego (szkic ma podgląd za logowaniem panelu).
+- PrestaShop: `products` z `display=full` i parametrami `price[...]`, które dodają ceny policzone przez sklep
+  (`final` brutto po promocji, `regular` brutto bez niej). Stany są w `stock_availables` (wiersz produktu ma
+  `id_product_attribute=0`); filtr braków czyta najpierw te wiersze z ilością ≤ 0, potem ich produkty. Zmiana stanu
+  to PUT całego wiersza w XML, z polami, których webservice nie zwraca, gdy są zerem. Zdjęcie: publiczny adres
+  `img/p/<cyfry id>/<id>-home_default.jpg`. Kombinacje i paczki mają `has_variants`. Link: `index.php?controller=product`
+  (sklep przekierowuje na przyjazny adres). Wyszukiwanie po nazwie (`filter[name]`).
+- Magento: `products` z `searchCriteria` (klasa `Criteria`), wyszukiwanie po nazwie albo SKU. Stany ze źródła `default`
+  inwentarza MSI (`inventory/source-items`): odczyt dla SKU ze strony, zmiana przez POST z ilością i statusem; filtr
+  braków bierze do 1000 SKU z ilością ≤ 0. Cena promocyjna (`special_price`) liczy się w swoich datach. Produkty
+  inne niż `simple` i `virtual` mają `has_variants`. Odczyt po `entity_id`, bo adres produktu w API bierze SKU,
+  które właściciel może zmienić.
+- Symulacja (`FakeProvisioner`) ma 40 powtarzalnych produktów (część z wariantami, bez liczenia, ukryta i bez
+  stanu) i pamięta stany zapisane z aplikacji.
 
 ### Lista startowa
 

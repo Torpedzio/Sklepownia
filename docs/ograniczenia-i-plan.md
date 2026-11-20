@@ -56,6 +56,11 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   i sumy pochodzą z kopii z 90 dni (starsze są tylko w panelu), sumy liczą tylko walutę sklepu, a nowe zamówienie
   pojawia się w aplikacji z opóźnieniem do 15 minut (od razu po „Odśwież”). Szczegóły zamówienia są czytane ze
   sklepu przy otwarciu, więc nie otworzą się, gdy sklep nie działa. Brakuje zestawień dłuższych niż 30 dni.
+- **Produkty w aplikacji** to na razie lista, szczegóły i stan magazynowy; cenę, opis, zdjęcia i warianty zmienia
+  się w panelu. Produkty z wariantami (i zestawy) mają stany w wariantach, więc ich stanu aplikacja nie zmienia.
+  Wyszukiwanie w WooCommerce i PrestaShop przeszukuje tylko nazwy (Magento także SKU), a filtr braków w Magento
+  bierze do 1000 brakujących produktów. Ceny w WooCommerce i Magento są takie, jak wpisane w sklepie (brutto przy
+  ustawieniu platformy). Lista jest czytana ze sklepu, więc nie otworzy się, gdy sklep nie działa.
 - **Powiadomienia push** o nowym zamówieniu przychodzą przy odczycie sklepu, więc do 15 minut po złożeniu, i na
   razie tylko do właściciela.
   Od razu dawałby je webhook sklepu (WooCommerce `order.created`) wołający platformę. Aplikacja nie ma jeszcze
@@ -96,16 +101,18 @@ liczba osób w zespole według planu (start do 5, standard do 20, business bez l
 platformach; dostęp obsługi do panelu sklepu później. Podstawą jest API sklepów
 ([architektura.md](architektura.md#api-sklepów)). Kolejne kroki:
 
-Role i zaproszenia już są ([backend.md](backend.md#zespół)): obsługa ogląda sklep, sprzedaż i zamówienia, resztę
+Role i zaproszenia już są ([backend.md](backend.md#zespół)): obsługa ogląda sklep, sprzedaż, zamówienia i produkty, resztę
 robi właściciel; nowe czynności (obsługa zamówień, produkty, stany, klienci, rabaty) trafią do `STAFF_ACTIONS`. Zaprasza się
 e-mailem z linkiem do aplikacji, a zaproszenie czeka na liście sklepów osoby zaproszonej. Przy rejestracji wybiera
 się „Zakładam sklep” albo „Dołączam do zespołu” (bez cennika, z ekranem czekania na zaproszenie). Właściciel
 prowadzi zespół na ekranie sklepu, a obsługa widzi tylko to, co może zrobić. Historia działań pokazuje właścicielowi,
 kto co zmienił; nowe czynności dopisują do niej swoje wpisy. Zamówienia już są: lista z filtrami, szczegóły
 czytane ze sklepu, zmiana statusu z numerem przesyłki i notatki zespołu ([backend.md](backend.md#zamówienia)).
+Produkty też mają już listę z wyszukiwaniem i filtrem braków, szczegóły i szybką zmianę stanu
+([backend.md](backend.md#produkty)).
 
-1. **Produkty:** lista, dodawanie i edycja (cena, promocja, opis, kategoria, SKU, stan), zdjęcia z aparatu,
-   ukrywanie i usuwanie; warianty na razie w panelu. Do tego szybka zmiana stanów magazynowych.
+1. **Produkty, dalej:** dodawanie i edycja (cena, promocja, opis, kategoria, SKU), ukrywanie i usuwanie, potem
+   zdjęcia z aparatu; warianty na razie w panelu.
 2. **Powiadomienia według osoby** (nowe zamówienia także dla obsługi, awarie) i przypadki brzegowe zespołu
    (usunięcie konta członka, sklepu z zespołem).
 3. **Kategorie, klienci (z wnioskami RODO) i kody rabatowe.**

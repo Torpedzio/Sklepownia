@@ -43,7 +43,7 @@ Limity zapytań: logowanie, rejestracja i ustawianie nowego hasła 10 na minutę
 
 ## Sklepy: `/api/shops/`
 
-Obsługa sklepu (`role: staff`) może tylko oglądać sklep (`GET shops/`, `GET shops/{id}/`), sprzedaż (`sales/`, `sales/refresh/`) i zamówienia (`orders/`, `orders/{order_id}/`, także ich obsługę: `actions/` i notatki) oraz opuścić zespół (`leave/`). Pozostałe akcje na sklepie dają jej `403` z „Tylko właściciel sklepu może to zrobić.”. Osoba spoza sklepu dostaje `404`.
+Obsługa sklepu (`role: staff`) może tylko oglądać sklep (`GET shops/`, `GET shops/{id}/`), sprzedaż (`sales/`, `sales/refresh/`) i zamówienia (`orders/`, `orders/{order_id}/`, także ich obsługę: `actions/` i notatki), produkty (`products/`, także zmianę stanu) oraz opuścić zespół (`leave/`). Pozostałe akcje na sklepie dają jej `403` z „Tylko właściciel sklepu może to zrobić.”. Osoba spoza sklepu dostaje `404`.
 
 | Metoda i ścieżka | Opis |
 |---|---|
@@ -105,6 +105,18 @@ przez swoje API (wysyła też swoje e-maile do klienta); notatki zespołu trzyma
 | `POST shops/{id}/orders/{order_id}/actions/` | `{action, tracking_number?, carrier?}` → `200` z zamówieniem odczytanym po zmianie (jak wyżej). `mark_paid`: opłacone, w realizacji. `mark_shipped`: wysłane (zrealizowane), z numerem przesyłki i przewoźnikiem, gdy podane (po 60 znaków; przy innych akcjach pomijane); klient dostaje numer w wiadomości ze sklepu (PrestaShop pokazuje go tylko w szczegółach zamówienia na koncie klienta i wysyła przesyłkę przewoźnikiem z zamówienia, więc `carrier` pomija). Historia działań zapisuje przesyłkę tak, jak ją ma sklep. `cancel`: anulowane. Zmiana trafia do historii działań. `400` dla nieznanej akcji; `409` z `detail`, gdy sklep nie działa albo zamówienie nie pozwala już na tę zmianę; `404` i `503` jak przy odczycie. |
 | `POST shops/{id}/orders/{order_id}/notes/` | `{text}` (do 2000 znaków) → `201` z notatką. Działa też, gdy sklep nie odpowiada. |
 | `DELETE shops/{id}/orders/{order_id}/notes/{note_id}/` | `204`; `403`, gdy notatka jest innej osoby z obsługi (usuwa ją autor albo właściciel); `404`, gdy jej nie ma. |
+
+### Produkty
+
+Wymaga potwierdzonego e-maila; także dla obsługi. Produkty żyją tylko w sklepie: każda odpowiedź to odczyt API
+sklepu w tej chwili, platforma niczego nie zapisuje. Przy sklepie, który nie działa, każdy endpoint daje `409`,
+a gdy sklep nie odpowiada, nie przyjął klucza aplikacji albo odpowiedział w nieoczekiwany sposób, `503` z `detail`.
+
+| Metoda i ścieżka | Opis |
+|---|---|
+| `GET shops/{id}/products/` | `{currency, products, has_more}`, po 30, od najnowszego, także ukryte. Produkt: `{external_id, name, sku, price, regular_price, stock, in_stock, visible, image, has_variants}`. `price`: brutto tak, jak płaci klient (w PrestaShop liczy ją sklep; w WooCommerce i Magento cena wpisana w sklepie, brutto przy ustawieniu platformy), z wariantami najniższa, `null` bez ceny. `regular_price`: cena przed promocją, tylko gdy trwa. `stock`: sztuki, `null`, gdy sklep ich nie liczy (WooCommerce bez zarządzania stanem). `in_stock`: można kupić. `visible`: klienci go widzą. `image`: adres głównego zdjęcia albo pusty. `has_variants`: warianty albo zestaw, z własnymi stanami (zmiana w panelu). Parametry: `q` (fragment nazwy; w Magento także SKU), `stock=out_of_stock` (tylko braki), `page` (od 1, do 1000). Zły filtr albo strona daje `400`. |
+| `GET shops/{id}/products/{product_id}/` | Produkt jak wyżej oraz `currency`, `categories` (nazwy, bez kategorii głównej) i `url` (strona produktu w sklepie, pusta dla ukrytego). `404`, gdy sklep go nie ma. |
+| `POST shops/{id}/products/{product_id}/stock/` | `{quantity}` (0–999999) → `200` z produktem odczytanym po zmianie. Sklep zaczyna liczyć sztuki, jeśli nie liczył; przy 0 przestaje sprzedawać produkt. Zmiana trafia do historii działań. `409` z `detail` dla produktu z wariantami; `400` dla złej liczby. |
 
 ### Lista startowa
 
@@ -200,7 +212,7 @@ Pola formularza `POST shops/`:
 
 | Metoda i ścieżka | Opis |
 |---|---|
-| `GET shops/{id}/history/` | Tylko właściciel, z potwierdzonym e-mailem. `{events, has_more}`, od najnowszych, po 30. Wpis: `{id, kind, title, detail, actor, actor_role, status, error, created_at}`. `title` i `detail` to gotowy tekst (np. „Zmiana ustawień”, „Waluta, Język”; „Wysłanie zamówienia”, „Nr #7, przesyłka 6200123 (InPost)”). `actor`: `{id, name, email}` albo `null`; `actor_role`: `owner`, `staff` (także była obsługa), `system` (platforma, np. zawieszenie przez plan) albo `deleted` (usunięte konto). `status` i `error`: stan zmiany w sklepie (`queued`, `running`, `succeeded`, `failed`), dla innych wpisów `null` i puste. Starsze: `?before=<id ostatniego wpisu>`. |
+| `GET shops/{id}/history/` | Tylko właściciel, z potwierdzonym e-mailem. `{events, has_more}`, od najnowszych, po 30. Wpis: `{id, kind, title, detail, actor, actor_role, status, error, created_at}`. `title` i `detail` to gotowy tekst (np. „Zmiana ustawień”, „Waluta, Język”; „Wysłanie zamówienia”, „Nr #7, przesyłka 6200123 (InPost)”; „Zmiana stanu produktu”, „Kawa: 3 → 20 szt.”). `actor`: `{id, name, email}` albo `null`; `actor_role`: `owner`, `staff` (także była obsługa), `system` (platforma, np. zawieszenie przez plan) albo `deleted` (usunięte konto). `status` i `error`: stan zmiany w sklepie (`queued`, `running`, `succeeded`, `failed`), dla innych wpisów `null` i puste. Starsze: `?before=<id ostatniego wpisu>`. |
 
 ### Zespół
 

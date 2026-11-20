@@ -11,6 +11,7 @@ from .. import shop_settings
 from ..models import Server, Shop, ShopChecklist, ShopCredentials, ShopSettings
 from ..orders import Action, Address, Order, OrderDetail, OrderLine, Status, actions_for, customer_label
 from ..platforms import platform_info
+from ..products import Filter, Product, ProductDetail, ProductPage, page_of
 from ..remote import NotInShop, ShopApiError
 from ..remote.fake import FakeApi
 from .base import (
@@ -26,6 +27,8 @@ FAKE_PEOPLE = (
 FAKE_CUSTOMERS = tuple(customer_label(first, last) for first, last in FAKE_PEOPLE)
 FAKE_PRODUCTS = ("Kubek ceramiczny", "Świeca sojowa", "Notes w kratkę", "Torba lniana", "Herbata zielona")
 FAKE_SHIPPING = Decimal("14.99")
+# How many made-up products a shop has, newest (highest id) first; more than one page.
+FAKE_PRODUCT_COUNT = 40
 
 
 class FakeProvisioner(BaseProvisioner):
@@ -46,6 +49,8 @@ class FakeProvisioner(BaseProvisioner):
     repairs_help = True
     # Parcels given with "shipped": {(shop id, order id): (number, carrier)}.
     parcels = {}
+    # {(shop pk, product id): pieces} set from the app.
+    stocks = {}
 
     def run_step(self, key, shop):
         time.sleep(settings.FAKE_PROVISIONER_STEP_DELAY)
@@ -247,6 +252,49 @@ class FakeProvisioner(BaseProvisioner):
             tracking_number=self.parcels.get((shop.pk, order.external_id), ("", ""))[0],
             carrier=self.parcels.get((shop.pk, order.external_id), ("", ""))[1],
             actions=actions_for(order.status),
+        )
+
+    def read_products(self, shop, *, query, stock_filter, offset, limit):
+        """Made-up products, the same on every read, with the stock set from the app."""
+        FakeApi(shop).ping()
+        products = [self._product(shop, number) for number in range(FAKE_PRODUCT_COUNT, 0, -1)]
+        if query:
+            products = [p for p in products if query.lower() in p.name.lower() or query.lower() in p.sku.lower()]
+        if stock_filter == Filter.OUT_OF_STOCK:
+            products = [product for product in products if not product.in_stock]
+        rows, has_more = page_of(products[offset:offset + limit + 1], limit)
+        return ProductPage(products=rows, has_more=has_more)
+
+    def read_product(self, shop, external_id):
+        FakeApi(shop).ping()
+        number = int(external_id)
+        if not 1 <= number <= FAKE_PRODUCT_COUNT:
+            raise NotInShop("Nie ma tego produktu w sklepie.")
+        product = self._product(shop, number)
+        return ProductDetail(
+            **vars(product), categories=("Prezenty",) if number % 2 else ("Dom", "Kuchnia"),
+            url=f"{shop.url}/produkt/{number}/" if product.visible else "",
+        )
+
+    def set_product_stock(self, shop, product, quantity):
+        FakeApi(shop).ping()
+        if settings.FAKE_PROVISIONER_FAIL_AT_STEP == "set_product_stock":
+            raise ShopApiError("Symulowany błąd: set_product_stock")
+        self.stocks[(shop.pk, product.external_id)] = quantity
+
+    def _product(self, shop, number):
+        """Every 7th has variants, every 9th isn't counted, every 11th is hidden, every 5th is sold out."""
+        rng = random.Random(f"{shop.pk}:product:{number}")
+        price = Decimal(rng.randrange(1900, 19900)) / 100
+        on_sale = number % 4 == 0
+        # Setting the stock from the app starts counting it.
+        counted = number % 9 != 0 or (shop.pk, str(number)) in self.stocks
+        stock = self.stocks.get((shop.pk, str(number)), 0 if number % 5 == 0 else rng.randint(1, 60))
+        return Product(
+            external_id=str(number), name=f"{FAKE_PRODUCTS[number % len(FAKE_PRODUCTS)]} {number}",
+            sku=f"SKU-{number:03}", price=(price * Decimal("0.8")).quantize(Decimal("0.01")) if on_sale else price,
+            regular_price=price if on_sale else None, stock=stock if counted else None,
+            in_stock=stock > 0 if counted else True, visible=number % 11 != 0, image="", has_variants=number % 7 == 0,
         )
 
     def change_order(self, shop, order, action, *, tracking_number="", carrier=""):

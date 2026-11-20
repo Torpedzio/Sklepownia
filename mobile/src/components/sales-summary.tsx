@@ -60,6 +60,12 @@ export function SalesSummary({ shopId }: { shopId: number }) {
           variant="secondary"
           onPress={() => router.push({ pathname: '/shops/[id]/orders', params: { id: String(shopId) } })}
         />
+        <Button
+          title="Produkty"
+          icon="store"
+          variant="secondary"
+          onPress={() => router.push({ pathname: '/shops/[id]/products', params: { id: String(shopId) } })}
+        />
       </View>
     </View>
   );

@@ -62,3 +62,9 @@ export function formatSize(bytes: number) {
   const digits = value < 10 && unit > 0 ? 1 : 0;
   return `${value.toLocaleString('pl-PL', { maximumFractionDigits: digits })} ${units[unit]}`;
 }
+
+/** `?a=1&b=2` from pairs, empty without them: React Native's URLSearchParams lacks most methods. */
+export function queryString(pairs: [string, string][]) {
+  if (!pairs.length) return '';
+  return `?${pairs.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join('&')}`;
+}
