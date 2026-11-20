@@ -29,10 +29,10 @@ Zasada: w `app/` są tylko ekrany. Komponenty, hooki i narzędzia są poza tym k
 | `/about` | `app/about.tsx` | Wszyscy. „Jak to działa”, cała lista funkcji i pytań. |
 | `/contact` | `app/contact.tsx` | Wszyscy. Dane kontaktowe i formularz. |
 | `/pricing` | `app/pricing.tsx` | Wszyscy. Cennik z planami i przejściem do wyboru planu. |
-| `/sign-in`, `/sign-up` | `app/sign-in.tsx`, `app/sign-up.tsx` | Tylko niezalogowani |
+| `/sign-in`, `/sign-up` | `app/sign-in.tsx`, `app/sign-up.tsx` | Tylko niezalogowani. Parametr `email` (z linku w zaproszeniu) wpisuje adres. Rejestracja zaczyna od wyboru „Zakładam sklep” albo „Dołączam do zespołu” (`purpose`; `?purpose=team` wybiera drugie, tak jak link z zaproszenia i przycisk na stronie głównej). |
 | `/reset-password` | `app/reset-password.tsx` | Tylko niezalogowani. „Nie pamiętasz hasła?”: adres (podpowiedziany z logowania), potem kod z e-maila i nowe hasło; po zmianie od razu zalogowany |
 | `/verify-email` | `app/verify-email.tsx` | Zalogowani bez potwierdzonego e-maila |
-| `/shops` | `app/(tabs)/shops.tsx` | Zalogowani z potwierdzonym e-mailem. Lista sklepów. |
+| `/shops` | `app/(tabs)/shops.tsx` | Zalogowani z potwierdzonym e-mailem. Lista sklepów (własnych i obsługiwanych) z zaproszeniami do zespołów nad nią (`Invitations`: „Dołącz”, „Odrzuć”). Konto zespołu bez planu nie widzi propozycji planu: bez sklepów ekran „Czekasz na zaproszenie” (co 15 s sprawdza zaproszenia, „Sprawdź teraz”), a zawsze „Chcę założyć własny sklep”, które zmienia `purpose` na `own_shop`. |
 | `/help` | `app/(tabs)/help.tsx` | jw. Porady dotyczące prowadzenia sklepu, z wyborem systemu (na start system pierwszego sklepu). |
 | `/account` | `app/(tabs)/account.tsx` | jw. Wizytówka konta (zdjęcie profilowe zmieniane kliknięciem, potwierdzony e-mail, plan, staż), konto w skrócie (sklepy względem limitu, a przy sklepie Magento też względem limitu Magento, plan z następną płatnością, dane do faktury), dane profilu, bezpieczeństwo (zmiana hasła, wylogowanie wszędzie, usunięcie konta), skróty i wylogowanie. |
 | `/delete-account` | `app/delete-account.tsx` | jw. Usunięcie konta: co zniknie (sklepy z adresami, plan, dane), co zostanie (płatności), anulowanie planu jako alternatywa; usuwa po wpisaniu hasła i potwierdzeniu. Zablokowane, gdy sklep jest zakładany. |
@@ -167,7 +167,7 @@ pliki z `dist/client` obok) albo EAS Hosting. Niezgodność widać jako błąd R
 | `ui/Button`, `ui/TextField`, `ui/CodeField`, `ui/ChipSelect`, `ui/SwitchRow`, `ui/Tooltip` | Podstawowe kontrolki. `CodeField` to pole na 6-cyfrowy kod z e-maila (potwierdzenie adresu, nowe hasło). `SwitchRow` to ustawienie włącz/wyłącz z opisem; przełącza je cały wiersz. `Button` delikatnie powiększa się po najechaniu i zapada przy wciśnięciu. |
 | `Receipt` | Paragon z wierszami, sumą i pieczątką; po najechaniu unosi się i obraca |
 | `ShopSign`, `StatusBadge`, `ShopStatusBadge`, `TestBadge` | Karta sklepu na liście (sklepy zawieszone przez plan wyszarzone i na końcu listy), znacznik statusu („Nie odpowiada” przy działającym sklepie z `down_since`) i znacznik „Testowy” sklepów sprzed płatnych planów |
-| `NewShopButton` | Przycisk nowego sklepu; bez planu prowadzi do wyboru planu, po osiągnięciu limitu planu wyszarzony z dymkiem. Sklepy testowe nie liczą się do limitu (`paidShopCount`). |
+| `NewShopButton` | Przycisk nowego sklepu; bez planu prowadzi do wyboru planu, po osiągnięciu limitu planu wyszarzony z dymkiem. Sklepy testowe i obsługiwane nie liczą się do limitu (`paidShopCount`). |
 | `PlanCard`, `BillingProfileForm` | Plan z ceną brutto, korzyściami i znacznikiem „Polecany” (do wyboru albo z przyciskiem wyrównanym do dołu karty) i formularz danych do faktury (osoba albo firma z NIP) |
 | `FeatureSlides` | „Co dostajesz” na całą szerokość pod markizą. Przy przewijaniu przyklejona witryna, w której każde przewinięcie pokazuje następny slajd (`PinnedSequence`); przy ograniczonym ruchu pokaz slajdów ze strzałkami, kropkami i automatycznym przewijaniem. Zdjęcia przechodzą po bokach gradientem w kolor strony (`SIDE_FADE_WIDE`, `SIDE_FADE_NARROW`). |
 | `Showcase` | Pasy na całą szerokość (na stronie głównej systemy sklepu z `Platforms` w content.ts): zrzut sklepu przechodzący gradientem w tło. Przy przewijaniu działa jak `FeatureSlides` (`PinnedSequence`); przy ograniczonym ruchu zwykła lista. |

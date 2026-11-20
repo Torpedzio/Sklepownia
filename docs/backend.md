@@ -47,6 +47,8 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 ## Aplikacja `accounts`
 
 - **`User`** loguje się e-mailem (bez nazwy użytkownika). Pole `is_email_verified` mówi, czy e-mail jest potwierdzony.
+  `purpose` (`own_shop` albo `team`) to wybór z rejestracji: własne sklepy albo zespoły cudzych. Nie daje uprawnień
+  (role są w sklepach, [Zespół](#zespół)), tylko mówi aplikacji, czy proponować plan, czy czekać na zaproszenie.
 - **`EmailVerificationCode`** to jeden aktywny kod na użytkownika, przechowywany jako hash.
   - Kod jest ważny 15 minut (`EMAIL_VERIFICATION_CODE_TTL`) i ma limit 5 prób (`EMAIL_VERIFICATION_MAX_ATTEMPTS`).
   - Nowy kod można wysłać najwcześniej po 60 s (`EMAIL_VERIFICATION_RESEND_COOLDOWN`).
@@ -103,7 +105,7 @@ usuwa też jego członkostwa. Powiadomienia (nowe zamówienia, awarie) i e-maile
 Zaproszenia: `invite` sprawdza limit (`staff_limit`: `Plan.max_staff` właściciela, 0 bez planu, `None` bez limitu;
 liczą się członkowie i ważne zaproszenia) pod blokadą wiersza sklepu i po commicie zleca e-mail
 (`send_invitation_email`). Link prowadzi do `APP_URL`: logowanie, gdy adres ma konto, inaczej rejestracja, z adresem
-w parametrze `email`. Zaproszenie widzi tylko konto z tym adresem, potwierdzonym (`invitations_for`). `accept` sprawdza
+w parametrze `email` (rejestracja dostaje też `purpose=team`). Zaproszenie widzi tylko konto z tym adresem, potwierdzonym (`invitations_for`). `accept` sprawdza
 limit jeszcze raz, bo plan mógł się zmienić. Właściciel nie może opuścić sklepu (`leave`).
 
 ### Zakładanie sklepu

@@ -100,7 +100,7 @@ function ProfileCard({ user }: { user: User }) {
             />
             <Badge
               icon="card"
-              label={user.plan ? `Plan ${user.plan}` : 'Bez planu'}
+              label={user.plan ? `Plan ${user.plan}` : user.purpose === 'team' ? 'Konto zespołu' : 'Bez planu'}
               tone={user.plan ? ['primary', 'primaryMuted'] : ['textSecondary', 'surfaceMuted']}
             />
             <Badge
@@ -231,7 +231,9 @@ function Overview({
     tests ? `${tests} ${plural(tests, ['testowy', 'testowe', 'testowych'])} poza planem` : '',
   ].filter(Boolean);
 
-  let planNote = 'Wybierz plan, żeby zakładać sklepy';
+  // A team account serves others' shops; their owners pay.
+  const joining = user.purpose === 'team' && !user.plan;
+  let planNote = joining ? 'Sklepy w zespole opłaca ich właściciel' : 'Wybierz plan, żeby zakładać sklepy';
   if (running && subscription.status === 'past_due') {
     planNote = 'Zaległa płatność: sprawdź kartę';
   } else if (running && subscription.cancel_at_period_end && subscription.current_period_end) {
@@ -257,7 +259,8 @@ function Overview({
           }
           note={[
             magentoNote,
-            shopNotes.join(', ') || (user.plan ? 'Wszystkie działają' : 'Wybierz plan, żeby założyć nowy'),
+            shopNotes.join(', ') ||
+              (user.plan ? 'Wszystkie działają' : joining ? 'W zespołach, do których należysz' : 'Wybierz plan, żeby założyć nowy'),
           ]
             .filter(Boolean)
             .join('. ')}

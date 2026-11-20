@@ -1,4 +1,5 @@
 import { Link } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,9 +14,12 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
+import { useNotify } from '@/context/notifications';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
+import { api } from '@/lib/api';
 import { plural } from '@/lib/plural';
+import { fetchQuery } from '@/lib/query-cache';
 import type { Shop } from '@/lib/types';
 
 const IN_PROGRESS = ['pending', 'provisioning'];
@@ -34,7 +38,9 @@ export default function DashboardScreen() {
   });
   const active = shops?.filter((shop) => shop.status === 'active').length ?? 0;
   const paidShops = paidShopCount(shops);
-  const limitReached = isShopLimitReached(user?.shop_limit, paidShops);
+  const limitReached = !!user?.plan && isShopLimitReached(user.shop_limit, paidShops);
+  // Signed up to join others' teams: no plan suggestions, just the wait for an invitation.
+  const joining = user?.purpose === 'team' && !user.plan;
 
   return (
     <SafeAreaView
@@ -63,15 +69,17 @@ export default function DashboardScreen() {
               </ThemedText>
             ) : null}
           </View>
-          {shops?.length ? <NewShopButton title="Nowy sklep" icon="plus" shopCount={paidShops} /> : null}
+          {shops?.length && !joining ? <NewShopButton title="Nowy sklep" icon="plus" shopCount={paidShops} /> : null}
         </View>
 
-        <Invitations onJoined={refresh} />
+        <Invitations onJoined={refresh} poll={joining && shops?.length === 0} />
 
         {error ? <ThemedText themeColor="danger">{error.message}</ThemedText> : null}
         {isLoading ? <ActivityIndicator style={styles.loader} /> : null}
 
-        {shops && shops.length === 0 ? (
+        {shops && shops.length === 0 && joining ? (
+          <WaitingForInvitation email={user.email} onCheck={refresh} />
+        ) : shops && shops.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={styles.emptyFront}>
               <Awning tone="card" />
@@ -104,18 +112,74 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        <Link href="/help" asChild>
-          <Pressable
-            accessibilityRole="link"
-            style={StyleSheet.flatten([styles.tip, { backgroundColor: theme.accentMuted }])}>
-            <Icon name="help" size={20} />
-            <ThemedText style={styles.flex}>Pierwszy raz? Zobacz, jak dodać produkty i włączyć płatności.</ThemedText>
-            <Icon name="chevron" size={18} color="textSecondary" />
-          </Pressable>
-        </Link>
+        {joining ? (
+          shops?.length ? <OwnShopSwitch /> : null
+        ) : (
+          <Link href="/help" asChild>
+            <Pressable
+              accessibilityRole="link"
+              style={StyleSheet.flatten([styles.tip, { backgroundColor: theme.accentMuted }])}>
+              <Icon name="help" size={20} />
+              <ThemedText style={styles.flex}>Pierwszy raz? Zobacz, jak dodać produkty i włączyć płatności.</ThemedText>
+              <Icon name="chevron" size={18} color="textSecondary" />
+            </Pressable>
+          </Link>
+        )}
       </Page>
     </SafeAreaView>
   );
+}
+
+/** For a team account without shops yet; the invitations above check for new ones meanwhile. */
+function WaitingForInvitation({ email, onCheck }: { email: string; onCheck: () => Promise<void> }) {
+  const theme = useTheme();
+  const [checking, setChecking] = useState(false);
+
+  async function check() {
+    setChecking(true);
+    // The invitation list above reads the same cache entry.
+    await Promise.all([onCheck(), fetchQuery('/invitations/', () => api('/invitations/'), { force: true })]);
+    setChecking(false);
+  }
+
+  return (
+    <View style={[styles.empty, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      <View style={styles.emptyFront}>
+        <Awning tone="card" />
+        <View style={[styles.emptyDoor, { backgroundColor: theme.primaryMuted }]}>
+          <Icon name="mail" size={36} color="primary" />
+        </View>
+      </View>
+      <ThemedText type="subtitle" style={styles.center}>
+        Czekasz na zaproszenie
+      </ThemedText>
+      <ThemedText themeColor="textSecondary" style={[styles.center, styles.emptyText]}>
+        Poproś właściciela sklepu, żeby zaprosił adres {email}. Zaproszenie pojawi się tutaj samo, a do tego przyjdzie
+        e-mailem.
+      </ThemedText>
+      <Button title="Sprawdź teraz" variant="secondary" icon="refresh" onPress={check} loading={checking} />
+      <OwnShopSwitch />
+    </View>
+  );
+}
+
+/** Turns a team account into one that opens its own shops; the plan comes next. */
+function OwnShopSwitch() {
+  const { updateProfile } = useAuth();
+  const notify = useNotify();
+  const [busy, setBusy] = useState(false);
+
+  async function switchPurpose() {
+    setBusy(true);
+    try {
+      await updateProfile({ purpose: 'own_shop' });
+    } catch (e) {
+      notify.error((e as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return <Button title="Chcę założyć własny sklep" variant="ghost" onPress={switchPurpose} loading={busy} />;
 }
 
 const styles = StyleSheet.create({

@@ -35,6 +35,7 @@ const anna: User = {
   plan: 'Standard',
   can_create_shops: true,
   avatar_url: null,
+  purpose: 'own_shop',
 };
 
 function signedIn(user: User | null, actions: Record<string, jest.Mock> = {}) {
@@ -147,22 +148,40 @@ describe('sign in', () => {
 
 describe('sign up', () => {
   test('creates the account and says where the code went', async () => {
-    signedIn(null, { signUp: jest.fn(async () => {}) });
+    const signUp = jest.fn(async () => {});
+    signedIn(null, { signUp });
     await renderScreen(<SignUpScreen />);
 
+    expect(screen.getByRole('radio', { name: 'Zakładam sklep' })).toBeSelected();
     await fireEvent.changeText(screen.getByLabelText('E-mail'), 'Anna@Example.com');
     await fireEvent.changeText(screen.getByLabelText('Hasło'), 'Sekretne-haslo-123');
     await fireEvent.press(screen.getByRole('button', { name: 'Załóż konto' }));
 
+    expect(signUp).toHaveBeenCalledWith('Anna@Example.com', 'Sekretne-haslo-123', 'own_shop');
     expect(await screen.findByText('Konto założone. Kod potwierdzający wysłaliśmy na anna@example.com.')).toBeTruthy();
   });
 
-  test('an invitation link fills in the address', async () => {
-    useLocalSearchParams.mockReturnValue({ email: 'nowa@example.com' });
+  test('joining a team skips the plan', async () => {
+    const signUp = jest.fn(async () => {});
+    signedIn(null, { signUp });
+    await renderScreen(<SignUpScreen />);
+
+    await fireEvent.press(screen.getByRole('radio', { name: 'Dołączam do zespołu' }));
+    expect(screen.getByText(/Właściciel sklepu zaprosi Cię na ten adres e-mail/)).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('E-mail'), 'ola@example.com');
+    await fireEvent.changeText(screen.getByLabelText('Hasło'), 'Sekretne-haslo-123');
+    await fireEvent.press(screen.getByRole('button', { name: 'Załóż konto' }));
+
+    expect(signUp).toHaveBeenCalledWith('ola@example.com', 'Sekretne-haslo-123', 'team');
+  });
+
+  test('an invitation link fills in the address and joins a team', async () => {
+    useLocalSearchParams.mockReturnValue({ email: 'nowa@example.com', purpose: 'team' });
     signedIn(null, { signUp: jest.fn() });
     await renderScreen(<SignUpScreen />);
 
     expect(screen.getByLabelText('E-mail')).toHaveProp('value', 'nowa@example.com');
+    expect(screen.getByRole('radio', { name: 'Dołączam do zespołu' })).toBeSelected();
   });
 
   test('shows what is wrong with the fields', async () => {
@@ -303,6 +322,36 @@ describe('shop list', () => {
     await renderScreen(<ShopsScreen />);
 
     expect(await screen.findByText(/3 sklepy, w tym 3 otwarte\.$/)).toBeTruthy();
+  });
+
+  const ola: User = { ...anna, email: 'ola@example.com', first_name: '', plan: null, shop_limit: 0, purpose: 'team' };
+
+  test('a team account waits for an invitation instead of choosing a plan', async () => {
+    const updateProfile = jest.fn(async () => {});
+    signedIn(ola, { updateProfile });
+    const api = mockApi({ 'GET /shops/': [[]], 'GET /invitations/': [[]] });
+    await renderScreen(<ShopsScreen />);
+
+    expect(await screen.findByText('Czekasz na zaproszenie')).toBeTruthy();
+    expect(screen.getByText(/Poproś właściciela sklepu, żeby zaprosił adres ola@example.com\./)).toBeTruthy();
+    expect(screen.queryByText('Twój pierwszy sklep czeka na otwarcie')).toBeNull();
+    expect(screen.queryByText(/Pierwszy raz\?/)).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Sprawdź teraz' }));
+    expect(api.calls.filter((call) => call.key === 'GET /invitations/').length).toBeGreaterThan(1);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Chcę założyć własny sklep' }));
+    expect(updateProfile).toHaveBeenCalledWith({ purpose: 'own_shop' });
+  });
+
+  test('a team account in a team sees its shops without plan suggestions', async () => {
+    signedIn(ola, { updateProfile: jest.fn() });
+    mockApi({ 'GET /shops/': [[{ ...shop(1, 'active'), role: 'staff' }]], 'GET /invitations/': [[]] });
+    await renderScreen(<ShopsScreen />);
+
+    expect(await screen.findByText(/^1 sklep, w tym 1 otwarty\.$/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Nowy sklep' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Chcę założyć własny sklep' })).toBeTruthy();
   });
 
   const invitation: Invitation = {

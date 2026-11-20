@@ -92,20 +92,20 @@ platformach; dostęp obsługi do panelu sklepu później. Podstawą jest API skl
 
 Role i zaproszenia już są ([backend.md](backend.md#zespół)): obsługa ogląda sklep i sprzedaż, resztę robi
 właściciel; nowe czynności (zamówienia, produkty, stany, klienci, rabaty) trafią do `STAFF_ACTIONS`. Zaprasza się
-e-mailem z linkiem do aplikacji, a zaproszenie czeka na liście sklepów osoby zaproszonej.
+e-mailem z linkiem do aplikacji, a zaproszenie czeka na liście sklepów osoby zaproszonej. Przy rejestracji wybiera
+się „Zakładam sklep” albo „Dołączam do zespołu” (bez cennika, z ekranem czekania na zaproszenie).
 
-1. **Rejestracja:** wybór „Zakładam sklep” albo „Dołączam do zespołu” (bez cennika, ekran czekania na zaproszenie).
-2. **Ekrany zespołu** w sklepie (zapraszanie, cofanie, usuwanie, opuszczanie) i oznaczenie cudzych sklepów na liście;
+1. **Ekrany zespołu** w sklepie (zapraszanie, cofanie, usuwanie, opuszczanie) i oznaczenie cudzych sklepów na liście;
    przyciski spoza roli ukryte.
-3. **Historia działań:** kto co zmienił w sklepie.
-4. **Zamówienia:** lista z filtrami, szczegóły, zmiana statusu, numer przesyłki dla klienta, notatka, push o nowym
+2. **Historia działań:** kto co zmienił w sklepie.
+3. **Zamówienia:** lista z filtrami, szczegóły, zmiana statusu, numer przesyłki dla klienta, notatka, push o nowym
    zamówieniu.
-5. **Produkty:** lista, dodawanie i edycja (cena, promocja, opis, kategoria, SKU, stan), zdjęcia z aparatu,
+4. **Produkty:** lista, dodawanie i edycja (cena, promocja, opis, kategoria, SKU, stan), zdjęcia z aparatu,
    ukrywanie i usuwanie; warianty na razie w panelu. Do tego szybka zmiana stanów magazynowych.
-6. **Powiadomienia według osoby** (nowe zamówienia, awarie) i przypadki brzegowe zespołu (usunięcie konta członka,
+5. **Powiadomienia według osoby** (nowe zamówienia, awarie) i przypadki brzegowe zespołu (usunięcie konta członka,
    sklepu z zespołem).
-7. **Kategorie, klienci (z wnioskami RODO) i kody rabatowe.**
-8. **Co zostaje w panelu:** lista z linkami „Otwórz w panelu” i poradami.
+6. **Kategorie, klienci (z wnioskami RODO) i kody rabatowe.**
+7. **Co zostaje w panelu:** lista z linkami „Otwórz w panelu” i poradami.
 
 Klucz API sklepu może usunąć właściciel w panelu; aplikacja zgłasza wtedy odrzucony klucz, a naprawia to dopiero
 `connect_shop_api`. Do rozważenia: samoczynne odnowienie klucza przez worker.

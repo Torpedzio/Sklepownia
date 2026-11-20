@@ -116,6 +116,9 @@ export default function HomeScreen() {
                   <Link href="/about" asChild>
                     <Button title="Zobacz, jak to działa" variant="secondary" size="large" />
                   </Link>
+                  <Link href={{ pathname: '/sign-up', params: { purpose: 'team' } }} asChild>
+                    <Button title="Dołączasz do zespołu sklepu?" variant="ghost" size="large" />
+                  </Link>
                 </>
               )}
             </View>

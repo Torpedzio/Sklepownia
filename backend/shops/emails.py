@@ -90,6 +90,8 @@ def invitation_message(invitation):
     name = (inviter.get_full_name() or inviter.email) if inviter else "Właściciel sklepu"
     has_account = User.objects.filter(email=invitation.email, is_active=True).exists()
     path = "/sign-in" if has_account else "/sign-up"
+    # A new account starts as one that joins teams.
+    params = {"email": invitation.email} if has_account else {"email": invitation.email, "purpose": "team"}
     context = {
         "platform": settings.PLATFORM_NAME,
         "recipient": invitation.email,
@@ -98,7 +100,7 @@ def invitation_message(invitation):
         "intro": f"{name} zaprasza Cię do zespołu sklepu „{shop.name}”. W aplikacji zobaczysz sklep i jego sprzedaż.",
         "action": "Zaloguj się na to konto, a zaproszenie pojawi się na liście sklepów."
         if has_account else "Załóż konto na ten adres, a po potwierdzeniu e-maila zaproszenie pojawi się na liście sklepów.",
-        "url": f"{settings.APP_URL}{path}?{urlencode({'email': invitation.email})}",
+        "url": f"{settings.APP_URL}{path}?{urlencode(params)}",
         "label": "Zaloguj się" if has_account else "Załóż konto",
         "shop_url": shop.url,
         "expires_at": invitation.expires_at,

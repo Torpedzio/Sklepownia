@@ -128,8 +128,9 @@ def test_the_owner_invites_by_email(auth_client, shop, django_capture_on_commit_
     assert message.subject == "Zaproszenie do sklepu „Mój Sklep”"
     assert "zaprasza Cię do zespołu sklepu „Mój Sklep”" in message.body
     # No account yet, so the link leads to signing up with the address filled in.
-    assert "https://app.example.com/sign-up?email=nowa.osoba%40example.com" in message.body
-    assert "https://app.example.com/sign-up?email=nowa.osoba%40example.com" in message.alternatives[0][0]
+    link = "https://app.example.com/sign-up?email=nowa.osoba%40example.com&amp;purpose=team"
+    assert link.replace("&amp;", "&") in message.body
+    assert link in message.alternatives[0][0]
 
 
 def test_an_existing_account_is_sent_to_sign_in(auth_client, shop, helper, django_capture_on_commit_callbacks):

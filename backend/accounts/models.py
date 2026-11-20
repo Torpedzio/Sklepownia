@@ -26,9 +26,16 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser):
+    class Purpose(models.TextChoices):
+        """Chosen at sign-up; only decides what the app suggests. Roles are per shop (shops/team.py)."""
+
+        OWN_SHOP = "own_shop", "Zakładam sklep"
+        TEAM = "team", "Dołączam do zespołu"
+
     username = None
     email = models.EmailField("adres e-mail", unique=True)
     is_email_verified = models.BooleanField(default=False)
+    purpose = models.CharField("cel konta", max_length=10, choices=Purpose.choices, default=Purpose.OWN_SHOP)
     avatar = models.FileField("zdjęcie profilowe", upload_to="avatars/", blank=True)
     # The row of a deleted account stays, without personal data, because payments point at it.
     deleted_at = models.DateTimeField("usunięte", null=True, blank=True)

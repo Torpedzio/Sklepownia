@@ -81,13 +81,14 @@ test('signing up, verifying, resending and editing the profile keep the user cur
   });
   await screen.findByText('wylogowany');
 
-  await act(() => auth().signUp('anna@example.com', 'haslo'));
+  await act(() => auth().signUp('anna@example.com', 'haslo', 'team'));
   expect(auth().user?.is_email_verified).toBe(false);
   await act(() => auth().verifyEmail('123456'));
   expect(auth().user?.is_email_verified).toBe(true);
   await act(() => auth().resendCode());
   await act(() => auth().updateProfile({ first_name: 'Anna', last_name: 'Nowak' }));
 
+  expect(api.sent('POST /auth/register/')).toEqual([{ email: 'anna@example.com', password: 'haslo', purpose: 'team' }]);
   expect(api.sent('POST /auth/verify-email/')).toEqual([{ code: '123456' }]);
   expect(screen.getByText('anna.nowak@example.com')).toBeTruthy();
 });

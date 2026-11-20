@@ -11,7 +11,11 @@ export type User = {
   plan: string | null;
   can_create_shops: boolean;
   avatar_url: string | null;
+  /** Chosen at sign-up, changeable: own shops (the app suggests a plan) or joining others' teams. */
+  purpose: AccountPurpose;
 };
+
+export type AccountPurpose = 'own_shop' | 'team';
 
 export type Tokens = { access: string; refresh: string };
 

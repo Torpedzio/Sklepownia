@@ -4,17 +4,17 @@ import { useNotify } from '@/context/notifications';
 import { api, ApiError, loadTokens, setOnSessionExpired, setTokens } from '@/lib/api';
 import { avatarForm, type AvatarFile } from '@/lib/avatar';
 import { forgetDevice, registerDevice } from '@/lib/push';
-import type { Tokens, User } from '@/lib/types';
+import type { AccountPurpose, Tokens, User } from '@/lib/types';
 
 type AuthContextValue = {
   isLoading: boolean;
   user: User | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, purpose: AccountPurpose) => Promise<void>;
   signOut: () => Promise<void>;
   verifyEmail: (code: string) => Promise<void>;
   resendCode: () => Promise<void>;
-  updateProfile: (changes: Pick<User, 'first_name' | 'last_name'>) => Promise<void>;
+  updateProfile: (changes: Partial<Pick<User, 'first_name' | 'last_name' | 'purpose'>>) => Promise<void>;
   refreshUser: () => Promise<void>;
   /** The server crops it to a square. */
   changeAvatar: (file: AvatarFile) => Promise<void>;
@@ -62,10 +62,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       await setTokens(tokens);
       setUser(await api<User>('/auth/me/'));
     },
-    async signUp(email, password) {
+    async signUp(email, password, purpose) {
       const data = await api<{ user: User; tokens: Tokens }>('/auth/register/', {
         method: 'POST',
-        body: { email, password },
+        body: { email, password, purpose },
         auth: false,
       });
       await setTokens(data.tokens);

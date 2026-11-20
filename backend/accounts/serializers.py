@@ -14,11 +14,16 @@ class UserSerializer(serializers.ModelSerializer):
     plan = serializers.SerializerMethodField(help_text="Nazwa aktywnego planu albo null.")
     can_create_shops = serializers.SerializerMethodField()
     avatar_url = serializers.SerializerMethodField(help_text="Adres zdjęcia profilowego albo null.")
+    purpose = serializers.ChoiceField(
+        choices=User.Purpose.choices, required=False,
+        help_text="own_shop: zakłada własne sklepy (aplikacja proponuje plan); team: dołącza do zespołów cudzych "
+        "sklepów (aplikacja czeka na zaproszenie). Można zmienić w każdej chwili.",
+    )
 
     class Meta:
         model = User
         fields = ["id", "email", "first_name", "last_name", "is_email_verified", "date_joined", "shop_limit",
-                  "magento_shop_limit", "plan", "can_create_shops", "avatar_url"]
+                  "magento_shop_limit", "plan", "can_create_shops", "avatar_url", "purpose"]
         read_only_fields = ["id", "email", "is_email_verified", "date_joined"]
 
     def _plan(self, user):
@@ -60,7 +65,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["email", "password", "first_name", "last_name"]
+        fields = ["email", "password", "first_name", "last_name", "purpose"]
 
     def validate_email(self, value):
         value = value.lower()

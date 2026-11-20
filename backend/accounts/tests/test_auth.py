@@ -33,6 +33,24 @@ def test_register_creates_unverified_user_returns_tokens_and_sends_code(
     assert mailoutbox[0].to == ["nowy@example.com"]
 
 
+def test_register_starts_an_own_shop_account_unless_joining_a_team(api_client, django_capture_on_commit_callbacks):
+    assert register(api_client, django_capture_on_commit_callbacks).data["user"]["purpose"] == "own_shop"
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = api_client.post(
+            "/api/auth/register/", {"email": "obsluga@example.com", "password": PASSWORD, "purpose": "team"},
+            format="json",
+        )
+
+    assert response.data["user"]["purpose"] == "team"
+    assert User.objects.get(email="obsluga@example.com").purpose == User.Purpose.TEAM
+
+
+def test_the_purpose_can_change_later(auth_client):
+    assert auth_client.patch("/api/auth/me/", {"purpose": "team"}, format="json").data["purpose"] == "team"
+    assert auth_client.patch("/api/auth/me/", {"purpose": "x"}, format="json").status_code == 400
+
+
 def test_register_rejects_existing_email_case_insensitively(api_client, user, django_capture_on_commit_callbacks):
     response = register(api_client, django_capture_on_commit_callbacks, email="JAN@example.com")
 

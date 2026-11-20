@@ -12,9 +12,16 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import type { Invitation } from '@/lib/types';
 
-/** Invitations to other shops' staff; nothing while there are none. `onJoined` reloads the shop list. */
-export function Invitations({ onJoined }: { onJoined: () => void }) {
-  const { data: invitations, refresh } = useApiQuery<Invitation[]>('/invitations/');
+const POLL_MS = 15_000;
+
+/**
+ * Invitations to other shops' staff; nothing while there are none. `onJoined` reloads the shop list; `poll` checks
+ * for new ones while someone waits for an invitation.
+ */
+export function Invitations({ onJoined, poll = false }: { onJoined: () => void; poll?: boolean }) {
+  const { data: invitations, refresh } = useApiQuery<Invitation[]>('/invitations/', {
+    refetchInterval: () => (poll ? POLL_MS : false),
+  });
   if (!invitations?.length) return null;
   return (
     <View style={styles.list}>
