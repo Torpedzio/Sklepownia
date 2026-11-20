@@ -9,9 +9,9 @@ from django.utils import timezone
 
 from .. import shop_settings
 from ..models import Server, Shop, ShopChecklist, ShopCredentials, ShopSettings
-from ..orders import Address, Order, OrderDetail, OrderLine, Status, customer_label
+from ..orders import Action, Address, Order, OrderDetail, OrderLine, Status, actions_for, customer_label
 from ..platforms import platform_info
-from ..remote import NotInShop
+from ..remote import NotInShop, ShopApiError
 from ..remote.fake import FakeApi
 from .base import (
     Backup, BaseProvisioner, ContainerState, NothingToBackUp, PageCheck, ProductCount, ProvisioningError, Snapshot,
@@ -44,6 +44,8 @@ class FakeProvisioner(BaseProvisioner):
     # (shop id, "start" or "restart") done by the monitor, oldest first; whether they fix the shop.
     repairs = []
     repairs_help = True
+    # Parcels given with "shipped": {(shop id, order id): (number, carrier)}.
+    parcels = {}
 
     def run_step(self, key, shop):
         time.sleep(settings.FAKE_PROVISIONER_STEP_DELAY)
@@ -242,7 +244,23 @@ class FakeProvisioner(BaseProvisioner):
             ),
             customer_note="Proszę o kontakt przed wysyłką." if rng.random() < 0.3 else "",
             placed_at=order.placed_at,
+            tracking_number=self.parcels.get((shop.pk, order.external_id), ("", ""))[0],
+            carrier=self.parcels.get((shop.pk, order.external_id), ("", ""))[1],
+            actions=actions_for(order.status),
         )
+
+    def change_order(self, shop, order, action, *, tracking_number="", carrier=""):
+        """Changes the order in the local copy, which read_order fills in."""
+        FakeApi(shop).ping()
+        time.sleep(settings.FAKE_PROVISIONER_STEP_DELAY)
+        if settings.FAKE_PROVISIONER_FAIL_AT_STEP == "change_order":
+            raise ShopApiError("Symulowany błąd: change_order")
+        status = {
+            Action.MARK_PAID: Status.PROCESSING, Action.MARK_SHIPPED: Status.COMPLETED, Action.CANCEL: Status.CANCELLED,
+        }[action]
+        shop.orders.filter(external_id=order.external_id).update(status=status, changed_at=timezone.now())
+        if action == Action.MARK_SHIPPED and tracking_number:
+            self.parcels[(shop.pk, order.external_id)] = (tracking_number, carrier)
 
     def _simulate(self, key):
         time.sleep(settings.FAKE_PROVISIONER_STEP_DELAY)

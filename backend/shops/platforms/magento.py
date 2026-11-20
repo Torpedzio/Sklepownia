@@ -16,15 +16,15 @@ from django.conf import settings
 from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..orders import (
-    Address, Order, OrderDetail, OrderLine, Status as OrderStatus, amount, country_name, customer_label, from_timestamp,
-    full_name, quantity,
+    Action, Address, Order, OrderDetail, OrderLine, Status as OrderStatus, actions_for, amount, country_name,
+    customer_label, from_timestamp, full_name, quantity,
 )
 from ..provisioning.base import ProductCount
 from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_memory, container_name, db_name, mail_relay,
     memory_bytes,
 )
-from ..remote import KEY_NAME
+from ..remote import KEY_NAME, ShopApiError
 from ..remote.magento import MagentoApi
 from .woocommerce import _money
 
@@ -423,7 +423,17 @@ class MagentoProvisioner(ContainerProvisioner):
         return orders
 
     def read_order(self, shop, external_id):
-        data = self.api(shop).get(f"orders/{int(external_id)}")
+        api = self.api(shop)
+        data = api.get(f"orders/{int(external_id)}")
+        status = ORDER_STATES.get(data.get("state"), OrderStatus.NEW)
+        track = {}
+        if any(quantity(item.get("qty_shipped")) for item in data.get("items") or []):
+            shipments = api.get("shipments", {
+                "searchCriteria[filterGroups][0][filters][0][field]": "order_id",
+                "searchCriteria[filterGroups][0][filters][0][value]": int(data["entity_id"]),
+            }).get("items") or []
+            tracks = [track for shipment in shipments for track in shipment.get("tracks") or []]
+            track = tracks[-1] if tracks else {}
         billing = data.get("billing_address") or {}
         assignments = (data.get("extension_attributes") or {}).get("shipping_assignments") or []
         shipping = ((assignments[0].get("shipping") or {}).get("address") or {}) if assignments else {}
@@ -432,7 +442,7 @@ class MagentoProvisioner(ContainerProvisioner):
         return OrderDetail(
             external_id=str(data["entity_id"]),
             number=data.get("increment_id") or str(data["entity_id"]),
-            status=ORDER_STATES.get(data.get("state"), OrderStatus.NEW),
+            status=status,
             currency=data.get("order_currency_code") or shop.config.currency,
             products_total=amount(data.get("subtotal_incl_tax")),
             shipping_total=amount(data.get("shipping_incl_tax")),
@@ -460,7 +470,29 @@ class MagentoProvisioner(ContainerProvisioner):
             ),
             customer_note=data.get("customer_note") or "",
             placed_at=datetime.fromisoformat(data["created_at"]).replace(tzinfo=UTC),
+            tracking_number=track.get("track_number") or "",
+            carrier=track.get("title") or "",
+            # Once invoiced, Magento only takes a credit memo, which the panel does.
+            actions=actions_for(status, can_cancel=not _invoiced(data)),
         )
+
+    def change_order(self, shop, order, action, *, tracking_number="", carrier=""):
+        api = self.api(shop)
+        order_id = int(order.external_id)
+        if action == Action.CANCEL:
+            if not api.post(f"orders/{order_id}/cancel"):
+                raise ShopApiError("Sklep nie pozwolił anulować tego zamówienia.")
+            return
+        # Paid means invoiced; "complete" needs the invoice and the shipment, so shipping invoices it if needed
+        # (e.g. cash on delivery), without a second e-mail to the customer.
+        if action == Action.MARK_PAID or not _invoiced(api.get(f"orders/{order_id}")):
+            api.post(f"order/{order_id}/invoice", json={"capture": False, "notify": action == Action.MARK_PAID})
+        if action == Action.MARK_SHIPPED:
+            tracks = [{
+                "track_number": tracking_number, "title": carrier or order.shipping_method or "Przesyłka",
+                "carrier_code": "custom",
+            }] if tracking_number else []
+            api.post(f"order/{order_id}/ship", json={"notify": True, "tracks": tracks})
 
     def _installed(self, shop):
         """The installation writes its date into env.php last."""
@@ -498,6 +530,10 @@ class MagentoProvisioner(ContainerProvisioner):
 
 def index_prefix(shop):
     return f"shop_{shop.pk}"
+
+
+def _invoiced(order):
+    return amount(order.get("total_invoiced")) > 0
 
 
 def _order_address(address):

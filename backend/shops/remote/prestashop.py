@@ -1,3 +1,5 @@
+from xml.etree import ElementTree
+
 from . import ShopApi
 
 
@@ -17,3 +19,12 @@ class PrestaShopApi(ShopApi):
     def ping(self):
         # Not the list of resources: PrestaShop 9.2 fails to give it as JSON.
         self.get("shops")
+
+    def send_xml(self, method, path, resource, fields, params=None):
+        """Saves through the webservice, which takes XML: <prestashop><resource><field>…; answers in JSON."""
+        root = ElementTree.Element("prestashop")
+        node = ElementTree.SubElement(root, resource)
+        for name, value in fields.items():
+            ElementTree.SubElement(node, name).text = "" if value is None else str(value)
+        body = ElementTree.tostring(root, encoding="utf-8", xml_declaration=True)
+        return self.request(method, path, params=params, data=body, headers={"Content-Type": "application/xml"})

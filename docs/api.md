@@ -43,7 +43,7 @@ Limity zapytań: logowanie, rejestracja i ustawianie nowego hasła 10 na minutę
 
 ## Sklepy: `/api/shops/`
 
-Obsługa sklepu (`role: staff`) może tylko oglądać sklep (`GET shops/`, `GET shops/{id}/`), sprzedaż (`sales/`, `sales/refresh/`) i zamówienia (`orders/`, `orders/{order_id}/`) oraz opuścić zespół (`leave/`). Pozostałe akcje na sklepie dają jej `403` z „Tylko właściciel sklepu może to zrobić.”. Osoba spoza sklepu dostaje `404`.
+Obsługa sklepu (`role: staff`) może tylko oglądać sklep (`GET shops/`, `GET shops/{id}/`), sprzedaż (`sales/`, `sales/refresh/`) i zamówienia (`orders/`, `orders/{order_id}/`, także ich obsługę: `actions/` i notatki) oraz opuścić zespół (`leave/`). Pozostałe akcje na sklepie dają jej `403` z „Tylko właściciel sklepu może to zrobić.”. Osoba spoza sklepu dostaje `404`.
 
 | Metoda i ścieżka | Opis |
 |---|---|
@@ -95,12 +95,16 @@ Każda platforma ma własne statusy, mapowane w `read_orders` i `read_order` jej
 ### Zamówienia
 
 Wymaga potwierdzonego e-maila. Lista pochodzi z tej samej kopii co sprzedaż (90 dni). Szczegóły czyta API sklepu
-przy każdym otwarciu, z pełnymi danymi klienta i adresami, i niczego z nich nie zapisuje.
+przy każdym otwarciu, z pełnymi danymi klienta i adresami, i niczego z nich nie zapisuje. Zmiany statusu robi sklep
+przez swoje API (wysyła też swoje e-maile do klienta); notatki zespołu trzyma platforma.
 
 | Metoda i ścieżka | Opis |
 |---|---|
 | `GET shops/{id}/orders/` | `{available, synced_at, refreshing, error, counts, orders, has_more}`. `orders`: 30 zamówień od najnowszego, w kształcie jak `recent` w sprzedaży (także nieopłacone). Parametry: `status` (jeden ze statusów niżej), `q` (fragment numeru albo imienia klienta, `#` na początku jest pomijany), `before` (`external_id` ostatniego zamówienia z poprzedniej strony). `counts`: liczba zamówień w każdym statusie w całej kopii, bez filtrów, do przycisków statusów. Nieznany status albo `before` daje `400`. Jak sprzedaż zleca odczyt starej kopii (`refreshing`). |
-| `GET shops/{id}/orders/{order_id}/` | Zamówienie odczytane teraz ze sklepu: `{external_id, number, status, status_display, currency, products_total, shipping_total, discount_total, total, payment_method, shipping_method, customer_name, email, phone, billing, shipping, lines, customer_note, placed_at}`. Kwoty brutto; produkty i dostawa przed rabatem, `total` tak, jak płaci klient. `lines`: `[{name, sku, quantity, price, total}]`. Adresy (`billing`, `shipping`, mogą być `null`): `{name, company, lines, postcode, city, country, phone}`, `country` to nazwa kraju albo kod ISO. Status w kopii przyjmuje odczytany. `404`, gdy sklep nie ma zamówienia; `409`, gdy sklep nie działa; `503` z `detail`, gdy sklep nie odpowiada, nie przyjął klucza aplikacji albo odpowiedział w nieoczekiwany sposób. |
+| `GET shops/{id}/orders/{order_id}/` | Zamówienie odczytane teraz ze sklepu: `{external_id, number, status, status_display, currency, products_total, shipping_total, discount_total, total, payment_method, shipping_method, customer_name, email, phone, billing, shipping, lines, customer_note, placed_at, tracking_number, carrier, actions, notes}`. Kwoty brutto; produkty i dostawa przed rabatem, `total` tak, jak płaci klient. `lines`: `[{name, sku, quantity, price, total}]`. Adresy (`billing`, `shipping`, mogą być `null`): `{name, company, lines, postcode, city, country, phone}`, `country` to nazwa kraju albo kod ISO. `tracking_number` i `carrier`: przesyłka zapisana w sklepie, puste bez niej. `actions`: co można teraz zrobić, w kolejności (`mark_paid` dla nowych, `mark_shipped` dla nowych i w realizacji, `cancel` dla nowych, w realizacji i nieopłaconych; Magento nie anuluje zamówienia z fakturą). `notes`: notatki zespołu od najstarszej, `{id, text, author, created_at, can_delete}` (`author` jak w zespole albo `null` po usunięciu konta; `can_delete` dla autora i właściciela). Status w kopii przyjmuje odczytany. `404`, gdy sklep nie ma zamówienia; `409`, gdy sklep nie działa; `503` z `detail`, gdy sklep nie odpowiada, nie przyjął klucza aplikacji albo odpowiedział w nieoczekiwany sposób. |
+| `POST shops/{id}/orders/{order_id}/actions/` | `{action, tracking_number?, carrier?}` → `200` z zamówieniem odczytanym po zmianie (jak wyżej). `mark_paid`: opłacone, w realizacji. `mark_shipped`: wysłane (zrealizowane), z numerem przesyłki i przewoźnikiem, gdy podane (po 60 znaków; przy innych akcjach pomijane); klient dostaje numer w wiadomości ze sklepu (PrestaShop pokazuje go tylko w szczegółach zamówienia na koncie klienta i wysyła przesyłkę przewoźnikiem z zamówienia, więc `carrier` pomija). Historia działań zapisuje przesyłkę tak, jak ją ma sklep. `cancel`: anulowane. Zmiana trafia do historii działań. `400` dla nieznanej akcji; `409` z `detail`, gdy sklep nie działa albo zamówienie nie pozwala już na tę zmianę; `404` i `503` jak przy odczycie. |
+| `POST shops/{id}/orders/{order_id}/notes/` | `{text}` (do 2000 znaków) → `201` z notatką. Działa też, gdy sklep nie odpowiada. |
+| `DELETE shops/{id}/orders/{order_id}/notes/{note_id}/` | `204`; `403`, gdy notatka jest innej osoby z obsługi (usuwa ją autor albo właściciel); `404`, gdy jej nie ma. |
 
 ### Lista startowa
 
@@ -196,7 +200,7 @@ Pola formularza `POST shops/`:
 
 | Metoda i ścieżka | Opis |
 |---|---|
-| `GET shops/{id}/history/` | Tylko właściciel, z potwierdzonym e-mailem. `{events, has_more}`, od najnowszych, po 30. Wpis: `{id, kind, title, detail, actor, actor_role, status, error, created_at}`. `title` i `detail` to gotowy tekst (np. „Zmiana ustawień”, „Waluta, Język”). `actor`: `{id, name, email}` albo `null`; `actor_role`: `owner`, `staff` (także była obsługa), `system` (platforma, np. zawieszenie przez plan) albo `deleted` (usunięte konto). `status` i `error`: stan zmiany w sklepie (`queued`, `running`, `succeeded`, `failed`), dla innych wpisów `null` i puste. Starsze: `?before=<id ostatniego wpisu>`. |
+| `GET shops/{id}/history/` | Tylko właściciel, z potwierdzonym e-mailem. `{events, has_more}`, od najnowszych, po 30. Wpis: `{id, kind, title, detail, actor, actor_role, status, error, created_at}`. `title` i `detail` to gotowy tekst (np. „Zmiana ustawień”, „Waluta, Język”; „Wysłanie zamówienia”, „Nr #7, przesyłka 6200123 (InPost)”). `actor`: `{id, name, email}` albo `null`; `actor_role`: `owner`, `staff` (także była obsługa), `system` (platforma, np. zawieszenie przez plan) albo `deleted` (usunięte konto). `status` i `error`: stan zmiany w sklepie (`queued`, `running`, `succeeded`, `failed`), dla innych wpisów `null` i puste. Starsze: `?before=<id ostatniego wpisu>`. |
 
 ### Zespół
 

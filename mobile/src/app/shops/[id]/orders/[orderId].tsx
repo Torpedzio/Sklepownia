@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { ActivityIndicator, Linking, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { backArrowOptions } from '@/components/back-link';
+import { OrderActions } from '@/components/order-actions';
+import { OrderNotes } from '@/components/order-notes';
 import { Page } from '@/components/page';
 import { Badge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
@@ -12,6 +14,7 @@ import { useNotify } from '@/context/notifications';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
 import { formatMoney } from '@/lib/format';
+import { writeQuery } from '@/lib/query-cache';
 import { ORDER_STATUS_COLORS } from '@/lib/sales';
 import { formatTime } from '@/lib/settings-form';
 import type { OrderAddress, ShopDetail, ShopOrderDetail } from '@/lib/types';
@@ -22,9 +25,8 @@ export default function ShopOrderScreen() {
   const theme = useTheme();
   const notify = useNotify();
   const { data: shop } = useApiQuery<ShopDetail>(`/shops/${id}/`);
-  const { data: order, error, isRefreshing, refresh } = useApiQuery<ShopOrderDetail>(
-    `/shops/${id}/orders/${orderId}/`,
-  );
+  const path = `/shops/${id}/orders/${orderId}/`;
+  const { data: order, error, isRefreshing, refresh } = useApiQuery<ShopOrderDetail>(path);
 
   const header = (
     <Stack.Screen
@@ -76,6 +78,15 @@ export default function ShopOrderScreen() {
           </ThemedText>
         </View>
       </View>
+
+      <Card title="Obsługa zamówienia">
+        <OrderActions
+          shopId={id}
+          order={order}
+          platform={shop?.platform}
+          onChanged={(changed) => writeQuery(path, changed)}
+        />
+      </Card>
 
       <Card title="Produkty">
         {order.lines.map((line, index) => (
@@ -150,6 +161,12 @@ export default function ShopOrderScreen() {
             Klient nie podał adresu.
           </ThemedText>
         )}
+        {order.tracking_number ? (
+          <ThemedText type="small" selectable>
+            Przesyłka {order.tracking_number}
+            {order.carrier ? ` (${order.carrier})` : ''}
+          </ThemedText>
+        ) : null}
       </Card>
 
       <Card title="Płatność">
@@ -168,9 +185,18 @@ export default function ShopOrderScreen() {
         ) : null}
       </Card>
 
+      <Card title="Notatki zespołu">
+        <OrderNotes
+          shopId={id}
+          orderId={orderId}
+          notes={order.notes}
+          onChange={(notes) => writeQuery(path, { ...order, notes })}
+        />
+      </Card>
+
       <ThemedText type="small" themeColor="textSecondary">
-        Dane odczytaliśmy ze sklepu przy otwarciu zamówienia i nigdzie ich nie zapisujemy.
-        {shop?.role === 'staff' ? '' : ' Status zamówienia zmienisz na razie w panelu sklepu.'}
+        Dane odczytaliśmy ze sklepu przy otwarciu zamówienia i nigdzie ich nie zapisujemy. Notatki zespołu trzymamy u
+        nas, sklep ich nie ma.
       </ThemedText>
     </Page>
   );

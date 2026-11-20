@@ -43,7 +43,8 @@ def _test_settings(settings, tmp_path, monkeypatch):
 
     monkeypatch.setattr(FakeProvisioner, "snapshots", {})
     monkeypatch.setattr(FakeProvisioner, "restored", [])
-    for name, value in {"containers": {}, "pages": {}, "services": {}, "disk": None, "repairs": []}.items():
+    fresh = {"containers": {}, "pages": {}, "services": {}, "disk": None, "repairs": [], "parcels": {}}
+    for name, value in fresh.items():
         monkeypatch.setattr(FakeProvisioner, name, value)
     monkeypatch.setattr(FakeProvisioner, "repairs_help", True)
     settings.SHOPS_BACKUP_PASSWORD = "backup-secret"

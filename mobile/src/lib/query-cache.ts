@@ -61,6 +61,12 @@ export function fetchQuery(key: string, load: () => Promise<unknown>, { force = 
   return promise;
 }
 
+/** E.g. the answer to a change, which already holds the fresh data; requests still on their way are dropped. */
+export function writeQuery(key: string, data: unknown) {
+  requests.delete(key);
+  write(key, { data, error: null });
+}
+
 /** E.g. on a session change; screens still open load again. */
 export function clearQueryCache() {
   const keys = [...entries.keys()];

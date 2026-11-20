@@ -48,12 +48,16 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   - faktury korygujące (np. przy zwrocie) i własne połączenie z KSeF bez Fakturowni;
   - regulamin i polityka prywatności jako strony, do których prowadzą zgody przy płatności;
   - zniżki, okresy próbne, plany roczne, inne metody płatności (BLIK, przelew), wypłata salda przy rezygnacji.
-- **Sprzedaż i zamówienia w aplikacji** są na razie do podglądu: status zamówienia zmienia się w panelu sklepu.
-  Lista zamówień i sumy pochodzą z kopii z 90 dni (starsze są tylko w panelu), sumy liczą tylko walutę sklepu, a nowe
-  zamówienie pojawia się w aplikacji z opóźnieniem do 15 minut (od razu po „Odśwież”). Szczegóły zamówienia są
-  czytane ze sklepu przy otwarciu, więc nie otworzą się, gdy sklep nie działa. Brakuje zestawień dłuższych niż
-  30 dni.
-- **Powiadomienia push** o nowym zamówieniu przychodzą przy odczycie sklepu, więc do 15 minut po złożeniu.
+- **Zamówienia w aplikacji** można oznaczyć jako opłacone, wysłane (z numerem przesyłki) albo anulować. Zwroty,
+  edycja pozycji i adresów, faktury oraz anulowanie zamówienia z fakturą w Magento zostają w panelu sklepu.
+  W PrestaShop przesyłka idzie przewoźnikiem wybranym w zamówieniu (aplikacja nie zmienia przewoźnika), a numer
+  przesyłki nie trafia do e-maila o wysyłce (klient widzi go w szczegółach zamówienia na koncie); numer
+  przesyłki w WooCommerce widać w notatce dla klienta, bo sklep nie ma pola na niego bez wtyczki. Lista zamówień
+  i sumy pochodzą z kopii z 90 dni (starsze są tylko w panelu), sumy liczą tylko walutę sklepu, a nowe zamówienie
+  pojawia się w aplikacji z opóźnieniem do 15 minut (od razu po „Odśwież”). Szczegóły zamówienia są czytane ze
+  sklepu przy otwarciu, więc nie otworzą się, gdy sklep nie działa. Brakuje zestawień dłuższych niż 30 dni.
+- **Powiadomienia push** o nowym zamówieniu przychodzą przy odczycie sklepu, więc do 15 minut po złożeniu, i na
+  razie tylko do właściciela.
   Od razu dawałby je webhook sklepu (WooCommerce `order.created`) wołający platformę. Aplikacja nie ma jeszcze
   projektu EAS ani kluczy FCM i APNs, więc powiadomienia działają dopiero po ich dodaniu i w buildzie, nie w Expo Go.
   Brakuje powiadomień o niskim stanie magazynu.
@@ -97,17 +101,15 @@ robi właściciel; nowe czynności (obsługa zamówień, produkty, stany, klienc
 e-mailem z linkiem do aplikacji, a zaproszenie czeka na liście sklepów osoby zaproszonej. Przy rejestracji wybiera
 się „Zakładam sklep” albo „Dołączam do zespołu” (bez cennika, z ekranem czekania na zaproszenie). Właściciel
 prowadzi zespół na ekranie sklepu, a obsługa widzi tylko to, co może zrobić. Historia działań pokazuje właścicielowi,
-kto co zmienił; nowe czynności dopisują do niej swoje wpisy. Lista zamówień z filtrami i szczegóły zamówienia
-czytane ze sklepu też już są ([backend.md](backend.md#zamówienia)).
+kto co zmienił; nowe czynności dopisują do niej swoje wpisy. Zamówienia już są: lista z filtrami, szczegóły
+czytane ze sklepu, zmiana statusu z numerem przesyłki i notatki zespołu ([backend.md](backend.md#zamówienia)).
 
-1. **Zamówienia, dalej:** zmiana statusu, numer przesyłki dla klienta, notatka (z wpisami w historii działań);
-   push o nowym zamówieniu dla obsługi razem z punktem 3.
-2. **Produkty:** lista, dodawanie i edycja (cena, promocja, opis, kategoria, SKU, stan), zdjęcia z aparatu,
+1. **Produkty:** lista, dodawanie i edycja (cena, promocja, opis, kategoria, SKU, stan), zdjęcia z aparatu,
    ukrywanie i usuwanie; warianty na razie w panelu. Do tego szybka zmiana stanów magazynowych.
-3. **Powiadomienia według osoby** (nowe zamówienia, awarie) i przypadki brzegowe zespołu (usunięcie konta członka,
-   sklepu z zespołem).
-4. **Kategorie, klienci (z wnioskami RODO) i kody rabatowe.**
-5. **Co zostaje w panelu:** lista z linkami „Otwórz w panelu” i poradami.
+2. **Powiadomienia według osoby** (nowe zamówienia także dla obsługi, awarie) i przypadki brzegowe zespołu
+   (usunięcie konta członka, sklepu z zespołem).
+3. **Kategorie, klienci (z wnioskami RODO) i kody rabatowe.**
+4. **Co zostaje w panelu:** lista z linkami „Otwórz w panelu” i poradami.
 
 Klucz API sklepu może usunąć właściciel w panelu; aplikacja zgłasza wtedy odrzucony klucz, a naprawia to dopiero
 `connect_shop_api`. Do rozważenia: samoczynne odnowienie klucza przez worker.

@@ -143,6 +143,14 @@ class BaseProvisioner:
         """
         raise NotImplementedError
 
+    def change_order(self, shop, order, action, *, tracking_number="", carrier=""):
+        """
+        shops.orders.Action on `order` (an OrderDetail offering it) through the shop's API; the shop e-mails the
+        customer as it does for the same change in its panel. With MARK_SHIPPED, the parcel's number goes with it.
+        Raises shops.remote.ShopApiError.
+        """
+        raise NotImplementedError
+
     # --- backups (see shops/backups.py) ---
 
     def can_back_up(self):

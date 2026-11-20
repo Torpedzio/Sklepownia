@@ -95,7 +95,6 @@ export default function ShopSalesScreen() {
   const neverRead = sales.synced_at === null;
   const empty = sales.last_30_days.orders === 0 && sales.recent.length === 0;
   const panelName = shop?.panel_name ?? 'panel sklepu';
-  const inPanel = `w ${panelName.replace(/^panel\b/, 'panelu')}`;
   const toHandle = sales.to_handle.new + sales.to_handle.processing;
 
   return (
@@ -170,10 +169,8 @@ export default function ShopSalesScreen() {
                   <Count value={sales.to_handle.processing} label="W realizacji" note="opłacone, do wysłania" />
                 </View>
                 <ThemedText type="small" themeColor="textSecondary">
-                  Szczegóły zamówień zobaczysz tutaj, a status{' '}
-                  {shop?.role === 'staff'
-                    ? `zmienia się na razie ${inPanel}, do którego dostęp ma właściciel sklepu.`
-                    : `zmienisz na razie ${inPanel}.`}
+                  Otwórz zamówienie, żeby oznaczyć je jako opłacone albo wysłane, podać numer przesyłki lub zostawić
+                  notatkę dla zespołu.
                 </ThemedText>
                 <View style={styles.actions}>
                   <Button

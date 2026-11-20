@@ -178,6 +178,7 @@ SPECTACULAR_SETTINGS = {
         'PlatformEnum': 'shops.platforms.Platform',
         'ChecklistStepEnum': 'shops.models.ShopChecklist.Step',
         'ShopOrderStatusEnum': 'shops.models.ShopOrder.Status',
+        'OrderActionEnum': 'shops.serializers.ORDER_ACTIONS',
     },
 }
 

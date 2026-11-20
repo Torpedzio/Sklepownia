@@ -471,6 +471,26 @@ export type ShopOrderDetail = {
   lines: OrderLine[];
   customer_note: string;
   placed_at: string;
+  /** The parcel's number; empty when the shop has none. */
+  tracking_number: string;
+  carrier: string;
+  /** What can be done with the order now, in this order. */
+  actions: OrderAction[];
+  /** The team's notes, oldest first. */
+  notes: OrderNote[];
+};
+
+export type OrderAction = 'mark_paid' | 'mark_shipped' | 'cancel';
+
+/** Kept by the platform, seen only by the shop's team. */
+export type OrderNote = {
+  id: number;
+  text: string;
+  /** Null after the author's account was deleted. */
+  author: Person | null;
+  created_at: string;
+  /** The author and the shop's owner may delete it. */
+  can_delete: boolean;
 };
 
 /** From a copy of the orders the platform reads every few minutes. */

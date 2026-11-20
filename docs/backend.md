@@ -88,6 +88,7 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 | `ShopOperation` | Praca na działającym sklepie: zmiana ustawień, odczyt ustawień, nowe hasło, usunięcie produktów przykładowych, kopia zapasowa i jej przywrócenie (`backup`: kopia zrobiona albo przywracana). Zmienione pola, wynik, błąd, kto zlecił; ostatnie są w ustawieniach jako „ostatnie zmiany”. `secrets` (zaszyfrowane) trzyma klucze płatności online tylko do końca operacji. |
 | `ShopBackup` | Kopia zapasowa sklepu, indeks repozytorium restic: rodzaj (`nightly`, `manual`, `before_restore`, `before_delete`), stan (gotowa albo błąd z opisem dla admina), `snapshot_id` (unikalny), rozmiar, czas. Zostaje po usunięciu sklepu, dopóki trzyma ją okres przechowywania. |
 | `ShopOrder` | Kopia zamówienia ze sklepu z ostatnich 90 dni: numer, status sprowadzony do pięciu wspólnych, suma, waluta, liczba sztuk, klient jako „Anna N.”, czas złożenia i ostatniej zmiany. Unikalne po `(shop, external_id)`. |
+| `ShopOrderNote` | Notatka zespołu do zamówienia (`external_id`): autor (`null` po usunięciu konta), treść, czas. Trzyma ją platforma, bo nie każdy sklep ma notatki widoczne tylko dla obsługi. |
 | `ShopChecklist` | Lista startowa sklepu: `products` i `sample_products` (policzone w sklepie, `null` przed pierwszym liczeniem), `counted_at` (udane liczenie), `attempted_at` (ostatnia próba), `requested_at` (zlecone przy otwarciu listy), `hidden_at` (właściciel ukrył listę). Kroki: `ShopChecklist.Step`. |
 | `SalesSync` | Stan odczytu zamówień sklepu: `cursor` (ostatnia zmiana, od której czytać), `synced_at` (udany odczyt), `attempted_at` (ostatnia próba), `requested_at` (zlecony z aplikacji), `error`. |
 
@@ -115,8 +116,9 @@ limit jeszcze raz, bo plan mógł się zmienić. Właściciel nie może opuści�
 zakładania, zawieszeniu i przywróceniu (także przez zmianę planu, wtedy bez osoby), każdej operacji poza rutynowym
 odczytem ustawień (`record_operation` w `start_operation`), wysłaniu danych logowania do panelu oraz w zespole
 (zaproszenie i ponowne zaproszenie, cofnięcie, odrzucenie, dołączenie, usunięcie, odejście, także przez usunięcie
-konta). `title` i `detail` układają z wpisu tekst dla aplikacji. Nowa czynność w sklepie (np. zmiana zamówienia)
-dopisuje własny rodzaj do `ShopEvent.Kind` i woła `record`. Historię czyta tylko właściciel.
+konta), a także przy zmianie zamówienia z aplikacji (opłacenie, wysłanie z numerem przesyłki, anulowanie).
+`title` i `detail` układają z wpisu tekst dla aplikacji. Nowa czynność w sklepie dopisuje własny rodzaj do
+`ShopEvent.Kind` i woła `record`. Historię czyta tylko właściciel.
 
 ### Zakładanie sklepu
 
@@ -127,7 +129,10 @@ Przebieg i stany: [architektura.md](architektura.md#przebieg-zakładania-sklepu)
 - Provisioner implementuje metodę `step_<klucz>(shop)` dla każdego kroku. **Każdy krok musi być idempotentny**:
   ponowienie uruchamia wszystkie kroki od nowa.
 - `runner.run_job` wykonuje kroki i zapisuje ich stan. Użytkownik widzi treść tylko wyjątków `ProvisioningError`.
-  Pozostałe wyjątki zastępuje ogólny komunikat, a pełny opis ląduje w logach workera.
+  Pozostałe wyjątki zastępuje ogólny komunikat, a pełny opis ląduje w logach workera. Gdy nie da się wczytać
+  provisionera (np. worker ma w pamięci kod sprzed wdrożenia), zadanie i pierwszy niewykonany krok kończą się błędem,
+  więc sklep da się ponowić zamiast utknąć w `provisioning`. Tak samo `operations.run_operation` kończy operację
+  błędem, żeby sklep nie został zajęty na zawsze.
 - `ContainerProvisioner` ([container.py](../backend/shops/provisioning/container.py)) tworzy kontener `shop-<id>`,
   wolumen `shop-<id>` i bazę `shop_<id>`. Kontener jest odtwarzany, gdy zmieni się jego środowisko, adres, limit
   pamięci albo obraz. Pocztę sklepu (`configure_mail`, [poczta sklepów](../infra/shops/README.md#poczta-sklepów))
@@ -267,7 +272,25 @@ Pola odpowiedzi: [api.md](api.md#zamówienia).
   traktowany jak brak zamówienia. PrestaShop: `orders/{id}` i kilka zasobów z `filter[id]` (stan zamówienia,
   konfiguracja `PS_OS_*` i `PS_TIMEZONE`, adresy, kraje, klient, przewoźnik, waluta, wiadomość klienta z `messages`);
   pusty wynik przychodzi jako `[]`. Magento: `orders/{id}`, adres dostawy z `shipping_assignments`, bez pozycji
-  podrzędnych (`parent_item_id`). Symulacja dopowiada szczegóły do zamówienia z kopii, powtarzalnie.
+  podrzędnych (`parent_item_id`), przesyłka z `shipments`, gdy coś wysłano. Symulacja dopowiada szczegóły do
+  zamówienia z kopii, powtarzalnie.
+- Zmiana (`orders.change`) najpierw czyta zamówienie i sprawdza, czy akcja jest w `actions` (`orders.actions_for`),
+  potem woła `change_order` w provisionerze, zapisuje wpis historii i zwraca zamówienie odczytane ponownie. E-maile
+  do klienta wysyła sklep, swoimi szablonami. Akcje to `orders.Action`.
+  - WooCommerce: `PUT orders/{id}` ze statusem (`processing`, `completed`, `cancelled`); opłacenie ustawia
+    `set_paid`. Przesyłka trafia do meta zamówienia (`sklepownia_tracking_number`, `sklepownia_tracking_carrier`)
+    i do notatki dla klienta (`orders/{id}/notes`, `customer_note`), w języku sklepu (`orders.shipped_note`).
+  - PrestaShop: nowy wpis `order_histories` ze stanem z konfiguracji (`PS_OS_PAYMENT`, `PS_OS_SHIPPING`,
+    `PS_OS_CANCELED`) i `sendemail=1`, więc sklep wysyła e-mail stanu. Numer przesyłki zapisuje w `order_carriers`
+    (PUT całego zasobu, XML: `PrestaShopApi.send_xml`). Szablon e-maila o wysyłce nie ma numeru przesyłki, a e-mail
+    „w drodze” wysyła tylko panel, więc klient widzi numer w szczegółach zamówienia na swoim koncie. Przewoźnik zostaje
+    ten z zamówienia, i to on trafia do historii działań (`orders.change` bierze przesyłkę z zamówienia odczytanego
+    po zmianie).
+  - Magento: anulowanie `orders/{id}/cancel` (zamówienie z fakturą nie da się anulować, więc go nie oferuje);
+    opłacenie to faktura `order/{id}/invoice` (z e-mailem); wysłanie to faktura, gdy jej nie ma, i
+    `order/{id}/ship` z numerem przesyłki (`carrier_code: custom`, tytuł z przewoźnika albo metody dostawy).
+- Notatki zespołu (`ShopOrderNote`) są w bazie platformy, nie w sklepie: widać je przy szczegółach zamówienia, usuwa
+  je autor albo właściciel.
 
 ### Lista startowa
 

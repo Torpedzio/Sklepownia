@@ -4,7 +4,7 @@ from rest_framework import serializers
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
 from .models import (
     ProvisioningJob, ProvisioningStep, Shop, ShopBackup, ShopChecklist, ShopConfig, ShopEvent, ShopInvitation,
-    ShopMember, ShopOperation, ShopOrder, ShopTemplate,
+    ShopMember, ShopOperation, ShopOrder, ShopOrderNote, ShopTemplate,
 )
 from . import history
 from .platforms import Platform, platform_info
@@ -333,6 +333,26 @@ class OrderLineSerializer(serializers.Serializer):
     total = serializers.DecimalField(max_digits=12, decimal_places=2)
 
 
+ORDER_ACTIONS = [
+    ("mark_paid", "Oznacz jako opłacone"),
+    ("mark_shipped", "Oznacz jako wysłane"),
+    ("cancel", "Anuluj zamówienie"),
+]
+
+
+class OrderNoteSerializer(serializers.ModelSerializer):
+    author = PersonSerializer(allow_null=True, help_text="Pusty po usunięciu konta autora.")
+    can_delete = serializers.SerializerMethodField(help_text="Autor notatki i właściciel sklepu mogą ją usunąć.")
+
+    class Meta:
+        model = ShopOrderNote
+        fields = ["id", "text", "author", "created_at", "can_delete"]
+
+    def get_can_delete(self, note) -> bool:
+        user = self.context["request"].user
+        return note.author_id == user.pk or note.shop.owner_id == user.pk
+
+
 class ShopOrderDetailSerializer(serializers.Serializer):
     """Read from the shop each time; the customer's data isn't stored by the platform."""
 
@@ -355,9 +375,43 @@ class ShopOrderDetailSerializer(serializers.Serializer):
     lines = OrderLineSerializer(many=True)
     customer_note = serializers.CharField(help_text="Co klient napisał przy zamówieniu.")
     placed_at = serializers.DateTimeField()
+    tracking_number = serializers.CharField(help_text="Numer przesyłki; pusty, gdy sklep go nie ma.")
+    carrier = serializers.CharField(help_text="Przewoźnik przesyłki; może być pusty.")
+    actions = serializers.ListField(
+        child=serializers.ChoiceField(choices=ORDER_ACTIONS),
+        help_text="Co można teraz zrobić z zamówieniem, w tej kolejności.",
+    )
+    notes = serializers.SerializerMethodField(help_text="Notatki zespołu, od najstarszej.")
 
     def get_status_display(self, order) -> str:
         return ShopOrder.Status(order.status).label
+
+    @extend_schema_field(OrderNoteSerializer(many=True))
+    def get_notes(self, order):
+        return OrderNoteSerializer(self.context.get("notes", []), many=True, context=self.context).data
+
+
+class OrderActionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=ORDER_ACTIONS)
+    tracking_number = serializers.CharField(
+        max_length=60, required=False, allow_blank=True, default="",
+        help_text="Tylko przy mark_shipped; klient dostaje go e-mailem.",
+    )
+    carrier = serializers.CharField(
+        max_length=60, required=False, allow_blank=True, default="",
+        help_text="Tylko przy mark_shipped z numerem; PrestaShop bierze przewoźnika zamówienia.",
+    )
+
+    def validate(self, attrs):
+        if attrs["action"] != "mark_shipped" or not attrs["tracking_number"].strip():
+            attrs["tracking_number"] = attrs["carrier"] = ""
+        attrs["tracking_number"] = attrs["tracking_number"].strip()
+        attrs["carrier"] = attrs["carrier"].strip()
+        return attrs
+
+
+class OrderNoteCreateSerializer(serializers.Serializer):
+    text = serializers.CharField(max_length=2000)
 
 
 class ShopSalesSerializer(serializers.Serializer):

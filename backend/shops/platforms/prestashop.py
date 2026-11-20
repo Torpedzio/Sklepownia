@@ -15,8 +15,8 @@ from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
 from ..orders import (
-    Address, Order, OrderDetail, OrderLine, Status as OrderStatus, amount, country_name, customer_label, from_timestamp,
-    full_name, quantity,
+    Address, Order, OrderDetail, OrderLine, Status as OrderStatus, actions_for, amount, country_name, customer_label,
+    from_timestamp, full_name, quantity,
 )
 from ..shop_settings import OPERATORS
 from . import Platform
@@ -26,7 +26,7 @@ from ..provisioning.container import (
     FILES_PATH, CommandError, ContainerProvisioner, container_name, db_name, mail_relay,
 )
 from ..provisioning.packages import Package
-from ..remote import KEY_NAME
+from ..remote import KEY_NAME, ShopApiError
 from ..remote.prestashop import PrestaShopApi
 
 SAMPLE_PRODUCT_CATEGORIES = 3
@@ -743,12 +743,7 @@ class PrestaShopProvisioner(ContainerProvisioner):
     def read_order(self, shop, external_id):
         api = self.api(shop)
         order = api.get(f"orders/{int(external_id)}")["order"]
-        config = {
-            row["name"]: row["value"]
-            for row in _rows(api.get("configurations", {
-                "filter[name]": f"[{'|'.join(ORDER_CONFIGURATION)}]", "display": "[name,value]",
-            }), "configurations")
-        }
+        config = _configuration(api)
         state = _first(api.get("order_states", {
             "filter[id]": f"[{int(order['current_state'])}]", "display": "[id,paid,shipped,delivery]",
         }), "order_states")
@@ -773,6 +768,9 @@ class PrestaShopProvisioner(ContainerProvisioner):
         carrier = _first(api.get("carriers", {
             "filter[id]": f"[{int(order['id_carrier'])}]", "display": "[id,name]",
         }), "carriers") if int(order.get("id_carrier") or 0) else {}
+        order_carrier = _first(api.get("order_carriers", {
+            "filter[id_order]": f"[{int(order['id'])}]", "display": "[id,tracking_number]",
+        }), "order_carriers")
         messages = _rows(api.get("messages", {
             "filter[id_order]": f"[{int(order['id'])}]", "filter[private]": "[0]", "display": "[id,message]",
         }), "messages")
@@ -797,10 +795,11 @@ class PrestaShopProvisioner(ContainerProvisioner):
             zone = ZoneInfo(config.get("PS_TIMEZONE") or "UTC")
         except (ZoneInfoNotFoundError, ValueError):
             zone = ZoneInfo("UTC")
+        status = _order_status(order["current_state"], state, config)
         return OrderDetail(
             external_id=str(order["id"]),
             number=order.get("reference") or str(order["id"]),
-            status=_order_status(order["current_state"], state, config),
+            status=status,
             currency=self._currency(api, order) or shop.config.currency,
             products_total=amount(order.get("total_products_wt")),
             shipping_total=amount(order.get("total_shipping_tax_incl")),
@@ -825,7 +824,32 @@ class PrestaShopProvisioner(ContainerProvisioner):
             ),
             customer_note="\n\n".join(message["message"].strip() for message in messages if message.get("message")),
             placed_at=datetime.fromisoformat(order["date_add"]).replace(tzinfo=zone),
+            tracking_number=order_carrier.get("tracking_number") or "",
+            # The parcel goes with the order's own carrier.
+            carrier=(carrier.get("name") or "") if order_carrier.get("tracking_number") else "",
+            actions=actions_for(status),
         )
+
+    def change_order(self, shop, order, action, *, tracking_number="", carrier=""):
+        """The carrier typed in the app is left out: the parcel goes with the order's own carrier."""
+        api = self.api(shop)
+        config = _configuration(api)
+        state = config.get(ACTION_STATES[action])
+        if not state:
+            raise ShopApiError("Sklep nie ma stanu zamówienia, który pasuje do tej zmiany.")
+        if action == "mark_shipped" and tracking_number:
+            # First, so the customer can follow the parcel when the "shipped" e-mail comes.
+            row = _first(api.get("order_carriers", {
+                "filter[id_order]": f"[{int(order.external_id)}]", "display": "full",
+            }), "order_carriers")
+            if row:
+                api.send_xml("PUT", f"order_carriers/{int(row['id'])}", "order_carrier", {
+                    **{name: row.get(name) for name in ORDER_CARRIER_FIELDS}, "tracking_number": tracking_number,
+                })
+        # sendemail: the customer gets the state's e-mail, as when it's changed in the panel.
+        api.send_xml("POST", "order_histories", "order_history", {
+            "id_order": int(order.external_id), "id_order_state": int(state),
+        }, params={"sendemail": 1})
 
     @staticmethod
     def _currency(api, order):
@@ -920,12 +944,29 @@ def _host(shop):
     return shop.url.split("://", 1)[1]
 
 
-# Read with an order: the states that cancel it (as READ_ORDERS_PHP) and the zone its dates are in.
-ORDER_CONFIGURATION = ("PS_OS_CANCELED", "PS_OS_REFUND", "PS_OS_ERROR", "PS_TIMEZONE")
+# Read with an order: the states that cancel it (as READ_ORDERS_PHP), those the app's actions set, and the zone its
+# dates are in.
+CANCELLED_STATES = ("PS_OS_CANCELED", "PS_OS_REFUND", "PS_OS_ERROR")
+ACTION_STATES = {"mark_paid": "PS_OS_PAYMENT", "mark_shipped": "PS_OS_SHIPPING", "cancel": "PS_OS_CANCELED"}
+ORDER_CONFIGURATION = (*CANCELLED_STATES, "PS_OS_PAYMENT", "PS_OS_SHIPPING", "PS_TIMEZONE")
+# An order carrier is saved whole.
+ORDER_CARRIER_FIELDS = (
+    "id", "id_order", "id_carrier", "id_order_invoice", "weight", "shipping_cost_tax_excl", "shipping_cost_tax_incl",
+    "tracking_number", "date_add",
+)
+
+
+def _configuration(api):
+    return {
+        row["name"]: row["value"]
+        for row in _rows(api.get("configurations", {
+            "filter[name]": f"[{'|'.join(ORDER_CONFIGURATION)}]", "display": "[name,value]",
+        }), "configurations")
+    }
 
 
 def _order_status(state_id, state, config):
-    cancelled = {config.get(name) for name in ORDER_CONFIGURATION[:3]} - {None, ""}
+    cancelled = {config.get(name) for name in CANCELLED_STATES} - {None, ""}
     if str(state_id) in {str(value) for value in cancelled}:
         return OrderStatus.CANCELLED
     if _yes(state.get("shipped")) or _yes(state.get("delivery")):

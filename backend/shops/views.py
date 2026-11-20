@@ -13,7 +13,8 @@ from billing.models import Plan
 from . import backups, checklist, documents, history, orders, sales, services, shop_settings, team
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import (
-    InvalidTransition, Shop, ShopCredentials, ShopEvent, ShopInvitation, ShopOperation, ShopOrder, ShopTemplate,
+    InvalidTransition, Shop, ShopCredentials, ShopEvent, ShopInvitation, ShopOperation, ShopOrder, ShopOrderNote,
+    ShopTemplate,
 )
 from .platforms import PLATFORMS, Platform, platform_info
 from .remote import NotInShop, ShopApiError
@@ -34,6 +35,9 @@ from .serializers import (
     ShopDetailSerializer,
     ShopHistorySerializer,
     ShopOperationSerializer,
+    OrderActionSerializer,
+    OrderNoteCreateSerializer,
+    OrderNoteSerializer,
     ShopOrderDetailSerializer,
     ShopOrdersSerializer,
     ShopSalesSerializer,
@@ -52,10 +56,13 @@ VERIFIED_ACTIONS = (
     "create", "retry", "resume", "admin_access", "send_admin_access", "shop_settings", "refresh_settings", "reset_admin_password",
     "remove_sample_products", "operations", "operation", "shop_sales", "refresh_sales", "shop_backups",
     "restore_backup", "team", "invite", "revoke_invitation", "remove_member", "shop_history", "shop_orders",
-    "shop_order",
+    "shop_order", "shop_order_action", "shop_order_notes", "shop_order_note",
 )
 # What the staff may do in a shop they serve; the rest (settings, backups, panel access, deletion…) is the owner's.
-STAFF_ACTIONS = ("list", "retrieve", "shop_sales", "refresh_sales", "shop_orders", "shop_order", "leave")
+STAFF_ACTIONS = (
+    "list", "retrieve", "shop_sales", "refresh_sales", "shop_orders", "shop_order", "shop_order_action",
+    "shop_order_notes", "shop_order_note", "leave",
+)
 OPERATION_HISTORY_LENGTH = 20
 HISTORY_PAGE = 30
 BACKUPS_DISABLED = "Kopie zapasowe są chwilowo wyłączone."
@@ -63,6 +70,9 @@ BACKUP_LIMIT = "Na dziś to już wszystkie kopie, które możesz zrobić sam. Ko
 
 NOT_ACTIVE = "Ustawienia można zmieniać, gdy sklep działa."
 ORDER_NOT_ACTIVE = "Szczegóły zamówienia zobaczysz, gdy sklep działa."
+ORDER_CHANGE_NOT_ACTIVE = "Zamówienie zmienisz, gdy sklep działa."
+ORDER_ACTION_GONE = "Tego nie da się już zrobić z tym zamówieniem. Sprawdź jego obecny stan."
+ORDER_NOT_FOUND = "Sklep nie ma takiego zamówienia."
 PANEL_NOT_READY = "Panel będzie dostępny, gdy sklep zostanie założony."
 PLAN_REQUIRED = "Wybierz plan, żeby zakładać sklepy."
 BUSY = "Sklep jeszcze zapisuje poprzednie zmiany. Spróbuj za chwilę."
@@ -533,10 +543,85 @@ class ShopViewSet(
         try:
             order = orders.read(shop, order_id)
         except NotInShop:
-            return Response({"detail": "Sklep nie ma takiego zamówienia."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": ORDER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
         except ShopApiError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        return Response(ShopOrderDetailSerializer(order).data)
+        return Response(self._order_payload(shop, order))
+
+    @extend_schema(
+        parameters=[OpenApiParameter("order_id", str, OpenApiParameter.PATH, description="external_id zamówienia.")],
+        request=OrderActionSerializer,
+        responses={
+            200: ShopOrderDetailSerializer,
+            404: OpenApiResponse(description="Sklep nie ma takiego zamówienia."),
+            409: OpenApiResponse(description="Sklep nie działa albo zamówienie nie pozwala już na tę zmianę."),
+            503: OpenApiResponse(description="Sklep nie odpowiada albo odrzucił zmianę."),
+        },
+        operation_id="shops_order_action",
+    )
+    @action(detail=True, methods=["post"], url_path=r"orders/(?P<order_id>[0-9]{1,20})/actions")
+    def shop_order_action(self, request, pk=None, order_id=None):
+        """Done in the shop now; the shop e-mails the customer. Answers with the order read again afterwards."""
+        shop = self.get_object()
+        serializer = OrderActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if shop.status != Shop.Status.ACTIVE:
+            return Response({"detail": ORDER_CHANGE_NOT_ACTIVE}, status=status.HTTP_409_CONFLICT)
+        try:
+            order = orders.change(shop, order_id, actor=request.user, **serializer.validated_data)
+        except orders.ActionNotAllowed:
+            return Response({"detail": ORDER_ACTION_GONE}, status=status.HTTP_409_CONFLICT)
+        except NotInShop:
+            return Response({"detail": ORDER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+        except ShopApiError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(self._order_payload(shop, order))
+
+    @extend_schema(
+        parameters=[OpenApiParameter("order_id", str, OpenApiParameter.PATH, description="external_id zamówienia.")],
+        request=OrderNoteCreateSerializer,
+        responses={201: OrderNoteSerializer},
+        operation_id="shops_order_notes_create",
+    )
+    @action(detail=True, methods=["post"], url_path=r"orders/(?P<order_id>[0-9]{1,20})/notes")
+    def shop_order_notes(self, request, pk=None, order_id=None):
+        """Kept by the platform, not the shop, so it works for every platform and even when the shop is down."""
+        shop = self.get_object()
+        serializer = OrderNoteCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        note = ShopOrderNote.objects.create(
+            shop=shop, external_id=order_id, author=request.user, text=serializer.validated_data["text"].strip(),
+        )
+        return Response(OrderNoteSerializer(note, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("order_id", str, OpenApiParameter.PATH, description="external_id zamówienia."),
+            OpenApiParameter("note_id", int, OpenApiParameter.PATH),
+        ],
+        request=None,
+        responses={204: None, 403: OpenApiResponse(description="Notatka innej osoby z obsługi.")},
+        operation_id="shops_order_notes_destroy",
+    )
+    @action(
+        detail=True, methods=["delete"], url_path=r"orders/(?P<order_id>[0-9]{1,20})/notes/(?P<note_id>[0-9]+)",
+    )
+    def shop_order_note(self, request, pk=None, order_id=None, note_id=None):
+        """The author or the shop's owner."""
+        shop = self.get_object()
+        note = orders.notes(shop, order_id).filter(pk=note_id).first()
+        if note is None:
+            return Response({"detail": "Nie ma takiej notatki."}, status=status.HTTP_404_NOT_FOUND)
+        if note.author_id != request.user.pk and shop.owner_id != request.user.pk:
+            return Response(
+                {"detail": "Notatkę może usunąć jej autor albo właściciel sklepu."}, status=status.HTTP_403_FORBIDDEN,
+            )
+        note.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _order_payload(self, shop, order):
+        context = {"request": self.request, "notes": orders.notes(shop, order.external_id)}
+        return ShopOrderDetailSerializer(order, context=context).data
 
     @extend_schema(methods=["GET"], responses={200: ShopChecklistSerializer})
     @extend_schema(methods=["PATCH"], request=ChecklistUpdateSerializer, responses={200: ShopChecklistSerializer})

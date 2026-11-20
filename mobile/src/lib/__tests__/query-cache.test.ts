@@ -1,5 +1,5 @@
 import { ApiError, setTokens } from '@/lib/api';
-import { fetchQuery, readQuery, subscribeQuery } from '@/lib/query-cache';
+import { fetchQuery, readQuery, subscribeQuery, writeQuery } from '@/lib/query-cache';
 
 jest.mock('@/lib/token-storage', () => ({
   readTokens: jest.fn(async () => null),
@@ -30,6 +30,20 @@ test('after a change the answer comes from a request sent after it, not one alre
   await earlier;
 
   expect(readQuery('/billing/').data).toBe('po zmianie');
+});
+
+test('data written after a change replace the answer to a request already on its way', async () => {
+  const before = deferred<string>();
+  const earlier = fetchQuery('/orders/41/', () => before.promise);
+  const listener = jest.fn();
+  subscribeQuery('/orders/41/', listener);
+
+  writeQuery('/orders/41/', 'po zmianie');
+  before.resolve('przed zmianą');
+  await earlier;
+
+  expect(readQuery('/orders/41/')).toEqual({ data: 'po zmianie', error: null });
+  expect(listener).toHaveBeenCalledTimes(1);
 });
 
 test('a failed refresh keeps the data and reports the error', async () => {

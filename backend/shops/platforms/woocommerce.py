@@ -13,8 +13,8 @@ from ..categories import category_names
 from ..choices import COUNTRY_TIMEZONES
 from ..models import ShopTemplate
 from ..orders import (
-    Address, Order, OrderDetail, OrderLine, Status as OrderStatus, amount, country_name, customer_label, from_timestamp,
-    full_name, quantity,
+    Action, Address, Order, OrderDetail, OrderLine, Status as OrderStatus, actions_for, amount, country_name,
+    customer_label, from_timestamp, full_name, quantity, shipped_note,
 )
 from ..shop_settings import OPERATORS
 from . import Platform
@@ -371,6 +371,11 @@ ORDER_STATUSES = {
     "trash": OrderStatus.CANCELLED,
 }
 SKIPPED_ORDER_STATUSES = {"checkout-draft"}
+# Order meta with the parcel, visible in the panel's custom fields.
+TRACKING_NUMBER_META = "sklepownia_tracking_number"
+TRACKING_CARRIER_META = "sklepownia_tracking_carrier"
+# What the app's actions set; the shop e-mails the customer about each.
+ACTION_STATUSES = {"mark_paid": "processing", "mark_shipped": "completed", "cancel": "cancelled"}
 
 REMOVE_SAMPLE_PRODUCTS_PHP = """
 $removed = 0;
@@ -822,6 +827,8 @@ class WooCommerceProvisioner(ContainerProvisioner):
         if data["status"] in SKIPPED_ORDER_STATUSES:
             raise NotInShop("Nie ma tego zamówienia w sklepie.")
         billing, shipping = data.get("billing") or {}, data.get("shipping") or {}
+        meta = {item.get("key"): item.get("value") for item in data.get("meta_data") or []}
+        status = ORDER_STATUSES.get(data["status"], OrderStatus.NEW)
         lines = []
         for item in data.get("line_items") or []:
             # Before the coupon: the discount is shown on its own.
@@ -836,7 +843,7 @@ class WooCommerceProvisioner(ContainerProvisioner):
         return OrderDetail(
             external_id=str(data["id"]),
             number=str(data.get("number") or data["id"]),
-            status=ORDER_STATUSES.get(data["status"], OrderStatus.NEW),
+            status=status,
             currency=data.get("currency") or shop.config.currency,
             products_total=sum((line.total for line in lines), amount(0)),
             shipping_total=amount(data.get("shipping_total")) + amount(data.get("shipping_tax")),
@@ -855,7 +862,29 @@ class WooCommerceProvisioner(ContainerProvisioner):
             lines=tuple(lines),
             customer_note=data.get("customer_note") or "",
             placed_at=datetime.fromisoformat(data["date_created_gmt"]).replace(tzinfo=UTC),
+            tracking_number=str(meta.get(TRACKING_NUMBER_META) or ""),
+            carrier=str(meta.get(TRACKING_CARRIER_META) or ""),
+            actions=actions_for(status),
         )
+
+    def change_order(self, shop, order, action, *, tracking_number="", carrier=""):
+        api = self.api(shop)
+        path = f"orders/{int(order.external_id)}"
+        body = {"status": ACTION_STATUSES[action]}
+        if action == Action.MARK_PAID:
+            # Paid like after an online payment: the date of payment is set and the stock goes down if it hadn't.
+            body["set_paid"] = True
+        if action == Action.MARK_SHIPPED and tracking_number:
+            body["meta_data"] = [
+                {"key": TRACKING_NUMBER_META, "value": tracking_number},
+                {"key": TRACKING_CARRIER_META, "value": carrier},
+            ]
+        api.put(path, json=body)
+        if action == Action.MARK_SHIPPED and tracking_number:
+            # A note for the customer goes to them by e-mail.
+            api.post(f"{path}/notes", json={
+                "note": shipped_note(shop, tracking_number, carrier), "customer_note": True,
+            })
 
     def _configure_mail(self, shop, relay):
         # A must-use plugin: WordPress loads it on its own and the panel can't switch it off.

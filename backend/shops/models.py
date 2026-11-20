@@ -312,6 +312,10 @@ class ShopEvent(models.Model):
         MEMBER_JOINED = "member_joined", "Dołączenie do zespołu"
         MEMBER_REMOVED = "member_removed", "Usunięcie z zespołu"
         MEMBER_LEFT = "member_left", "Odejście z zespołu"
+        # data: {"number"}, and {"tracking_number", "carrier"} when shipped.
+        ORDER_PAID = "order_paid", "Opłacenie zamówienia"
+        ORDER_SHIPPED = "order_shipped", "Wysłanie zamówienia"
+        ORDER_CANCELLED = "order_cancelled", "Anulowanie zamówienia"
 
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="events")
     kind = models.CharField(max_length=30, choices=Kind.choices)
@@ -331,6 +335,27 @@ class ShopEvent(models.Model):
 
     def __str__(self):
         return f"{self.get_kind_display()} – {self.shop}"
+
+
+class ShopOrderNote(models.Model):
+    """A note the shop's team keeps on an order, in the platform's database: the shop's own notes differ by platform."""
+
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="order_notes")
+    # Not a ShopOrder: the copy keeps 90 days, notes stay as long as the shop.
+    external_id = models.CharField(max_length=40)
+    # Null: a deleted account.
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+    )
+    text = models.TextField()
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [models.Index(fields=["shop", "external_id"], name="shop_order_notes")]
+
+    def __str__(self):
+        return f"{self.shop} #{self.external_id}"
 
 
 class ShopBackup(models.Model):

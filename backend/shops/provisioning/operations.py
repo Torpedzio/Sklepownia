@@ -30,8 +30,10 @@ def run_operation(operation_id):
         operation.save(update_fields=["status", "started_at"])
 
     shop = operation.shop
-    provisioner = get_provisioner(shop.platform)
+    provisioner = None
     try:
+        # Inside: an operation marked running must end, or the shop stays busy for good.
+        provisioner = get_provisioner(shop.platform)
         if operation.kind == Kind.UPDATE_SETTINGS:
             _update_settings(provisioner, shop, operation.changes, operation.secret_values)
         elif operation.kind == Kind.SYNC_SETTINGS:
@@ -58,7 +60,7 @@ def run_operation(operation_id):
         # Raw exception text may contain internals, so the owner only sees it for known errors.
         operation.error = str(exc) if isinstance(exc, ProvisioningError) else GENERIC_ERROR
         _finish(operation, ShopOperation.Status.FAILED)
-        if operation.kind == Kind.UPDATE_SETTINGS:
+        if operation.kind == Kind.UPDATE_SETTINGS and provisioner is not None:
             # Part of the change may have been applied; show what the shop really has now.
             _sync_quietly(provisioner, shop)
         return operation

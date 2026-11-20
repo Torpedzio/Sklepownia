@@ -8,6 +8,7 @@ from .shop_settings import describe as describe_changes
 Kind = ShopEvent.Kind
 # Asked for by the app on its own, not a change anyone made.
 UNRECORDED_OPERATIONS = {ShopOperation.Kind.SYNC_SETTINGS}
+ORDER_KINDS = {Kind.ORDER_PAID, Kind.ORDER_SHIPPED, Kind.ORDER_CANCELLED}
 
 
 def record(shop, kind, actor=None, operation=None, **data):
@@ -49,6 +50,11 @@ def detail(event):
         return "Sklep nie mieścił się w planie właściciela."
     if event.kind == Kind.RESUMED and event.actor is None:
         return "Plan właściciela ma na niego miejsce."
+    if event.kind in ORDER_KINDS:
+        tracking = event.data.get("tracking_number", "")
+        if tracking and event.data.get("carrier"):
+            tracking = f"{tracking} ({event.data['carrier']})"
+        return ", ".join(filter(None, [f"Nr {event.data.get('number', '')}", f"przesyłka {tracking}" if tracking else ""]))
     if event.kind == Kind.MEMBER_REMOVED:
         return event.data.get("name") or event.data.get("email", "")
     return event.data.get("email", "")

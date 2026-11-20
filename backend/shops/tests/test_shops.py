@@ -326,3 +326,46 @@ def test_failed_cleanup_still_marks_the_shop_failed(
     shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
 
     assert Shop.objects.get(pk=shop_id).status == Shop.Status.FAILED
+
+
+def test_a_provisioner_that_cannot_be_loaded_fails_the_setup_so_it_can_be_retried(
+    auth_client, monkeypatch, django_capture_on_commit_callbacks,
+):
+    from shops.provisioning import runner
+
+    real = runner.get_provisioner
+
+    def broken(platform):
+        raise ImportError("cannot import name 'Address' from 'shops.orders'")
+
+    monkeypatch.setattr(runner, "get_provisioner", broken)
+    shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
+
+    detail = auth_client.get(f"/api/shops/{shop_id}/").data
+    first = detail["provisioning"]["steps"][0]
+    assert (detail["status"], detail["provisioning"]["status"]) == ("failed", "failed")
+    assert (first["status"], first["error"]) == ("failed", "Wystąpił nieoczekiwany błąd.")
+    assert "Address" not in detail["provisioning"]["error"]
+
+    monkeypatch.setattr(runner, "get_provisioner", real)
+    with django_capture_on_commit_callbacks(execute=True):
+        assert auth_client.post(f"/api/shops/{shop_id}/retry/").status_code == 202
+    assert auth_client.get(f"/api/shops/{shop_id}/").data["status"] == "active"
+
+
+def test_a_provisioner_that_cannot_be_loaded_fails_the_operation_instead_of_keeping_the_shop_busy(
+    auth_client, monkeypatch, django_capture_on_commit_callbacks,
+):
+    from shops.provisioning import operations
+
+    shop_id = create_shop(auth_client, django_capture_on_commit_callbacks).data["id"]
+
+    def broken(platform):
+        raise ImportError("half-updated worker")
+
+    monkeypatch.setattr(operations, "get_provisioner", broken)
+    with django_capture_on_commit_callbacks(execute=True):
+        operation = auth_client.post(f"/api/shops/{shop_id}/reset-admin-password/").data
+
+    finished = auth_client.get(f"/api/shops/{shop_id}/operations/{operation['id']}/").data
+    assert (finished["status"], finished["error"]) == ("failed", operations.GENERIC_ERROR)

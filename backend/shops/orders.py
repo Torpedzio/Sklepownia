@@ -10,8 +10,9 @@ from decimal import Decimal, InvalidOperation
 
 from django.db.models import Q
 
+from . import history
 from .choices import Country
-from .models import ShopOrder
+from .models import ShopEvent, ShopOrder
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,39 @@ class OrderDetail:
     # What the customer wrote when ordering.
     customer_note: str
     placed_at: datetime
+    # The parcel's number for the customer, when the shop has one.
+    tracking_number: str = ""
+    carrier: str = ""
+    # What can be done with the order now (Action values), in this order.
+    actions: tuple[str, ...] = ()
+
+
+class Action:
+    MARK_PAID = "mark_paid"
+    MARK_SHIPPED = "mark_shipped"
+    CANCEL = "cancel"
+
+    # Done once: the history's kind and, as the order's new status, what the app shows.
+    KINDS = {
+        MARK_PAID: ShopEvent.Kind.ORDER_PAID,
+        MARK_SHIPPED: ShopEvent.Kind.ORDER_SHIPPED,
+        CANCEL: ShopEvent.Kind.ORDER_CANCELLED,
+    }
+    ALL = (MARK_PAID, MARK_SHIPPED, CANCEL)
+
+
+class ActionNotAllowed(Exception):
+    pass
+
+
+def actions_for(status, *, can_cancel=True):
+    """What an order in `status` can go through; a platform may refuse to cancel (e.g. Magento once invoiced)."""
+    actions = {
+        Status.NEW: (Action.MARK_PAID, Action.MARK_SHIPPED, Action.CANCEL),
+        Status.PROCESSING: (Action.MARK_SHIPPED, Action.CANCEL),
+        Status.UNFINISHED: (Action.CANCEL,),
+    }.get(status, ())
+    return tuple(action for action in actions if can_cancel or action != Action.CANCEL)
 
 
 def listing(shop, *, status="", query="", before=None):
@@ -97,18 +131,68 @@ def listing(shop, *, status="", query="", before=None):
 def read(shop, external_id):
     """The order as it is in the shop now (raises shops.remote.ShopApiError); the local copy takes its status."""
     from .provisioning import get_provisioner
-    from .remote import ShopApiError
 
     try:
         order = get_provisioner(shop.platform).read_order(shop, external_id)
     except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
         # A plugin or a newer platform version changed the answer's shape.
         logger.warning("Unexpected order from shop %s: %r", shop.pk, exc)
-        raise ShopApiError("Sklep odpowiedział w nieoczekiwany sposób.") from exc
+        raise _unexpected() from exc
     ShopOrder.objects.filter(shop=shop, external_id=order.external_id).exclude(status=order.status).update(
         status=order.status,
     )
     return order
+
+
+def change(shop, external_id, action, actor, *, tracking_number="", carrier=""):
+    """
+    Does `action` in the shop and returns the order as it is afterwards. Raises ActionNotAllowed when the order (read
+    just before) doesn't offer it, shops.remote.ShopApiError when the shop fails.
+    """
+    from .provisioning import get_provisioner
+
+    order = read(shop, external_id)
+    if action not in order.actions:
+        raise ActionNotAllowed(action)
+    provisioner = get_provisioner(shop.platform)
+    try:
+        provisioner.change_order(shop, order, action, tracking_number=tracking_number, carrier=carrier)
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
+        logger.warning("Unexpected answer to %s of order %s in shop %s: %r", action, external_id, shop.pk, exc)
+        raise _unexpected() from exc
+    changed = None
+    try:
+        changed = read(shop, external_id)
+        return changed
+    finally:
+        # Done in the shop even when reading it again fails. The parcel as the shop keeps it: PrestaShop, e.g., ships
+        # with the order's own carrier, not the one typed in.
+        data = {"number": order.number}
+        if action == Action.MARK_SHIPPED and tracking_number:
+            kept = changed if changed is not None and changed.tracking_number else None
+            data.update(
+                tracking_number=kept.tracking_number if kept else tracking_number,
+                carrier=kept.carrier if kept else carrier,
+            )
+        history.record(shop, Action.KINDS[action], actor, **data)
+
+
+# What the customer reads about the parcel, in the shop's language.
+SHIPPED_NOTE = {
+    "pl_PL": "Zamówienie zostało wysłane. Numer przesyłki: {tracking}.",
+    "en_US": "Your order has been shipped. Tracking number: {tracking}.",
+    "de_DE": "Ihre Bestellung wurde versandt. Sendungsnummer: {tracking}.",
+}
+
+
+def shipped_note(shop, tracking_number, carrier=""):
+    tracking = f"{tracking_number} ({carrier})" if carrier else tracking_number
+    language = getattr(getattr(shop, "config", None), "language", "pl_PL")
+    return SHIPPED_NOTE.get(language, SHIPPED_NOTE["pl_PL"]).format(tracking=tracking)
+
+
+def notes(shop, external_id):
+    return shop.order_notes.filter(external_id=str(external_id)).select_related("author")
 
 
 def amount(value):
@@ -117,6 +201,12 @@ def amount(value):
         return Decimal(str(value if value not in (None, "") else 0)).quantize(Decimal("0.01"))
     except InvalidOperation:
         return Decimal("0.00")
+
+
+def _unexpected():
+    from .remote import ShopApiError
+
+    return ShopApiError("Sklep odpowiedział w nieoczekiwany sposób.")
 
 
 def quantity(value):
