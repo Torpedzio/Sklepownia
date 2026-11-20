@@ -281,6 +281,8 @@ export type Plan = {
   interval_months: number;
   max_shops: number;
   max_magento_shops: number;
+  /** Staff per shop, not counting the owner; null: no limit. */
+  max_staff: number | null;
   shop_memory_mb: number;
   is_featured: boolean;
   features: string[];
@@ -455,4 +457,19 @@ export type PushPreferences = {
   shops: boolean;
   billing: boolean;
   devices: { name: string; platform: 'ios' | 'android'; platform_display: string; last_seen_at: string }[];
+};
+
+export type Person = {
+  id: number;
+  name: string;
+  email: string;
+};
+
+/** An invitation to a shop's staff, waiting for the signed-in person. */
+export type Invitation = {
+  id: number;
+  shop: { id: number; name: string; url: string; platform: Platform; platform_display: string };
+  invited_by: Person | null;
+  created_at: string;
+  expires_at: string;
 };

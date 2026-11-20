@@ -45,7 +45,7 @@ async function open(routes: Routes = {}, shopCount = 0, plan: string | null = 'S
   (useAuth as jest.Mock).mockReturnValue({ user: { shop_limit: 3, plan } });
   const api = mockApi({
     'GET /shops/form-options/': options,
-    'GET /shops/': [Array.from({ length: shopCount }, (_, id) => ({ id, is_test: false }))],
+    'GET /shops/': [Array.from({ length: shopCount }, (_, id) => ({ id, is_test: false, role: 'owner' }))],
     ...routes,
   });
   await render(<NewShopScreen />, { wrapper: NotificationsProvider });
@@ -170,7 +170,7 @@ test('without a plan the form sends you to choose one', async () => {
 
 test('test shops do not count towards the limit', async () => {
   (useAuth as jest.Mock).mockReturnValue({ user: { shop_limit: 1, plan: 'Standard' } });
-  mockApi({ 'GET /shops/form-options/': options, 'GET /shops/': [[{ id: 1, is_test: true }]] });
+  mockApi({ 'GET /shops/form-options/': options, 'GET /shops/': [[{ id: 1, is_test: true, role: 'owner' }]] });
 
   await render(<NewShopScreen />, { wrapper: NotificationsProvider });
 

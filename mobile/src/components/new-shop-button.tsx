@@ -15,7 +15,8 @@ export function isShopLimitReached(limit: number | undefined, shopCount: number 
 }
 
 export function paidShopCount(shops: Shop[] | undefined) {
-  return shops?.filter((shop) => !shop.is_test).length;
+  // Shops served as staff are on their owners' plans.
+  return shops?.filter((shop) => !shop.is_test && shop.role === 'owner').length;
 }
 
 type NewShopButtonProps = Omit<ButtonProps, 'onPress' | 'disabled'> & {

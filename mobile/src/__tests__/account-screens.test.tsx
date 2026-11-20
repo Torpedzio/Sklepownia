@@ -13,7 +13,7 @@ import { NotificationsProvider } from '@/context/notifications';
 import { ApiError } from '@/lib/api';
 import { pickAvatar } from '@/lib/avatar';
 import { confirm } from '@/lib/confirm';
-import type { Shop, User } from '@/lib/types';
+import type { Invitation, Shop, User } from '@/lib/types';
 import { mockApi } from '@/testing/api';
 import { router, useLocalSearchParams } from '@/testing/router';
 
@@ -43,7 +43,10 @@ function signedIn(user: User | null, actions: Record<string, jest.Mock> = {}) {
 
 const renderScreen = (screenElement: React.ReactElement) => render(screenElement, { wrapper: NotificationsProvider });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  useLocalSearchParams.mockReturnValue({});
+});
 
 describe('forgotten password', () => {
   test('a code goes to the address, then the new password signs in', async () => {
@@ -124,6 +127,14 @@ describe('sign in', () => {
     expect(router.push).toHaveBeenCalledWith({ pathname: '/reset-password', params: { email: 'anna@example.com' } });
   });
 
+  test('an invitation link fills in the address', async () => {
+    useLocalSearchParams.mockReturnValue({ email: 'nowa@example.com' });
+    signedIn(null, { signIn: jest.fn() });
+    await renderScreen(<SignInScreen />);
+
+    expect(screen.getByLabelText('E-mail')).toHaveProp('value', 'nowa@example.com');
+  });
+
   test('links to signing up', async () => {
     signedIn(null, { signIn: jest.fn() });
     await renderScreen(<SignInScreen />);
@@ -144,6 +155,14 @@ describe('sign up', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Załóż konto' }));
 
     expect(await screen.findByText('Konto założone. Kod potwierdzający wysłaliśmy na anna@example.com.')).toBeTruthy();
+  });
+
+  test('an invitation link fills in the address', async () => {
+    useLocalSearchParams.mockReturnValue({ email: 'nowa@example.com' });
+    signedIn(null, { signUp: jest.fn() });
+    await renderScreen(<SignUpScreen />);
+
+    expect(screen.getByLabelText('E-mail')).toHaveProp('value', 'nowa@example.com');
   });
 
   test('shows what is wrong with the fields', async () => {
@@ -276,6 +295,60 @@ describe('shop list', () => {
 
     await fireEvent.press(await screen.findByRole('button', { name: 'Wybierz plan i załóż sklep' }));
     expect(router.push).toHaveBeenCalledWith('/billing/checkout');
+  });
+
+  test('shops served as staff do not count towards the plan', async () => {
+    signedIn(anna);
+    mockApi({ 'GET /shops/': [[shop(1, 'active'), shop(2, 'active'), { ...shop(3, 'active'), role: 'staff' }]] });
+    await renderScreen(<ShopsScreen />);
+
+    expect(await screen.findByText(/3 sklepy, w tym 3 otwarte\.$/)).toBeTruthy();
+  });
+
+  const invitation: Invitation = {
+    id: 7,
+    shop: { id: 9, name: 'Ceramika', url: 'http://ceramika.localhost', platform: 'woocommerce', platform_display: 'WooCommerce' },
+    invited_by: { id: 2, name: 'Jan Kowalski', email: 'jan@example.com' },
+    created_at: '2026-11-20T10:00:00Z',
+    expires_at: '2026-11-27T10:00:00Z',
+  };
+
+  test('joins a shop from an invitation', async () => {
+    signedIn(anna);
+    const api = mockApi({
+      'GET /shops/': [[], [{ ...shop(9, 'active'), name: 'Ceramika', role: 'staff' }]],
+      'GET /invitations/': [[invitation], []],
+      'POST /invitations/7/accept/': {},
+    });
+    await renderScreen(<ShopsScreen />);
+
+    expect(await screen.findByText('Ceramika')).toBeTruthy();
+    expect(screen.getByText(/Jan Kowalski zaprasza Cię do zespołu\. .* Ważne do 27 listopada 2026\./)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Dołącz' }));
+
+    expect(await screen.findByText('Dołączono do sklepu „Ceramika”.')).toBeTruthy();
+    expect(api.calls.map((call) => call.key)).toContain('POST /invitations/7/accept/');
+    expect(screen.queryByRole('button', { name: 'Dołącz' })).toBeNull();
+    expect(screen.getByText('Ceramika')).toBeTruthy();
+  });
+
+  test('declines an invitation, or says why joining failed', async () => {
+    signedIn(anna);
+    const api = mockApi({
+      'GET /shops/': [[]],
+      'GET /invitations/': [[invitation], []],
+      'POST /invitations/7/accept/': new ApiError(409, { detail: 'Zespół sklepu jest już pełny.' }),
+      'POST /invitations/7/decline/': undefined,
+    });
+    await renderScreen(<ShopsScreen />);
+
+    await fireEvent.press(await screen.findByRole('button', { name: 'Dołącz' }));
+    expect(await screen.findByText('Zespół sklepu jest już pełny.')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Odrzuć' }));
+    expect(await screen.findByText('Zaproszenie odrzucone.')).toBeTruthy();
+    expect(api.calls.map((call) => call.key)).toContain('POST /invitations/7/decline/');
+    expect(screen.queryByText('Ceramika')).toBeNull();
   });
 
   test('shows why the list did not load', async () => {

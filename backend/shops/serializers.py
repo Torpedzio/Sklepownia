@@ -3,8 +3,8 @@ from rest_framework import serializers
 
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
 from .models import (
-    ProvisioningJob, ProvisioningStep, Shop, ShopBackup, ShopChecklist, ShopConfig, ShopMember, ShopOperation,
-    ShopOrder, ShopTemplate,
+    ProvisioningJob, ProvisioningStep, Shop, ShopBackup, ShopChecklist, ShopConfig, ShopInvitation, ShopMember,
+    ShopOperation, ShopOrder, ShopTemplate,
 )
 from .platforms import Platform, platform_info
 from .shop_settings import OPERATORS, SECTIONS, describe
@@ -351,3 +351,59 @@ class ShopBackupsSerializer(serializers.Serializer):
     keep_weekly = serializers.IntegerField(help_text="Z ilu ostatnich tygodni zostaje najnowsza kopia.")
     nightly_at = serializers.DateTimeField(help_text="Kiedy powstaną następne kopie nocne.")
 
+
+
+class PersonSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField(source="get_full_name", help_text="Imię i nazwisko; puste, gdy nie podane.")
+    email = serializers.EmailField()
+
+
+class TeamMemberSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source="user.id", help_text="Id osoby (do usunięcia z zespołu).")
+    name = serializers.CharField(source="user.get_full_name")
+    email = serializers.EmailField(source="user.email")
+    joined_at = serializers.DateTimeField(source="created_at")
+
+    class Meta:
+        model = ShopMember
+        fields = ["id", "name", "email", "joined_at"]
+
+
+class TeamInvitationSerializer(serializers.ModelSerializer):
+    expired = serializers.BooleanField(read_only=True, help_text="Termin minął; zaproś ponownie, żeby wysłać nowe.")
+
+    class Meta:
+        model = ShopInvitation
+        fields = ["id", "email", "created_at", "expires_at", "expired"]
+
+
+class TeamSerializer(serializers.Serializer):
+    owner = PersonSerializer()
+    members = TeamMemberSerializer(many=True)
+    invitations = TeamInvitationSerializer(many=True)
+    limit = serializers.IntegerField(
+        allow_null=True, help_text="Ile osób z obsługi pozwala plan właściciela (bez niego); null: bez limitu.",
+    )
+    used = serializers.IntegerField(help_text="Osoby z obsługi i ważne zaproszenia, liczone do limitu.")
+
+
+class InviteSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class InvitationShopSerializer(serializers.ModelSerializer):
+    platform_display = serializers.CharField(source="get_platform_display", read_only=True)
+
+    class Meta:
+        model = Shop
+        fields = ["id", "name", "url", "platform", "platform_display"]
+
+
+class InvitationSerializer(serializers.ModelSerializer):
+    shop = InvitationShopSerializer()
+    invited_by = PersonSerializer(allow_null=True)
+
+    class Meta:
+        model = ShopInvitation
+        fields = ["id", "shop", "invited_by", "created_at", "expires_at"]

@@ -127,6 +127,7 @@ Bez ustawień poczty w `.env` backend wypisuje wiadomości w logach (`EMAIL_BACK
 | `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` | puste, `0` | Logowanie i szyfrowanie u dostawcy poczty na produkcji |
 | `DEFAULT_FROM_EMAIL` | `Sklepownia <no-reply@localhost>` | Nadawca wiadomości |
 | `PLATFORM_NAME` | `Sklepownia` | Nazwa platformy w treści wiadomości |
+| `APP_URL` | `http://localhost:8081` | Adres aplikacji w wersji web, do którego prowadzą linki w wiadomościach (zaproszenia do zespołu) |
 | `MAIL_UI_PORT` | `8030` | Port podglądu Mailpit (tylko docker-compose) |
 | `SHOPS_SMTP_HOST`, `SHOPS_SMTP_PORT` | `shops-mail`, `1025` | Przekaźnik poczty sklepów w sieci serwera sklepów, bez logowania. Puste `SHOPS_SMTP_HOST`: sklepy bez poczty |
 | `SHOPS_MAIL_DOMAIN` | `SHOPS_BASE_DOMAIN` | Sklepy wysyłają jako `<slug>@<domena>`; domena musi mieć kropkę (dla `localhost`: `sklepy.localhost`) |

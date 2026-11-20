@@ -1,0 +1,14 @@
+{% autoescape off %}{{ heading }}
+{{ subheading }}
+
+{{ intro }}
+
+{{ action }}
+{{ label }}: {{ url }}
+
+Adres sklepu: {{ shop_url }}
+Zaproszenie jest ważne do {{ expires_at|date:"j E Y, H:i" }}.
+
+--
+{{ platform }}. Wiadomość wysłana na {{ recipient }}. Jeśli nie znasz tego sklepu, zignoruj ją.
+{% endautoescape %}

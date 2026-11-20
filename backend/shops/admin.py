@@ -2,8 +2,8 @@ from django.contrib import admin
 from django.template.defaultfilters import filesizeformat
 
 from .models import (
-    ProvisioningJob, ProvisioningStep, Server, Shop, ShopBackup, ShopConfig, ShopMember, ShopOperation,
-    ShopTemplate,
+    ProvisioningJob, ProvisioningStep, Server, Shop, ShopBackup, ShopConfig, ShopInvitation, ShopMember,
+    ShopOperation, ShopTemplate,
 )
 
 
@@ -32,13 +32,25 @@ class ShopMemberInline(admin.TabularInline):
     verbose_name_plural = "obsługa sklepu"
 
 
+class ShopInvitationInline(admin.TabularInline):
+    model = ShopInvitation
+    extra = 0
+    fields = ["email", "invited_by", "created_at", "expires_at"]
+    readonly_fields = fields
+    verbose_name = "zaproszenie"
+    verbose_name_plural = "zaproszenia do obsługi"
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Shop)
 class ShopAdmin(admin.ModelAdmin):
     list_display = ["name", "slug", "owner", "platform", "status", "server", "created_at"]
     list_filter = ["platform", "status", "server"]
     search_fields = ["name", "slug", "owner__email"]
     raw_id_fields = ["owner"]
-    inlines = [ShopConfigInline, ShopMemberInline]
+    inlines = [ShopConfigInline, ShopMemberInline, ShopInvitationInline]
     # Status changes go through the state machine in services, not the admin form.
     readonly_fields = ["status", "platform", "admin_path"]
 

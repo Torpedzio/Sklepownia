@@ -43,7 +43,7 @@ Limity zapytań: logowanie, rejestracja i ustawianie nowego hasła 10 na minutę
 
 ## Sklepy: `/api/shops/`
 
-Obsługa sklepu (`role: staff`) może tylko oglądać sklep (`GET shops/`, `GET shops/{id}/`) i sprzedaż (`sales/`, `sales/refresh/`). Pozostałe akcje na sklepie dają jej `403` z „Tylko właściciel sklepu może to zrobić.”. Osoba spoza sklepu dostaje `404`.
+Obsługa sklepu (`role: staff`) może tylko oglądać sklep (`GET shops/`, `GET shops/{id}/`) i sprzedaż (`sales/`, `sales/refresh/`) oraz opuścić zespół (`leave/`). Pozostałe akcje na sklepie dają jej `403` z „Tylko właściciel sklepu może to zrobić.”. Osoba spoza sklepu dostaje `404`.
 
 | Metoda i ścieżka | Opis |
 |---|---|
@@ -181,6 +181,30 @@ Pola formularza `POST shops/`:
 | `contact_email` | nie | Domyślnie e-mail właściciela konta |
 | `description` | nie | Do 500 znaków, trafia do opisu witryny |
 | `include_sample_products` | nie | Domyślnie `true` |
+
+### Zespół
+
+Tylko dla właściciela, z potwierdzonym e-mailem. Limit osób z obsługi to `max_staff` planu właściciela, osobno
+w każdym sklepie i bez właściciela; liczą się do niego też ważne zaproszenia. Bez planu nie można nikogo zaprosić.
+
+| Metoda i ścieżka | Opis |
+|---|---|
+| `GET shops/{id}/team/` | `{owner, members, invitations, limit, used}`. `owner`: `{id, name, email}`. `members`: `{id, name, email, joined_at}` (`id` osoby). `invitations`: `{id, email, created_at, expires_at, expired}`, także przeterminowane (do ponownego wysłania). `limit`: `null` bez limitu. `used`: osoby i ważne zaproszenia. |
+| `POST shops/{id}/team/invitations/` | `{email}` → `201` z zaproszeniem i e-mail z linkiem do aplikacji (`APP_URL`: logowanie albo rejestracja z wpisanym adresem). Zaproszenie tego samego adresu odnawia termin (7 dni) i wysyła e-mail ponownie. `400` z `{email: [...]}` dla adresu właściciela albo osoby z zespołu, `409` z `detail`, gdy plan nie ma miejsca. Najwyżej 30 na godzinę. |
+| `DELETE shops/{id}/team/invitations/{invitation_id}/` | Cofnięcie zaproszenia, `204`; `404`, gdy go nie ma |
+| `DELETE shops/{id}/team/members/{user_id}/` | Usunięcie osoby z zespołu, `204`; `404`, gdy jej nie ma |
+| `POST shops/{id}/leave/` | Dla obsługi: opuszczenie zespołu, `204`. Właściciel dostaje `409`. |
+
+## Zaproszenia: `/api/invitations/`
+
+Zaproszenia do zespołów cudzych sklepów na potwierdzony adres zalogowanej osoby (konto bez potwierdzonego e-maila
+nie widzi żadnych). Przeterminowane i do usuniętych sklepów znikają z listy.
+
+| Metoda i ścieżka | Opis |
+|---|---|
+| `GET invitations/` | `[{id, shop: {id, name, url, platform, platform_display}, invited_by: {id, name, email} \| null, created_at, expires_at}]` |
+| `POST invitations/{id}/accept/` | Dołączenie do zespołu, `200` ze sklepem jak na liście (`role: staff`). Zaproszenie znika. `409`, gdy zespół jest już pełny (plan właściciela mógł się zmienić). |
+| `POST invitations/{id}/decline/` | Odrzucenie, `204` |
 
 ## Powiadomienia push: `/api/push/`
 

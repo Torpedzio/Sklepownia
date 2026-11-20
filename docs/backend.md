@@ -75,7 +75,8 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 | `Server` | Serwer, na którym działają kontenery sklepów, z limitem `max_shops`. `public_ip` to adres, z którego sklepy łączą się z operatorami płatności (aplikacja pokazuje go przy Przelewy24). Migracja tworzy serwer `local`. |
 | `ShopTemplate` | Motyw do wyboru w formularzu, dla jednej platformy (`platform`). `theme` to nazwa motywu w systemie sklepu. Migracje dodają Storefront, Astrę i Kadence (WooCommerce) oraz Hummingbird i Classic (PrestaShop). |
 | `Shop` | Sklep: właściciel, nazwa, `slug` (część adresu), platforma, status z maszyną stanów, serwer. `url` i `admin_url` są liczone z ustawień; folder panelu PrestaShop jest w `admin_path`. |
-| `ShopMember` | Osoba z obsługi sklepu (rola `staff`), unikalna w sklepie. Właściciel to `Shop.owner`, nigdy członek: płaci za plan i tylko jego sklepy liczą się do limitów. Na razie dodaje się ją w panelu admina (sklep → obsługa sklepu). |
+| `ShopMember` | Osoba z obsługi sklepu (rola `staff`), unikalna w sklepie. Właściciel to `Shop.owner`, nigdy członek: płaci za plan i tylko jego sklepy liczą się do limitów. Dołącza z zaproszenia albo dodaje ją admin (sklep → obsługa sklepu). |
+| `ShopInvitation` | Zaproszenie adresu e-mail (małymi literami) do obsługi sklepu: kto zaprosił, ważne do `expires_at` (7 dni). Jedno na sklep i adres; ponowne zaproszenie odnawia termin. Znika po przyjęciu, odrzuceniu albo cofnięciu. |
 | `ShopConfig` | Wybory z formularza: branża, motyw, liczba kategorii, język, waluta, kraj, e-mail, produkty przykładowe. Zmiany z ustawień (opis, e-mail, język, waluta, kraj, motyw) są tu dopisywane. |
 | `ShopCredentials` | Login administratora (`admin_login`: nazwa użytkownika w WordPressie, e-mail w PrestaShop) i hasła: bazy, administratora i klucz API sklepu (`api_key`). Hasła zaszyfrowane. |
 | `ProvisioningJob` | Jedna próba założenia sklepu (status, błąd, czasy). Ponowienie tworzy nowe zadanie. |
@@ -98,6 +99,12 @@ bez adresów zarezerwowanych dla platformy ([slugs.py](../backend/shops/slugs.py
 `ShopViewSet`. Uprawnienie `StaffActions` przepuszcza obsługę tylko przez `STAFF_ACTIONS` z
 [views.py](../backend/shops/views.py) (lista, szczegóły, sprzedaż), a resztę zostawia właścicielowi. Usunięcie konta
 usuwa też jego członkostwa. Powiadomienia (nowe zamówienia, awarie) i e-maile o sklepie dostaje na razie tylko właściciel.
+
+Zaproszenia: `invite` sprawdza limit (`staff_limit`: `Plan.max_staff` właściciela, 0 bez planu, `None` bez limitu;
+liczą się członkowie i ważne zaproszenia) pod blokadą wiersza sklepu i po commicie zleca e-mail
+(`send_invitation_email`). Link prowadzi do `APP_URL`: logowanie, gdy adres ma konto, inaczej rejestracja, z adresem
+w parametrze `email`. Zaproszenie widzi tylko konto z tym adresem, potwierdzonym (`invitations_for`). `accept` sprawdza
+limit jeszcze raz, bo plan mógł się zmienić. Właściciel nie może opuścić sklepu (`leave`).
 
 ### Zakładanie sklepu
 
@@ -303,7 +310,7 @@ Opis działania, stanów i operatorów: [platnosci.md](platnosci.md).
 
 | Model | Opis |
 |---|---|
-| `Plan` | Cena brutto, VAT, okres w miesiącach, limit sklepów, korzyści. Migracja dodaje plan „Standard”. |
+| `Plan` | Cena brutto, VAT, okres w miesiącach, limit sklepów, limit osób z obsługi w sklepie (`max_staff`, puste: bez limitu), korzyści. Migracja dodaje plan „Standard”. |
 | `BillingProfile` | Dane do faktury użytkownika: osoba albo firma z NIP, adres. |
 | `Subscription` | Plan użytkownika (jeden na konto): stan, okres, anulowanie, zapisana karta (token zaszyfrowany), ponowienia, zgody. |
 | `Payment` | Jedna płatność: pierwsza albo odnowienie, kwota, stan, identyfikatory u operatora, opłacony okres, dane do faktury z chwili płatności. |
@@ -402,6 +409,7 @@ Renderuje pliki Markdown z repozytorium jako strony pod `/docs/`, z menu sekcji.
 | `shops.tasks.teardown_shop` | Usunięcie sklepu albo konta | Robi kopię „Stan sprzed usunięcia sklepu” (bez niej, gdy się nie uda), usuwa kontener, wolumen i bazę; przy usuniętym koncie bez kopii, a potem usuwa kopie i wiersz sklepu |
 | `shops.tasks.back_up_all_shops` | Co noc o `SHOPS_BACKUP_HOUR` (Celery beat) | Kopia każdego działającego i zawieszonego sklepu, potem porządki w repozytorium (`backups.back_up_all`); monitor dostaje listę nieudanych |
 | `accounts.tasks.send_account_deleted_email` | Usunięcie konta | Potwierdzenie na dawny adres z listą usuniętych sklepów |
+| `shops.tasks.send_invitation_email` | Zaproszenie do zespołu i jego odnowienie | E-mail z linkiem do aplikacji; cofnięte zaproszenie nic nie wysyła; przy błędzie serwera pocztowego ponawia |
 | `shops.tasks.send_admin_access_email` | Koniec zakładania, nowe hasło, prośba z aplikacji | Wysyła właścicielowi e-mail ze szczegółami sklepu i danymi logowania ([emails.py](../backend/shops/emails.py)); przy błędzie serwera pocztowego ponawia |
 | `billing.tasks.renew_subscriptions` | Co 15 minut (Celery beat) | Odnawia plany, ponawia nieudane odnowienia, kończy anulowane i niezapłacone |
 | `billing.tasks.reconcile_payments` | Co 5 minut (Celery beat) | Pyta operatora o płatności, które wciąż czekają; po dobie oznacza je jako niedokończone |

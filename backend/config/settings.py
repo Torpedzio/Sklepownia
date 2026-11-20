@@ -134,6 +134,8 @@ EMAIL_TIMEOUT = 10
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Sklepownia <no-reply@localhost>")
 PLATFORM_NAME = os.environ.get("PLATFORM_NAME", "Sklepownia")
 CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "kontakt@localhost")
+# Where links in e-mails lead (the web app).
+APP_URL = os.environ.get("APP_URL", "http://localhost:8081").rstrip("/")
 
 
 # REST API
@@ -152,6 +154,7 @@ REST_FRAMEWORK = {
         'password_reset': '5/hour',
         'contact': '5/hour',
         'admin_access_email': '5/hour',
+        'shop_invitations': '30/hour',
         'avatar': '30/hour',
     },
 }

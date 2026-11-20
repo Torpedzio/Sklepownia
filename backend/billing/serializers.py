@@ -13,7 +13,7 @@ class PlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plan
         fields = ["code", "name", "description", "price", "currency", "vat_rate", "interval_months", "max_shops",
-                  "max_magento_shops", "shop_memory_mb", "is_featured", "features"]
+                  "max_magento_shops", "max_staff", "shop_memory_mb", "is_featured", "features"]
 
 
 class BillingProfileSerializer(serializers.ModelSerializer):

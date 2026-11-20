@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Awning } from '@/components/awning';
 import { Icon } from '@/components/icon';
+import { Invitations } from '@/components/invitations';
 import { Logo } from '@/components/logo';
 import { isShopLimitReached, NewShopButton, paidShopCount } from '@/components/new-shop-button';
 import { Page } from '@/components/page';
@@ -64,6 +65,8 @@ export default function DashboardScreen() {
           </View>
           {shops?.length ? <NewShopButton title="Nowy sklep" icon="plus" shopCount={paidShops} /> : null}
         </View>
+
+        <Invitations onJoined={refresh} />
 
         {error ? <ThemedText themeColor="danger">{error.message}</ThemedText> : null}
         {isLoading ? <ActivityIndicator style={styles.loader} /> : null}

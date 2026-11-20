@@ -42,6 +42,7 @@ const standard: Plan = {
   interval_months: 1,
   max_shops: 3,
   max_magento_shops: 1,
+  max_staff: 20,
   shop_memory_mb: 512,
   is_featured: true,
   features: ['Do 3 sklepów'],

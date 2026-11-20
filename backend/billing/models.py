@@ -18,6 +18,9 @@ class Plan(models.Model):
     max_shops = models.PositiveSmallIntegerField()
     # Of max_shops; Magento needs about three times the memory of the others.
     max_magento_shops = models.PositiveSmallIntegerField(default=0)
+    max_staff = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Osoby z obsługi w każdym sklepie, bez właściciela; puste: bez limitu.",
+    )
     shop_memory_mb = models.PositiveIntegerField(default=512)
     is_featured = models.BooleanField(default=False)
     # Benefits shown on the pricing page, one per line.

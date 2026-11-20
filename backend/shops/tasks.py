@@ -7,8 +7,8 @@ from push import messages
 from push import services as push
 
 from . import backups, sales
-from .emails import admin_access_message
-from .models import ProvisioningJob, SalesSync, Shop, ShopOperation, ShopOrder
+from .emails import admin_access_message, invitation_message
+from .models import ProvisioningJob, SalesSync, Shop, ShopInvitation, ShopOperation, ShopOrder
 from .provisioning import get_provisioner
 from .provisioning.operations import run_operation
 from .provisioning.runner import run_job
@@ -88,6 +88,19 @@ def send_admin_access_email(shop_id, reason):
     if shop is None:
         return
     admin_access_message(shop, reason).send()
+
+
+@shared_task(autoretry_for=(OSError, SMTPException), retry_backoff=True, max_retries=5)
+def send_invitation_email(invitation_id):
+    invitation = (
+        ShopInvitation.objects.select_related("shop", "invited_by")
+        .exclude(shop__status=Shop.Status.DELETED)
+        .filter(pk=invitation_id)
+        .first()
+    )
+    # Revoked or accepted in the meantime.
+    if invitation is not None:
+        invitation_message(invitation).send()
 
 
 @shared_task

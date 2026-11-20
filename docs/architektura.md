@@ -283,6 +283,8 @@ więc po zmianie domeny trzeba przenieść istniejące sklepy poleceniem `update
   Aplikacja pokazuje tylko adres panelu i adres, na który wysłano dane.
 - Użytkownik widzi tylko sklepy, które ma albo obsługuje (`team.visible_shops`); obsługa może w nich tylko to, co
   wymienia `STAFF_ACTIONS` ([backend.md](backend.md#zespół)). Zakładanie i ponawianie wymaga potwierdzonego e-maila.
+- Zaproszenie do zespołu przyjmie tylko konto z potwierdzonym adresem, na który je wysłano; link w e-mailu nie
+  niesie tokenu, tylko prowadzi do logowania albo rejestracji.
 - Komunikaty błędów kroków pokazywane użytkownikowi pochodzą tylko z `ProvisioningError`; inne wyjątki
   (mogące zawierać hasła lub nazwy hostów) zastępuje ogólny komunikat, a szczegóły trafiają do logów workera.
 - Endpointy logowania, weryfikacji e-maila i formularza kontaktowego mają limity zapytań (throttling).

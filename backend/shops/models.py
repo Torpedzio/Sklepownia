@@ -138,6 +138,29 @@ class ShopMember(models.Model):
         return f"{self.user} w {self.shop}"
 
 
+class ShopInvitation(models.Model):
+    """An address invited to the staff; whoever signs in with it verified can join (shops/team.py)."""
+
+    VALID_DAYS = 7
+
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="invitations")
+    # Lowercase, like account e-mails.
+    email = models.EmailField()
+    invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["shop", "email"], name="unique_shop_invitation")]
+
+    def __str__(self):
+        return f"{self.email} do {self.shop}"
+
+    @property
+    def expired(self):
+        return self.expires_at <= timezone.now()
+
+
 class ShopConfig(models.Model):
     """Creation form input for provisioning; settings changed in the app are written back here."""
 

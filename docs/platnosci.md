@@ -178,13 +178,16 @@ Wszystko poza planami wymaga potwierdzonego e-maila.
 Plany są w panelu admina (**Płatności → Plany**): nazwa, cena brutto, VAT, okres w miesiącach, limit sklepów,
 limit sklepów Magento, pamięć sklepu, wyróżnienie w cenniku, korzyści (lista w JSON), kolejność i widoczność. Migracje dodają:
 
-| Plan | Cena brutto | Sklepy | W tym Magento | Pamięć sklepu | Pomoc |
-|---|---|---|---|---|---|
-| Start (`start`) | 29 zł / mies. | 1 | 0 | 512 MB | e-mailowa |
-| Standard (`standard`, polecany) | 49 zł / mies. | 3 | 1 | 512 MB | e-mailowa |
-| Biznes (`business`) | 99 zł / mies. | 10 | 5 | 1 GB | priorytetowa, odpowiedź w ciągu 1 dnia roboczego |
+| Plan | Cena brutto | Sklepy | W tym Magento | Obsługa w sklepie | Pamięć sklepu | Pomoc |
+|---|---|---|---|---|---|---|
+| Start (`start`) | 29 zł / mies. | 1 | 0 | do 5 osób | 512 MB | e-mailowa |
+| Standard (`standard`, polecany) | 49 zł / mies. | 3 | 1 | do 20 osób | 512 MB | e-mailowa |
+| Biznes (`business`) | 99 zł / mies. | 10 | 5 | bez limitu | 1 GB | priorytetowa, odpowiedź w ciągu 1 dnia roboczego |
 
 - `max_shops` sprawdza backend przy zakładaniu sklepu (sklepy testowe się nie liczą).
+- `max_staff` to ile osób z obsługi właściciel może mieć w każdym sklepie, nie licząc siebie; puste pole to brak
+  limitu. Backend sprawdza go przy zaproszeniu (licząc ważne zaproszenia) i przy jego przyjęciu. Po zmianie planu
+  na mniejszy nikt nie jest usuwany z zespołu, ale nowych osób nie można zaprosić, dopóki jest za dużo.
 - `max_magento_shops` to ile z tych sklepów może działać na Magento, które potrzebuje ok. trzy razy więcej pamięci.
   Backend sprawdza go przy zakładaniu i przywracaniu sklepu, a przy zmianie planu zostawia aktywne najstarsze
   sklepy, które mieszczą się w obu limitach (właściciel może wybrać inne). Formularz sklepu (`form-options`)

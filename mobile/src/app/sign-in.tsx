@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
 import { AuthLayout } from '@/components/auth-layout';
@@ -11,7 +11,9 @@ import { ApiError } from '@/lib/api';
 export default function SignInScreen() {
   const { signIn } = useAuth();
   const notify = useNotify();
-  const [email, setEmail] = useState('');
+  const params = useLocalSearchParams<{ email?: string }>();
+  // Links in invitation e-mails carry the invited address.
+  const [email, setEmail] = useState(params.email ?? '');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 

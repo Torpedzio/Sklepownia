@@ -1,4 +1,6 @@
-"""E-mails about a shop sent to its owner. Admin passwords travel only this way, never through the API."""
+"""E-mails about a shop. Admin passwords travel only this way (to the owner), never through the API."""
+
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -78,3 +80,33 @@ def _listed(names):
     """E.g. "Płatności, wysyłkę i podatki"."""
     text = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} i {names[-1]}"
     return text[0].upper() + text[1:]
+
+
+def invitation_message(invitation):
+    """Leads to signing in, or signing up when the address has no account; the app shows the invitation there."""
+    from accounts.models import User
+
+    shop, inviter = invitation.shop, invitation.invited_by
+    name = (inviter.get_full_name() or inviter.email) if inviter else "Właściciel sklepu"
+    has_account = User.objects.filter(email=invitation.email, is_active=True).exists()
+    path = "/sign-in" if has_account else "/sign-up"
+    context = {
+        "platform": settings.PLATFORM_NAME,
+        "recipient": invitation.email,
+        "heading": "Zaproszenie do obsługi sklepu",
+        "subheading": shop.name,
+        "intro": f"{name} zaprasza Cię do zespołu sklepu „{shop.name}”. W aplikacji zobaczysz sklep i jego sprzedaż.",
+        "action": "Zaloguj się na to konto, a zaproszenie pojawi się na liście sklepów."
+        if has_account else "Załóż konto na ten adres, a po potwierdzeniu e-maila zaproszenie pojawi się na liście sklepów.",
+        "url": f"{settings.APP_URL}{path}?{urlencode({'email': invitation.email})}",
+        "label": "Zaloguj się" if has_account else "Załóż konto",
+        "shop_url": shop.url,
+        "expires_at": invitation.expires_at,
+    }
+    message = EmailMultiAlternatives(
+        subject=f"Zaproszenie do sklepu „{shop.name}”",
+        body=render_to_string("shops/email/invitation.txt", context),
+        to=[invitation.email],
+    )
+    message.attach_alternative(render_to_string("shops/email/invitation.html", context), "text/html")
+    return message

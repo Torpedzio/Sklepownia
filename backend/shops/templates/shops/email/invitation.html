@@ -1,0 +1,17 @@
+{% extends "email/layout.html" %}
+{% block content %}
+<tr>
+  <td style="padding:16px 32px 0;">
+    <p style="margin:0; font-size:15px; line-height:1.55;">{{ action }}</p>
+  </td>
+</tr>
+{% include "email/button.html" with url=url label=label %}
+<tr>
+  <td style="padding:16px 32px 20px;">
+    <p style="margin:0 0 4px; font-size:13px; color:#5B6478;">Adres sklepu</p>
+    <p style="margin:0 0 12px; font-size:15px;"><a href="{{ shop_url }}" style="color:#0F7B5F;">{{ shop_url }}</a></p>
+    <p style="margin:0; font-size:13px; color:#5B6478;">Zaproszenie jest ważne do {{ expires_at|date:"j E Y, H:i" }}.</p>
+  </td>
+</tr>
+{% endblock %}
+{% block footer %}{{ platform }}. Wiadomość wysłana na {{ recipient }}. Jeśli nie znasz tego sklepu, zignoruj ją.{% endblock %}

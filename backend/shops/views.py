@@ -11,7 +11,9 @@ from billing.models import Plan
 
 from . import backups, checklist, documents, sales, services, shop_settings, team
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
-from .models import InvalidTransition, Shop, ShopCredentials, ShopOperation, ShopTemplate
+from .models import (
+    InvalidTransition, Shop, ShopCredentials, ShopInvitation, ShopMember, ShopOperation, ShopTemplate,
+)
 from .platforms import PLATFORMS, Platform, platform_info
 from .shop_settings import DocumentsSection, SellerRegister, SettingsUpdateSerializer
 from .tasks import send_admin_access_email
@@ -21,6 +23,8 @@ from .serializers import (
     DocumentsPreviewRequestSerializer,
     DocumentsPreviewSerializer,
     FormOptionsSerializer,
+    InvitationSerializer,
+    InviteSerializer,
     ShopCreateSerializer,
     ShopAdminAccessSerializer,
     ShopBackupsSerializer,
@@ -32,6 +36,8 @@ from .serializers import (
     ShopSerializer,
     ShopTemplateSerializer,
     SlugCheckSerializer,
+    TeamInvitationSerializer,
+    TeamSerializer,
 )
 from .slugs import normalize_slug, slug_error
 
@@ -40,10 +46,10 @@ from .slugs import normalize_slug, slug_error
 VERIFIED_ACTIONS = (
     "create", "retry", "resume", "admin_access", "send_admin_access", "shop_settings", "refresh_settings", "reset_admin_password",
     "remove_sample_products", "operations", "operation", "shop_sales", "refresh_sales", "shop_backups",
-    "restore_backup",
+    "restore_backup", "team", "invite", "revoke_invitation", "remove_member",
 )
 # What the staff may do in a shop they serve; the rest (settings, backups, panel access, deletion…) is the owner's.
-STAFF_ACTIONS = ("list", "retrieve", "shop_sales", "refresh_sales")
+STAFF_ACTIONS = ("list", "retrieve", "shop_sales", "refresh_sales", "leave")
 OPERATION_HISTORY_LENGTH = 20
 BACKUPS_DISABLED = "Kopie zapasowe są chwilowo wyłączone."
 BACKUP_LIMIT = "Na dziś to już wszystkie kopie, które możesz zrobić sam. Kolejną zrobisz jutro, a w nocy powstanie kopia nocna."
@@ -520,6 +526,64 @@ class ShopViewSet(
             return _operation_conflict(exc)
         return Response(ShopOperationSerializer(operation).data, status=status.HTTP_202_ACCEPTED)
 
+    @extend_schema(responses={200: TeamSerializer})
+    @action(detail=True, methods=["get"])
+    def team(self, request, pk=None):
+        return Response(TeamSerializer(team.overview(self.get_object())).data)
+
+    @extend_schema(
+        request=InviteSerializer,
+        responses={
+            201: TeamInvitationSerializer,
+            400: OpenApiResponse(description="Adres właściciela albo osoby, która już jest w zespole."),
+            409: OpenApiResponse(description="Plan nie ma miejsca na kolejną osobę."),
+        },
+    )
+    @action(
+        detail=True, methods=["post"], url_path="team/invitations",
+        throttle_classes=[ScopedRateThrottle], throttle_scope="shop_invitations",
+    )
+    def invite(self, request, pk=None):
+        """Sends the invitation e-mail; inviting the same address again renews the term and sends it again."""
+        shop = self.get_object()
+        serializer = InviteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            invitation = team.invite(shop, serializer.validated_data["email"], request.user)
+        except team.TeamError as exc:
+            if exc.conflict:
+                return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+            return Response({"email": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(TeamInvitationSerializer(invitation).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(parameters=[OpenApiParameter("invitation_id", int, OpenApiParameter.PATH)], responses={204: None})
+    @action(detail=True, methods=["delete"], url_path=r"team/invitations/(?P<invitation_id>[0-9]+)")
+    def revoke_invitation(self, request, pk=None, invitation_id=None):
+        """The link in the e-mail stops working."""
+        if not self.get_object().invitations.filter(pk=invitation_id).delete()[0]:
+            return Response({"detail": "Nie znaleziono zaproszenia."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(parameters=[OpenApiParameter("user_id", int, OpenApiParameter.PATH)], responses={204: None})
+    @action(detail=True, methods=["delete"], url_path=r"team/members/(?P<user_id>[0-9]+)")
+    def remove_member(self, request, pk=None, user_id=None):
+        if not ShopMember.objects.filter(shop=self.get_object(), user_id=user_id).delete()[0]:
+            return Response({"detail": "Tej osoby nie ma w zespole sklepu."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        request=None,
+        responses={204: None, 409: OpenApiResponse(description="Właściciel nie może opuścić swojego sklepu.")},
+    )
+    @action(detail=True, methods=["post"])
+    def leave(self, request, pk=None):
+        """For the staff: leaves the shop's team."""
+        try:
+            team.leave(self.get_object(), request.user)
+        except team.TeamError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     def _start(self, kind):
         shop = self.get_object()
         try:
@@ -527,3 +591,34 @@ class ShopViewSet(
         except (services.ShopNotActive, services.OperationInProgress) as exc:
             return _operation_conflict(exc)
         return Response(ShopOperationSerializer(operation).data, status=status.HTTP_202_ACCEPTED)
+
+
+class InvitationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Invitations waiting for the signed-in person (to their verified e-mail)."""
+
+    serializer_class = InvitationSerializer
+
+    def get_queryset(self):
+        # The schema generator asks without a signed-in user.
+        if getattr(self, "swagger_fake_view", False):
+            return ShopInvitation.objects.none()
+        return team.invitations_for(self.request.user)
+
+    @extend_schema(
+        request=None,
+        responses={200: ShopSerializer, 409: OpenApiResponse(description="Zespół sklepu jest już pełny.")},
+    )
+    @action(detail=True, methods=["post"])
+    def accept(self, request, pk=None):
+        """Joins the shop's team; returns the shop as it appears on the list."""
+        try:
+            shop = team.accept(self.get_object(), request.user)
+        except team.TeamError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+        return Response(ShopSerializer(team.visible_shops(request.user).select_related("health").get(pk=shop.pk)).data)
+
+    @extend_schema(request=None, responses={204: None})
+    @action(detail=True, methods=["post"])
+    def decline(self, request, pk=None):
+        self.get_object().delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
