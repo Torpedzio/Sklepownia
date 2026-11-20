@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from accounts.models import User
 
-from . import backups, shop_settings
+from . import backups, history, shop_settings
 from .choices import COUNTRY_TIMEZONES
 from .models import (
     InvalidTransition,
@@ -85,6 +85,7 @@ def create_shop(owner, *, name, slug, platform=None, **config):
             _check_room(owner, plan, platform)
             shop = Shop.objects.create(owner=owner, name=name, slug=slug, platform=platform)
             ShopConfig.objects.create(shop=shop, **config)
+            history.record(shop, history.Kind.SHOP_CREATED, owner)
             _enqueue_provisioning(shop)
     except IntegrityError as exc:
         if "unique_slug_for_live_shops" in str(exc):
@@ -167,10 +168,11 @@ def suspend_shops(shops):
             if shop.status == Shop.Status.SUSPENDED:
                 continue
             shop.transition_to(Shop.Status.SUSPENDED)
+            history.record(shop, history.Kind.SUSPENDED)
             transaction.on_commit(lambda shop_id=shop.pk: suspend_shop.delay(shop_id))
 
 
-def resume_shop(shop):
+def resume_shop(shop, actor=None):
     with transaction.atomic():
         User.objects.select_for_update().get(pk=shop.owner_id)
         shop = Shop.objects.select_for_update().get(pk=shop.pk)
@@ -181,6 +183,7 @@ def resume_shop(shop):
             raise PlanRequired()
         _check_room(shop.owner, plan, shop.platform)
         _bring_back(shop)
+        history.record(shop, history.Kind.RESUMED, actor)
     return shop
 
 
@@ -196,6 +199,7 @@ def resume_up_to_limit(user, plan):
             shop = Shop.objects.select_for_update().get(pk=shop.pk)
             if shop.status == Shop.Status.SUSPENDED:
                 _bring_back(shop)
+                history.record(shop, history.Kind.RESUMED)
                 resumed.append(shop)
     return resumed
 
@@ -209,13 +213,14 @@ def _bring_back(shop):
         transaction.on_commit(lambda: resume_shop_container.delay(shop.pk))
 
 
-def retry_shop(shop):
+def retry_shop(shop, actor=None):
     if not shop.is_test and active_plan(shop.owner) is None:
         raise PlanRequired()
     with transaction.atomic():
         shop = Shop.objects.select_for_update().get(pk=shop.pk)
         shop.transition_to(Shop.Status.PENDING)
         _enqueue_provisioning(shop)
+        history.record(shop, history.Kind.SETUP_RETRIED, actor)
     return shop
 
 
@@ -329,5 +334,6 @@ def start_operation(shop, user, kind, changes=None, secrets=None, backup=None):
             shop=shop, kind=kind, changes=changes or {}, secrets=json.dumps(secrets) if secrets else "",
             backup=backup, requested_by=user,
         )
+        history.record_operation(operation)
         transaction.on_commit(lambda: run_shop_operation.delay(operation.pk))
     return operation

@@ -2,8 +2,8 @@ from django.contrib import admin
 from django.template.defaultfilters import filesizeformat
 
 from .models import (
-    ProvisioningJob, ProvisioningStep, Server, Shop, ShopBackup, ShopConfig, ShopInvitation, ShopMember,
-    ShopOperation, ShopTemplate,
+    ProvisioningJob, ProvisioningStep, Server, Shop, ShopBackup, ShopConfig, ShopEvent, ShopInvitation,
+    ShopMember, ShopOperation, ShopTemplate,
 )
 
 
@@ -80,6 +80,22 @@ class ShopOperationAdmin(admin.ModelAdmin):
     readonly_fields = [
         "shop", "kind", "status", "changes", "result", "error", "requested_by", "created_at", "started_at", "finished_at",
     ]
+
+
+@admin.register(ShopEvent)
+class ShopEventAdmin(admin.ModelAdmin):
+    """Read-only: the history is what happened."""
+
+    list_display = ["created_at", "shop", "kind", "actor", "operation"]
+    list_filter = ["kind"]
+    search_fields = ["shop__name", "shop__slug", "actor__email"]
+    readonly_fields = ["shop", "kind", "actor", "operation", "data", "created_at"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(ShopBackup)

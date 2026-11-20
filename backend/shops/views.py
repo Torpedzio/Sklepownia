@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.db.models import Q
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -9,10 +10,10 @@ from rest_framework.throttling import ScopedRateThrottle
 from accounts.permissions import IsEmailVerified
 from billing.models import Plan
 
-from . import backups, checklist, documents, sales, services, shop_settings, team
+from . import backups, checklist, documents, history, sales, services, shop_settings, team
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, VAT_RATES, Country, Currency, Industry, Language, Timezone
 from .models import (
-    InvalidTransition, Shop, ShopCredentials, ShopInvitation, ShopMember, ShopOperation, ShopTemplate,
+    InvalidTransition, Shop, ShopCredentials, ShopEvent, ShopInvitation, ShopOperation, ShopTemplate,
 )
 from .platforms import PLATFORMS, Platform, platform_info
 from .shop_settings import DocumentsSection, SellerRegister, SettingsUpdateSerializer
@@ -30,6 +31,7 @@ from .serializers import (
     ShopBackupsSerializer,
     ShopChecklistSerializer,
     ShopDetailSerializer,
+    ShopHistorySerializer,
     ShopOperationSerializer,
     ShopSalesSerializer,
     ShopSettingsSerializer,
@@ -46,11 +48,12 @@ from .slugs import normalize_slug, slug_error
 VERIFIED_ACTIONS = (
     "create", "retry", "resume", "admin_access", "send_admin_access", "shop_settings", "refresh_settings", "reset_admin_password",
     "remove_sample_products", "operations", "operation", "shop_sales", "refresh_sales", "shop_backups",
-    "restore_backup", "team", "invite", "revoke_invitation", "remove_member",
+    "restore_backup", "team", "invite", "revoke_invitation", "remove_member", "shop_history",
 )
 # What the staff may do in a shop they serve; the rest (settings, backups, panel access, deletion…) is the owner's.
 STAFF_ACTIONS = ("list", "retrieve", "shop_sales", "refresh_sales", "leave")
 OPERATION_HISTORY_LENGTH = 20
+HISTORY_PAGE = 30
 BACKUPS_DISABLED = "Kopie zapasowe są chwilowo wyłączone."
 BACKUP_LIMIT = "Na dziś to już wszystkie kopie, które możesz zrobić sam. Kolejną zrobisz jutro, a w nocy powstanie kopia nocna."
 
@@ -248,7 +251,7 @@ class ShopViewSet(
     @action(detail=True, methods=["post"])
     def retry(self, request, pk=None):
         try:
-            services.retry_shop(self.get_object())
+            services.retry_shop(self.get_object(), request.user)
         except services.PlanRequired:
             return Response({"detail": PLAN_REQUIRED}, status=status.HTTP_402_PAYMENT_REQUIRED)
         except InvalidTransition:
@@ -271,7 +274,7 @@ class ShopViewSet(
     def resume(self, request, pk=None):
         """Brings back a shop suspended for not fitting the plan."""
         try:
-            services.resume_shop(self.get_object())
+            services.resume_shop(self.get_object(), request.user)
         except services.PlanRequired:
             return Response({"detail": PLAN_REQUIRED}, status=status.HTTP_402_PAYMENT_REQUIRED)
         except services.ShopLimitReached as limit:
@@ -312,6 +315,7 @@ class ShopViewSet(
         if not _panel_ready(shop):
             return Response({"detail": PANEL_NOT_READY}, status=status.HTTP_409_CONFLICT)
         send_admin_access_email.delay(shop.pk, "resend")
+        history.record(shop, history.Kind.ADMIN_ACCESS_SENT, request.user)
         return Response({"admin_url": shop.admin_url, "sent_to": shop.owner.email}, status=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
@@ -526,6 +530,27 @@ class ShopViewSet(
             return _operation_conflict(exc)
         return Response(ShopOperationSerializer(operation).data, status=status.HTTP_202_ACCEPTED)
 
+    @extend_schema(
+        parameters=[OpenApiParameter("before", int, description="Id wpisu: starsze od niego (następna strona).")],
+        responses={200: ShopHistorySerializer},
+    )
+    @action(detail=True, methods=["get"], url_path="history")
+    def shop_history(self, request, pk=None):
+        """Who did what in the shop, newest first, a page at a time."""
+        shop = self.get_object()
+        events = history.events(shop)
+        before = request.query_params.get("before", "")
+        if before.isdigit():
+            cursor = shop.events.filter(pk=before).first()
+            if cursor is not None:
+                events = events.filter(
+                    Q(created_at__lt=cursor.created_at) | Q(created_at=cursor.created_at, pk__lt=cursor.pk),
+                )
+        page = list(events[: HISTORY_PAGE + 1])
+        return Response(ShopHistorySerializer(
+            {"events": page[:HISTORY_PAGE], "has_more": len(page) > HISTORY_PAGE}, context={"shop": shop},
+        ).data)
+
     @extend_schema(responses={200: TeamSerializer})
     @action(detail=True, methods=["get"])
     def team(self, request, pk=None):
@@ -560,14 +585,14 @@ class ShopViewSet(
     @action(detail=True, methods=["delete"], url_path=r"team/invitations/(?P<invitation_id>[0-9]+)")
     def revoke_invitation(self, request, pk=None, invitation_id=None):
         """The link in the e-mail stops working."""
-        if not self.get_object().invitations.filter(pk=invitation_id).delete()[0]:
+        if not team.revoke(self.get_object(), invitation_id, request.user):
             return Response({"detail": "Nie znaleziono zaproszenia."}, status=status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(parameters=[OpenApiParameter("user_id", int, OpenApiParameter.PATH)], responses={204: None})
     @action(detail=True, methods=["delete"], url_path=r"team/members/(?P<user_id>[0-9]+)")
     def remove_member(self, request, pk=None, user_id=None):
-        if not ShopMember.objects.filter(shop=self.get_object(), user_id=user_id).delete()[0]:
+        if not team.remove_member(self.get_object(), user_id, request.user):
             return Response({"detail": "Tej osoby nie ma w zespole sklepu."}, status=status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -620,5 +645,5 @@ class InvitationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     @extend_schema(request=None, responses={204: None})
     @action(detail=True, methods=["post"])
     def decline(self, request, pk=None):
-        self.get_object().delete()
+        team.decline(self.get_object(), request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)

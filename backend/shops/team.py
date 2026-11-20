@@ -7,6 +7,7 @@ from django.db.models import Case, CharField, Q, Value, When
 from django.utils import timezone
 from rest_framework.permissions import BasePermission
 
+from . import history
 from .models import Shop, ShopInvitation, ShopMember
 
 Role = ShopMember.Role
@@ -80,10 +81,11 @@ def invite(shop, email, invited_by):
             taken = shop.members.count() + pending_invitations(shop).exclude(email=email).count()
             if taken >= limit:
                 raise TeamError(_full(limit), conflict=True)
-        invitation, _ = ShopInvitation.objects.update_or_create(
+        invitation, created = ShopInvitation.objects.update_or_create(
             shop=shop, email=email,
             defaults={"invited_by": invited_by, "expires_at": timezone.now() + timedelta(days=ShopInvitation.VALID_DAYS)},
         )
+        history.record(shop, history.Kind.INVITATION_SENT, invited_by, email=email, **({} if created else {"again": True}))
         transaction.on_commit(lambda: send_invitation_email.delay(invitation.pk))
     return invitation
 
@@ -113,13 +115,42 @@ def accept(invitation, user):
             raise TeamError("Zespół sklepu jest już pełny. Poproś właściciela o miejsce.", conflict=True)
         ShopMember.objects.create(shop=shop, user=user)
         invitation.delete()
+        history.record(shop, history.Kind.MEMBER_JOINED, user)
     return shop
+
+
+def decline(invitation, user):
+    invitation.delete()
+    history.record(invitation.shop, history.Kind.INVITATION_DECLINED, user, email=invitation.email)
+
+
+def revoke(shop, invitation_id, by):
+    """False when there is no such invitation."""
+    invitation = shop.invitations.filter(pk=invitation_id).first()
+    if invitation is None:
+        return False
+    invitation.delete()
+    history.record(shop, history.Kind.INVITATION_REVOKED, by, email=invitation.email)
+    return True
+
+
+def remove_member(shop, user_id, by):
+    """False when the person isn't on the staff."""
+    member = shop.members.select_related("user").filter(user_id=user_id).first()
+    if member is None:
+        return False
+    member.delete()
+    history.record(
+        shop, history.Kind.MEMBER_REMOVED, by, email=member.user.email, name=member.user.get_full_name(),
+    )
+    return True
 
 
 def leave(shop, user):
     if shop.owner_id == user.pk:
         raise TeamError("Właściciel nie może opuścić swojego sklepu. Możesz go usunąć.", conflict=True)
-    ShopMember.objects.filter(shop=shop, user=user).delete()
+    if ShopMember.objects.filter(shop=shop, user=user).delete()[0]:
+        history.record(shop, history.Kind.MEMBER_LEFT, user)
 
 
 def _full(limit):

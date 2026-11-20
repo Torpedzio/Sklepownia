@@ -273,6 +273,8 @@ describe('team', () => {
     expect(await screen.findByText('1 osoba z obsługi, 1 zaproszenie czeka.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Zarządzaj zespołem' }));
     expect(router.push).toHaveBeenCalledWith({ pathname: '/shops/[id]/team', params: { id: '7' } });
+    await fireEvent.press(screen.getByRole('button', { name: 'Historia działań' }));
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/shops/[id]/history', params: { id: '7' } });
   });
 
   test('the staff sees the shop and its sales, without what belongs to the owner', async () => {
@@ -281,7 +283,7 @@ describe('team', () => {
     expect(await screen.findByText('Sklep działa')).toBeTruthy();
     expect(screen.getByText('Obsługujesz')).toBeTruthy();
     expect(screen.getByText(/Sklep należy do: Anna Kowalska \(anna@example.com\)/)).toBeTruthy();
-    for (const name of ['Ustawienia sklepu', 'Panel WordPressa', 'Usuń sklep', 'Zarządzaj zespołem']) {
+    for (const name of ['Ustawienia sklepu', 'Panel WordPressa', 'Usuń sklep', 'Zarządzaj zespołem', 'Historia działań']) {
       expect(screen.queryByRole('button', { name })).toBeNull();
     }
     // Nothing asked of the owner-only endpoints.

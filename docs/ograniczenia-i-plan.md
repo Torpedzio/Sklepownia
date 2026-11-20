@@ -94,17 +94,17 @@ Role i zaproszenia już są ([backend.md](backend.md#zespół)): obsługa ogląd
 właściciel; nowe czynności (zamówienia, produkty, stany, klienci, rabaty) trafią do `STAFF_ACTIONS`. Zaprasza się
 e-mailem z linkiem do aplikacji, a zaproszenie czeka na liście sklepów osoby zaproszonej. Przy rejestracji wybiera
 się „Zakładam sklep” albo „Dołączam do zespołu” (bez cennika, z ekranem czekania na zaproszenie). Właściciel
-prowadzi zespół na ekranie sklepu, a obsługa widzi tylko to, co może zrobić.
+prowadzi zespół na ekranie sklepu, a obsługa widzi tylko to, co może zrobić. Historia działań pokazuje właścicielowi,
+kto co zmienił; nowe czynności dopisują do niej swoje wpisy.
 
-1. **Historia działań:** kto co zmienił w sklepie.
-2. **Zamówienia:** lista z filtrami, szczegóły, zmiana statusu, numer przesyłki dla klienta, notatka, push o nowym
+1. **Zamówienia:** lista z filtrami, szczegóły, zmiana statusu, numer przesyłki dla klienta, notatka, push o nowym
    zamówieniu.
-3. **Produkty:** lista, dodawanie i edycja (cena, promocja, opis, kategoria, SKU, stan), zdjęcia z aparatu,
+2. **Produkty:** lista, dodawanie i edycja (cena, promocja, opis, kategoria, SKU, stan), zdjęcia z aparatu,
    ukrywanie i usuwanie; warianty na razie w panelu. Do tego szybka zmiana stanów magazynowych.
-4. **Powiadomienia według osoby** (nowe zamówienia, awarie) i przypadki brzegowe zespołu (usunięcie konta członka,
+3. **Powiadomienia według osoby** (nowe zamówienia, awarie) i przypadki brzegowe zespołu (usunięcie konta członka,
    sklepu z zespołem).
-5. **Kategorie, klienci (z wnioskami RODO) i kody rabatowe.**
-6. **Co zostaje w panelu:** lista z linkami „Otwórz w panelu” i poradami.
+4. **Kategorie, klienci (z wnioskami RODO) i kody rabatowe.**
+5. **Co zostaje w panelu:** lista z linkami „Otwórz w panelu” i poradami.
 
 Klucz API sklepu może usunąć właściciel w panelu; aplikacja zgłasza wtedy odrzucony klucz, a naprawia to dopiero
 `connect_shop_api`. Do rozważenia: samoczynne odnowienie klucza przez worker.

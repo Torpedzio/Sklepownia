@@ -84,7 +84,8 @@ Logika biznesowa, transakcje i kolejkowanie zadań są w serwisach.
 | `ProvisioningJob` | Jedna próba założenia sklepu (status, błąd, czasy). Ponowienie tworzy nowe zadanie. |
 | `ProvisioningStep` | Krok zadania: klucz, etykieta dla użytkownika, status, błąd, czasy. |
 | `ShopSettings` | Ostatnio odczytane albo zapisane ustawienia sklepu (`values`, JSON w sekcjach) i czas odczytu ze sklepu. |
-| `ShopOperation` | Praca na działającym sklepie: zmiana ustawień, odczyt ustawień, nowe hasło, usunięcie produktów przykładowych, kopia zapasowa i jej przywrócenie (`backup`: kopia zrobiona albo przywracana). Zmienione pola, wynik, błąd, kto zlecił. Służy też jako historia zmian. `secrets` (zaszyfrowane) trzyma klucze płatności online tylko do końca operacji. |
+| `ShopEvent` | Wpis historii sklepu ([history.py](../backend/shops/history.py)): rodzaj, kto (`actor`; puste, gdy platforma, np. zawieszenie przez zmianę planu), operacja (`operation`, gdy to zmiana w sklepie, z jej stanem i błędem), dane (`data`, np. zaproszony adres), czas. Migracja uzupełniła wpisy z istniejących sklepów, operacji i członków zespołu. |
+| `ShopOperation` | Praca na działającym sklepie: zmiana ustawień, odczyt ustawień, nowe hasło, usunięcie produktów przykładowych, kopia zapasowa i jej przywrócenie (`backup`: kopia zrobiona albo przywracana). Zmienione pola, wynik, błąd, kto zlecił; ostatnie są w ustawieniach jako „ostatnie zmiany”. `secrets` (zaszyfrowane) trzyma klucze płatności online tylko do końca operacji. |
 | `ShopBackup` | Kopia zapasowa sklepu, indeks repozytorium restic: rodzaj (`nightly`, `manual`, `before_restore`, `before_delete`), stan (gotowa albo błąd z opisem dla admina), `snapshot_id` (unikalny), rozmiar, czas. Zostaje po usunięciu sklepu, dopóki trzyma ją okres przechowywania. |
 | `ShopOrder` | Kopia zamówienia ze sklepu z ostatnich 90 dni: numer, status sprowadzony do pięciu wspólnych, suma, waluta, liczba sztuk, klient jako „Anna N.”, czas złożenia i ostatniej zmiany. Unikalne po `(shop, external_id)`. |
 | `ShopChecklist` | Lista startowa sklepu: `products` i `sample_products` (policzone w sklepie, `null` przed pierwszym liczeniem), `counted_at` (udane liczenie), `attempted_at` (ostatnia próba), `requested_at` (zlecone przy otwarciu listy), `hidden_at` (właściciel ukrył listę). Kroki: `ShopChecklist.Step`. |
@@ -107,6 +108,15 @@ liczą się członkowie i ważne zaproszenia) pod blokadą wiersza sklepu i po c
 (`send_invitation_email`). Link prowadzi do `APP_URL`: logowanie, gdy adres ma konto, inaczej rejestracja, z adresem
 w parametrze `email` (rejestracja dostaje też `purpose=team`). Zaproszenie widzi tylko konto z tym adresem, potwierdzonym (`invitations_for`). `accept` sprawdza
 limit jeszcze raz, bo plan mógł się zmienić. Właściciel nie może opuścić sklepu (`leave`).
+
+### Historia działań
+
+[history.py](../backend/shops/history.py) zapisuje `ShopEvent` (`record`) przy: założeniu sklepu, ponowieniu
+zakładania, zawieszeniu i przywróceniu (także przez zmianę planu, wtedy bez osoby), każdej operacji poza rutynowym
+odczytem ustawień (`record_operation` w `start_operation`), wysłaniu danych logowania do panelu oraz w zespole
+(zaproszenie i ponowne zaproszenie, cofnięcie, odrzucenie, dołączenie, usunięcie, odejście, także przez usunięcie
+konta). `title` i `detail` układają z wpisu tekst dla aplikacji. Nowa czynność w sklepie (np. zmiana zamówienia)
+dopisuje własny rodzaj do `ShopEvent.Kind` i woła `record`. Historię czyta tylko właściciel.
 
 ### Zakładanie sklepu
 

@@ -296,6 +296,43 @@ class ShopOperation(models.Model):
         return json.loads(self.secrets) if self.secrets else {}
 
 
+class ShopEvent(models.Model):
+    """One line of a shop's history: who did what and when (shops/history.py)."""
+
+    class Kind(models.TextChoices):
+        SHOP_CREATED = "shop_created", "Założenie sklepu"
+        SETUP_RETRIED = "setup_retried", "Ponowienie zakładania"
+        SUSPENDED = "suspended", "Zawieszenie sklepu"
+        RESUMED = "resumed", "Przywrócenie sklepu"
+        OPERATION = "operation", "Zmiana w sklepie"
+        ADMIN_ACCESS_SENT = "admin_access_sent", "Wysłanie danych logowania do panelu"
+        INVITATION_SENT = "invitation_sent", "Zaproszenie do zespołu"
+        INVITATION_REVOKED = "invitation_revoked", "Cofnięcie zaproszenia"
+        INVITATION_DECLINED = "invitation_declined", "Odrzucenie zaproszenia"
+        MEMBER_JOINED = "member_joined", "Dołączenie do zespołu"
+        MEMBER_REMOVED = "member_removed", "Usunięcie z zespołu"
+        MEMBER_LEFT = "member_left", "Odejście z zespołu"
+
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="events")
+    kind = models.CharField(max_length=30, choices=Kind.choices)
+    # Null: the platform itself (e.g. a plan change suspended the shop).
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+    )
+    # OPERATION: its kind, changes and outcome.
+    operation = models.ForeignKey(ShopOperation, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    # E.g. {"email": ...} for invitations, {"email", "name"} of a removed member.
+    data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [models.Index(fields=["shop", "-created_at"], name="shop_event_history")]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} – {self.shop}"
+
+
 class ShopBackup(models.Model):
     """Index entry for a restic snapshot of the shop's files and database (see shops/backups.py)."""
 

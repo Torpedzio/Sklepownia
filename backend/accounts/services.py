@@ -133,6 +133,7 @@ def delete_account(user):
     from billing.services import close_account
     from shops.services import ShopBeingSetUp, delete_all_shops
     from push.models import PushPreferences
+    from shops import history
     from shops.models import ShopMember
 
     with transaction.atomic():
@@ -159,6 +160,8 @@ def delete_account(user):
         PasswordResetCode.objects.filter(user=user).delete()
         sign_out_everywhere(user)
         PushPreferences.objects.filter(user=user).delete()
+        for membership in ShopMember.objects.filter(user=user).select_related("shop"):
+            history.record(membership.shop, history.Kind.MEMBER_LEFT, user, account_deleted=True)
         ShopMember.objects.filter(user=user).delete()
         if avatar:
             transaction.on_commit(lambda: default_storage.delete(avatar))

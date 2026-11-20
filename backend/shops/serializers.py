@@ -3,9 +3,10 @@ from rest_framework import serializers
 
 from .choices import MAX_CATEGORY_COUNT, MIN_CATEGORY_COUNT, Country, Currency, Industry, Language
 from .models import (
-    ProvisioningJob, ProvisioningStep, Shop, ShopBackup, ShopChecklist, ShopConfig, ShopInvitation, ShopMember,
-    ShopOperation, ShopOrder, ShopTemplate,
+    ProvisioningJob, ProvisioningStep, Shop, ShopBackup, ShopChecklist, ShopConfig, ShopEvent, ShopInvitation,
+    ShopMember, ShopOperation, ShopOrder, ShopTemplate,
 )
+from . import history
 from .platforms import Platform, platform_info
 from .shop_settings import OPERATORS, SECTIONS, describe
 from .slugs import normalize_slug, slug_error
@@ -408,3 +409,56 @@ class InvitationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShopInvitation
         fields = ["id", "shop", "invited_by", "created_at", "expires_at"]
+
+
+class ShopEventSerializer(serializers.ModelSerializer):
+    title = serializers.SerializerMethodField(help_text="Co się stało, np. „Zmiana ustawień”.")
+    detail = serializers.SerializerMethodField(
+        help_text="Czego dotyczyło, np. zmienione pola albo zaproszony adres; puste, gdy tytuł wystarcza.",
+    )
+    actor = serializers.SerializerMethodField(help_text="Kto to zrobił; null dla platformy i usuniętych kont.")
+    actor_role = serializers.SerializerMethodField(
+        help_text="owner, staff (także była obsługa), system (platforma, np. zmiana planu) albo deleted (usunięte konto).",
+    )
+    status = serializers.SerializerMethodField(
+        help_text="Dla zmian w sklepie: queued, running, succeeded albo failed; null dla pozostałych wpisów.",
+    )
+    error = serializers.SerializerMethodField(help_text="Dlaczego zmiana się nie udała; puste, gdy się udała.")
+
+    class Meta:
+        model = ShopEvent
+        fields = ["id", "kind", "title", "detail", "actor", "actor_role", "status", "error", "created_at"]
+
+    def get_title(self, event) -> str:
+        return history.title(event)
+
+    def get_detail(self, event) -> str:
+        return history.detail(event)
+
+    def _actor(self, event):
+        return None if event.actor is None or event.actor.deleted_at else event.actor
+
+    @extend_schema_field(PersonSerializer(allow_null=True))
+    def get_actor(self, event):
+        actor = self._actor(event)
+        return PersonSerializer(actor).data if actor else None
+
+    def get_actor_role(self, event) -> str:
+        if event.actor is None:
+            return "system"
+        if event.actor.deleted_at:
+            return "deleted"
+        return "owner" if event.actor_id == self.context["shop"].owner_id else "staff"
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_status(self, event):
+        return event.operation.status if event.operation else None
+
+    def get_error(self, event) -> str:
+        operation = event.operation
+        return operation.error if operation and operation.status == ShopOperation.Status.FAILED else ""
+
+
+class ShopHistorySerializer(serializers.Serializer):
+    events = ShopEventSerializer(many=True)
+    has_more = serializers.BooleanField(help_text="Są starsze wpisy: następna strona z ?before=<id ostatniego>.")

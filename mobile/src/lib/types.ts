@@ -501,3 +501,22 @@ export type Team = {
   /** Members and valid invitations. */
   used: number;
 };
+
+/** One line of `GET /shops/{id}/history/`. */
+export type ShopEvent = {
+  id: number;
+  kind: string;
+  /** E.g. "Zmiana ustawień". */
+  title: string;
+  /** E.g. the changed fields or the invited address; empty when the title says it all. */
+  detail: string;
+  /** Null for the platform and deleted accounts. */
+  actor: Person | null;
+  actor_role: 'owner' | 'staff' | 'system' | 'deleted';
+  /** Changes in the shop only. */
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | null;
+  error: string;
+  created_at: string;
+};
+
+export type ShopHistory = { events: ShopEvent[]; has_more: boolean };

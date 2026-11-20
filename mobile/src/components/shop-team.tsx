@@ -13,7 +13,7 @@ import { confirm } from '@/lib/confirm';
 import { plural } from '@/lib/plural';
 import type { ShopDetail, Team } from '@/lib/types';
 
-/** For the owner: who runs the shop with them, and the way to the team screen. */
+/** For the owner: who runs the shop with them, the way to the team screen and the shop's history. */
 export function TeamCard({ shopId }: { shopId: number }) {
   const theme = useTheme();
   const { data: team } = useApiQuery<Team>(`/shops/${shopId}/team/`);
@@ -39,13 +39,20 @@ export function TeamCard({ shopId }: { shopId: number }) {
           {summary}
         </ThemedText>
       ) : null}
-      <Button
-        title={members || pending ? 'Zarządzaj zespołem' : 'Zaproś do zespołu'}
-        icon="person"
-        variant="secondary"
-        style={styles.start}
-        onPress={() => router.push({ pathname: '/shops/[id]/team', params: { id: String(shopId) } })}
-      />
+      <View style={styles.actions}>
+        <Button
+          title={members || pending ? 'Zarządzaj zespołem' : 'Zaproś do zespołu'}
+          icon="person"
+          variant="secondary"
+          onPress={() => router.push({ pathname: '/shops/[id]/team', params: { id: String(shopId) } })}
+        />
+        <Button
+          title="Historia działań"
+          icon="history"
+          variant="ghost"
+          onPress={() => router.push({ pathname: '/shops/[id]/history', params: { id: String(shopId) } })}
+        />
+      </View>
     </View>
   );
 }
@@ -95,5 +102,10 @@ const styles = StyleSheet.create({
   },
   start: {
     alignSelf: 'flex-start',
+  },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
   },
 });

@@ -182,6 +182,12 @@ Pola formularza `POST shops/`:
 | `description` | nie | Do 500 znaków, trafia do opisu witryny |
 | `include_sample_products` | nie | Domyślnie `true` |
 
+### Historia działań
+
+| Metoda i ścieżka | Opis |
+|---|---|
+| `GET shops/{id}/history/` | Tylko właściciel, z potwierdzonym e-mailem. `{events, has_more}`, od najnowszych, po 30. Wpis: `{id, kind, title, detail, actor, actor_role, status, error, created_at}`. `title` i `detail` to gotowy tekst (np. „Zmiana ustawień”, „Waluta, Język”). `actor`: `{id, name, email}` albo `null`; `actor_role`: `owner`, `staff` (także była obsługa), `system` (platforma, np. zawieszenie przez plan) albo `deleted` (usunięte konto). `status` i `error`: stan zmiany w sklepie (`queued`, `running`, `succeeded`, `failed`), dla innych wpisów `null` i puste. Starsze: `?before=<id ostatniego wpisu>`. |
+
 ### Zespół
 
 Tylko dla właściciela, z potwierdzonym e-mailem. Limit osób z obsługi to `max_staff` planu właściciela, osobno
