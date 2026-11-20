@@ -21,10 +21,30 @@ class PrestaShopApi(ShopApi):
         self.get("shops")
 
     def send_xml(self, method, path, resource, fields, params=None):
-        """Saves through the webservice, which takes XML: <prestashop><resource><field>…; answers in JSON."""
+        """
+        Saves through the webservice, which takes XML: <prestashop><resource><field>…; answers in JSON. A value is
+        text, Translated ({language id: text}) for a field per language, or a list of (tag, value) for nested ones,
+        e.g. the product's associations.
+        """
         root = ElementTree.Element("prestashop")
-        node = ElementTree.SubElement(root, resource)
-        for name, value in fields.items():
-            ElementTree.SubElement(node, name).text = "" if value is None else str(value)
+        _fill(ElementTree.SubElement(root, resource), fields.items())
         body = ElementTree.tostring(root, encoding="utf-8", xml_declaration=True)
         return self.request(method, path, params=params, data=body, headers={"Content-Type": "application/xml"})
+
+
+class Translated(dict):
+    """{language id: text} of a field kept per language."""
+
+
+def _fill(node, items):
+    for name, value in items:
+        child = ElementTree.SubElement(node, name)
+        if isinstance(value, Translated):
+            for language, text in value.items():
+                ElementTree.SubElement(child, "language", id=str(language)).text = text
+        elif isinstance(value, dict):
+            _fill(child, value.items())
+        elif isinstance(value, list):
+            _fill(child, value)
+        else:
+            child.text = "" if value is None else str(value)

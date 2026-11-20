@@ -241,6 +241,10 @@ class Api:
 
     def send_xml(self, method, path, resource, fields, params=None):
         self.writes.append((method, path, {resource: fields, **({"params": params} if params else {})}))
+        return self.answers.get(path, {})
+
+    def delete(self, path, params=None):
+        self.writes.append(("DELETE", path, None))
         return {}
 
 

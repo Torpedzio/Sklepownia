@@ -11,7 +11,7 @@ from .. import shop_settings
 from ..models import Server, Shop, ShopChecklist, ShopCredentials, ShopSettings
 from ..orders import Action, Address, Order, OrderDetail, OrderLine, Status, actions_for, customer_label
 from ..platforms import platform_info
-from ..products import Filter, Product, ProductDetail, ProductPage, page_of
+from ..products import Category, Filter, Product, ProductDetail, ProductPage, page_of
 from ..remote import NotInShop, ShopApiError
 from ..remote.fake import FakeApi
 from .base import (
@@ -29,6 +29,7 @@ FAKE_PRODUCTS = ("Kubek ceramiczny", "Świeca sojowa", "Notes w kratkę", "Torba
 FAKE_SHIPPING = Decimal("14.99")
 # How many made-up products a shop has, newest (highest id) first; more than one page.
 FAKE_PRODUCT_COUNT = 40
+FAKE_CATEGORIES = (Category("1", "Prezenty"), Category("2", "Dom"), Category("3", "Kuchnia"))
 
 
 class FakeProvisioner(BaseProvisioner):
@@ -51,6 +52,8 @@ class FakeProvisioner(BaseProvisioner):
     parcels = {}
     # {(shop pk, product id): pieces} set from the app.
     stocks = {}
+    # {(shop pk, product id): {field: value}} changed from the app; "created" and "deleted" mark the product's fate.
+    product_edits = {}
 
     def run_step(self, key, shop):
         time.sleep(settings.FAKE_PROVISIONER_STEP_DELAY)
@@ -255,46 +258,99 @@ class FakeProvisioner(BaseProvisioner):
         )
 
     def read_products(self, shop, *, query, stock_filter, offset, limit):
-        """Made-up products, the same on every read, with the stock set from the app."""
+        """Made-up products, the same on every read, with what the app changed."""
         FakeApi(shop).ping()
-        products = [self._product(shop, number) for number in range(FAKE_PRODUCT_COUNT, 0, -1)]
+        products = [self._detail(shop, id) for id in self._product_ids(shop)]
         if query:
             products = [p for p in products if query.lower() in p.name.lower() or query.lower() in p.sku.lower()]
         if stock_filter == Filter.OUT_OF_STOCK:
             products = [product for product in products if not product.in_stock]
         rows, has_more = page_of(products[offset:offset + limit + 1], limit)
-        return ProductPage(products=rows, has_more=has_more)
+        return ProductPage(products=tuple(Product(**{
+            name: getattr(row, name) for name in Product.__dataclass_fields__
+        }) for row in rows), has_more=has_more)
 
     def read_product(self, shop, external_id):
         FakeApi(shop).ping()
-        number = int(external_id)
-        if not 1 <= number <= FAKE_PRODUCT_COUNT:
+        if str(external_id) not in self._product_ids(shop):
             raise NotInShop("Nie ma tego produktu w sklepie.")
-        product = self._product(shop, number)
-        return ProductDetail(
-            **vars(product), categories=("Prezenty",) if number % 2 else ("Dom", "Kuchnia"),
-            url=f"{shop.url}/produkt/{number}/" if product.visible else "",
-        )
+        return self._detail(shop, str(external_id))
+
+    def read_categories(self, shop):
+        FakeApi(shop).ping()
+        return FAKE_CATEGORIES
 
     def set_product_stock(self, shop, product, quantity):
-        FakeApi(shop).ping()
-        if settings.FAKE_PROVISIONER_FAIL_AT_STEP == "set_product_stock":
-            raise ShopApiError("Symulowany błąd: set_product_stock")
+        self._fail_at("set_product_stock", shop)
         self.stocks[(shop.pk, product.external_id)] = quantity
 
-    def _product(self, shop, number):
-        """Every 7th has variants, every 9th isn't counted, every 11th is hidden, every 5th is sold out."""
-        rng = random.Random(f"{shop.pk}:product:{number}")
-        price = Decimal(rng.randrange(1900, 19900)) / 100
-        on_sale = number % 4 == 0
-        # Setting the stock from the app starts counting it.
-        counted = number % 9 != 0 or (shop.pk, str(number)) in self.stocks
-        stock = self.stocks.get((shop.pk, str(number)), 0 if number % 5 == 0 else rng.randint(1, 60))
-        return Product(
-            external_id=str(number), name=f"{FAKE_PRODUCTS[number % len(FAKE_PRODUCTS)]} {number}",
-            sku=f"SKU-{number:03}", price=(price * Decimal("0.8")).quantize(Decimal("0.01")) if on_sale else price,
-            regular_price=price if on_sale else None, stock=stock if counted else None,
-            in_stock=stock > 0 if counted else True, visible=number % 11 != 0, image="", has_variants=number % 7 == 0,
+    def update_product(self, shop, product, changes):
+        self._fail_at("update_product", shop)
+        self.product_edits.setdefault((shop.pk, product.external_id), {}).update(changes)
+
+    def create_product(self, shop, fields):
+        self._fail_at("create_product", shop)
+        ids = [int(id) for id in self._product_ids(shop)] + [FAKE_PRODUCT_COUNT]
+        external_id = str(max(ids) + 1)
+        self.product_edits[(shop.pk, external_id)] = {"created": True, **fields}
+        if fields.get("stock") is not None:
+            self.stocks[(shop.pk, external_id)] = fields["stock"]
+        return external_id
+
+    def delete_product(self, shop, product):
+        self._fail_at("delete_product", shop)
+        self.product_edits[(shop.pk, product.external_id)] = {"deleted": True}
+
+    def _fail_at(self, step, shop):
+        FakeApi(shop).ping()
+        if settings.FAKE_PROVISIONER_FAIL_AT_STEP == step:
+            raise ShopApiError(f"Symulowany błąd: {step}")
+
+    def _product_ids(self, shop):
+        """Newest first: the ones added from the app, then the made-up ones; without the deleted ones."""
+        added = sorted(
+            (int(id) for (pk, id), edits in self.product_edits.items() if pk == shop.pk and edits.get("created")),
+            reverse=True,
+        )
+        ids = [str(id) for id in [*added, *range(FAKE_PRODUCT_COUNT, 0, -1)]]
+        return [id for id in ids if not self.product_edits.get((shop.pk, id), {}).get("deleted")]
+
+    def _detail(self, shop, external_id):
+        """
+        A made-up product with the app's changes. Every 7th has variants, every 9th isn't counted, every 11th is
+        hidden, every 5th is sold out and every 4th on sale.
+        """
+        number = int(external_id)
+        edits = self.product_edits.get((shop.pk, external_id), {})
+        key = (shop.pk, external_id)
+        if edits.get("created"):
+            price, sale, counted, variants = edits["price"], edits.get("sale_price"), key in self.stocks, False
+            fields = {"name": edits["name"], "sku": edits.get("sku", ""), "visible": edits.get("visible", True),
+                      "description": edits.get("description", ""), "categories": edits.get("categories", [])}
+            stock = self.stocks.get(key, 0)
+        else:
+            rng = random.Random(f"{shop.pk}:product:{number}")
+            price = Decimal(rng.randrange(1900, 19900)) / 100
+            sale = (price * Decimal("0.8")).quantize(Decimal("0.01")) if number % 4 == 0 else None
+            # Setting the stock from the app starts counting it.
+            counted, variants = number % 9 != 0 or key in self.stocks, number % 7 == 0
+            stock = self.stocks.get(key, 0 if number % 5 == 0 else rng.randint(1, 60))
+            fields = {
+                "name": f"{FAKE_PRODUCTS[number % len(FAKE_PRODUCTS)]} {number}", "sku": f"SKU-{number:03}",
+                "visible": number % 11 != 0, "description": "Ręcznie robiony.\n\nPakowany na prezent.",
+                "categories": ["1"] if number % 2 else ["2", "3"],
+            }
+            price, sale = edits.get("price", price), edits.get("sale_price", sale)
+            fields.update({name: edits[name] for name in fields if name in edits})
+        names = dict((category.id, category) for category in FAKE_CATEGORIES)
+        return ProductDetail(
+            external_id=external_id, name=fields["name"], sku=fields["sku"],
+            price=sale if sale is not None else price, regular_price=price if sale is not None else None,
+            stock=stock if counted else None, in_stock=stock > 0 if counted else True, visible=fields["visible"],
+            image="", has_variants=variants,
+            categories=tuple(names[id] for id in fields["categories"] if id in names),
+            url=f"{shop.url}/produkt/{external_id}/" if fields["visible"] else "",
+            description=fields["description"], formatted_description=number % 13 == 0,
         )
 
     def change_order(self, shop, order, action, *, tracking_number="", carrier=""):

@@ -45,6 +45,9 @@ const ICONS = {
   document: ['doc.text', 'description'],
   chart: ['chart.bar', 'bar_chart'],
   bell: ['bell', 'notifications'],
+  edit: ['pencil', 'edit'],
+  show: ['eye', 'visibility'],
+  hide: ['eye.slash', 'visibility_off'],
 } as const;
 
 export type IconName = keyof typeof ICONS;

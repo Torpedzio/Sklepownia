@@ -22,7 +22,7 @@ backend/
 │   ├── categories.py  nazwy kategorii według branży
 │   ├── emails.py      e-mail z danymi sklepu i logowaniem (szablony w templates/shops/email/)
 │   ├── orders.py      zamówienia wspólne dla platform: do kopii (Order) i szczegóły (OrderDetail), lista z kopii
-│   ├── products.py    produkty wspólne dla platform (Product, ProductDetail), czytane z API sklepu, zmiana stanu
+│   ├── products.py    produkty wspólne dla platform (Product, ProductDetail), czytane z API sklepu, zmiana stanu, edycja, dodawanie, usuwanie
 │   ├── sales.py       kopia zamówień ze sklepów i podsumowanie sprzedaży dla aplikacji
 │   ├── checklist.py   lista startowa nowego sklepu: kroki odhaczane same i liczenie produktów
 │   ├── backups.py     kopie zapasowe: kopia, przywrócenie, nocny przebieg, przechowywanie, lista dla aplikacji
@@ -118,7 +118,8 @@ zakładania, zawieszeniu i przywróceniu (także przez zmianę planu, wtedy bez 
 odczytem ustawień (`record_operation` w `start_operation`), wysłaniu danych logowania do panelu oraz w zespole
 (zaproszenie i ponowne zaproszenie, cofnięcie, odrzucenie, dołączenie, usunięcie, odejście, także przez usunięcie
 konta), a także przy zmianie zamówienia z aplikacji (opłacenie, wysłanie z numerem przesyłki, anulowanie).
-Zmiana stanu produktu z aplikacji też ma wpis (nazwa, stan przed i po). `title` i `detail` układają z wpisu tekst dla aplikacji. Nowa czynność w sklepie dopisuje własny rodzaj do
+Zmiana stanu produktu z aplikacji też ma wpis (nazwa, stan przed i po), a edycja, dodanie i usunięcie produktu
+wpisy z nazwą (edycja także z listą zmienionych pól). `title` i `detail` układają z wpisu tekst dla aplikacji. Nowa czynność w sklepie dopisuje własny rodzaj do
 `ShopEvent.Kind` i woła `record`. Historię czyta tylko właściciel.
 
 ### Zakładanie sklepu
@@ -297,15 +298,34 @@ Pola odpowiedzi: [api.md](api.md#zamówienia).
 
 Pola odpowiedzi: [api.md](api.md#produkty).
 
-- Produktów nie ma w bazie platformy: lista, szczegóły i zmiana stanu idą przez REST API sklepu w procesie WWW
-  ([products.py](../backend/shops/products.py), metody `read_products`, `read_product`, `set_product_stock`
-  w provisionerze). Kod platform jest w osobnych modułach dołączanych do provisionerów:
+- Produktów nie ma w bazie platformy: lista, szczegóły, zmiany, dodawanie i usuwanie idą przez REST API sklepu
+  w procesie WWW ([products.py](../backend/shops/products.py), metody `read_products`, `read_product`,
+  `read_categories`, `set_product_stock`, `update_product`, `create_product`, `delete_product` w provisionerze). Kod platform jest w osobnych modułach dołączanych do provisionerów:
   `platforms/woocommerce_products.py`, `prestashop_products.py`, `magento_products.py`. Odpowiedź w nieoczekiwanym
   kształcie staje się `ShopApiError`, jak przy zamówieniach.
 - Lista jest stronicowana numerem strony (API sklepów liczą od przesunięcia) i czytana o jeden wiersz dalej, żeby
   wiedzieć o następnej stronie (`products.page_of`); Magento podaje `total_count`.
 - Stan zmienia się tylko dla produktu bez wariantów; `set_stock` czyta produkt przed zmianą i po niej, a wpis
   historii powstaje także wtedy, gdy ponowny odczyt się nie uda.
+- `update` czyta produkt, odrzuca pola równe tym w sklepie (`_current`), pilnuje cen (`PriceOfVariants` dla
+  wariantów, `SaleNotBelowPrice`) i przy samej nowej cenie wysyła też dotychczasową cenę promocyjną (PrestaShop
+  trzyma promocję jako kwotę obniżki). Opis idzie jako zwykły tekst: `description_text` robi go z HTML-a sklepu
+  (i mówi, czy było formatowanie poza akapitami), `description_markup` z powrotem akapity `<p>` i `<br>`.
+  Provisioner dostaje tylko zmienione pola (`update_product(shop, product, changes)`).
+- WooCommerce: zmiana `PUT products/{id}` (`regular_price`, `sale_price` pusta kończy promocję, `status`
+  publish/draft dla widoczności), nowy produkt `POST products` jako `simple`, usunięcie `DELETE` bez `force`, czyli
+  do kosza; produkt w koszu odczyt traktuje jak usunięty.
+- PrestaShop: zmiana `PATCH products/{id}` w XML (`send_xml` umie pola wielojęzyczne `Translated` i zagnieżdżone
+  `associations`), tylko w domyślnym języku. Cena netto z brutto według stawki grupy podatkowej produktu
+  w domyślnym kraju (`tax_rules`, `taxes`). Promocja: ogólna cena specjalna (każdy koszyk, klient, grupa, kraj,
+  waluta, od 1 sztuki) z kwotą obniżki brutto; zmiana usuwa poprzednią ogólną, inne zostają. Kategorie zawsze
+  z kategorią strony głównej, pierwsza wybrana jest domyślną. Nowy produkt bez grupy podatkowej, z `link_rewrite`
+  z nazwy; odkrycie produktu z `visibility=none` ustawia `both`. Przyjazny adres nie zmienia się przy zmianie nazwy.
+- Magento: zmiana przez `POST products` z `id` (nie `PUT products/{sku}`: API nadpisuje SKU z adresu, więc nowe SKU
+  by się nie zapisało, a ukośnika w SKU adres nie przyjmuje). Koniec promocji: `special-price-delete`, bo pusta
+  `special_price` w produkcie się nie zapisuje. Nowy produkt: zestaw atrybutów 4, strona główna (website 1),
+  `url_key` z nazwy i SKU, SKU z nazwy, gdy puste; stan zawsze zapisany w źródle. Usunięcie: `DELETE products/{sku}`,
+  a SKU z ukośnikiem najpierw zmienia się na `usuwany-<id>`.
 - WooCommerce: `products` z `status=any` (także szkice i prywatne), wyszukiwanie po nazwie (`search`), braki przez
   `stock_status=outofstock`. Stan: `PUT products/{id}` z `manage_stock` i `stock_quantity` (sklep sam ustawia
   „brak” przy 0). Warianty, zestawy i produkty zewnętrzne (`type` inny niż `simple`) mają `has_variants`. Link
@@ -321,8 +341,9 @@ Pola odpowiedzi: [api.md](api.md#produkty).
   braków bierze do 1000 SKU z ilością ≤ 0. Cena promocyjna (`special_price`) liczy się w swoich datach. Produkty
   inne niż `simple` i `virtual` mają `has_variants`. Odczyt po `entity_id`, bo adres produktu w API bierze SKU,
   które właściciel może zmienić.
-- Symulacja (`FakeProvisioner`) ma 40 powtarzalnych produktów (część z wariantami, bez liczenia, ukryta i bez
-  stanu) i pamięta stany zapisane z aplikacji.
+- Symulacja (`FakeProvisioner`) ma 40 powtarzalnych produktów (część z wariantami, bez liczenia, ukryta, bez
+  stanu, z formatowanym opisem) w trzech kategoriach i pamięta stany, zmiany, dodane i usunięte produkty
+  (`product_edits`).
 
 ### Lista startowa
 

@@ -1,8 +1,13 @@
 """Magento products through its REST API, mixed into MagentoProvisioner. Stock is kept by the inventory (MSI) source."""
 
+import secrets
 from datetime import date
+from urllib.parse import quote
 
-from ..products import Filter, Product, ProductDetail, ProductPage, gross, stock_count
+from ..products import (
+    Category, Filter, Product, ProductDetail, ProductPage, description_markup, description_text, gross, stock_count,
+    url_slug,
+)
 from ..remote import NotInShop
 
 # The single source of a shop the platform set up.
@@ -11,6 +16,13 @@ SOURCE = "default"
 COUNTED_TYPES = {"simple", "virtual"}
 NOT_VISIBLE_INDIVIDUALLY = 1
 ENABLED = 1
+DISABLED = 2
+CATALOG_AND_SEARCH = 4
+# Magento's default attribute set for products, and the main website.
+DEFAULT_ATTRIBUTE_SET = 4
+MAIN_WEBSITE = 1
+# The tree's root and the store's root category, which every category is under.
+ROOT_LEVELS = 1
 # The most sold-out products the filter looks through.
 MAX_SOLD_OUT = 1000
 
@@ -45,13 +57,73 @@ class MagentoProducts:
             raise NotInShop("Nie ma tego produktu w sklepie.")
         row = rows[0]
         product = _product(shop, row, self._stock(api, [row["sku"]]))
-        url_key = _attributes(row).get("url_key")
+        attributes = _attributes(row)
+        description, formatted = description_text(attributes.get("description"))
         return ProductDetail(
             **vars(product),
             categories=self._categories(api, row),
             # The default URL suffix of product pages.
-            url=f"{shop.url}/{url_key}.html" if product.visible and url_key else "",
+            url=f"{shop.url}/{attributes['url_key']}.html" if product.visible and attributes.get("url_key") else "",
+            description=description,
+            formatted_description=formatted,
         )
+
+    def read_categories(self, shop):
+        """The tree, depth first, below the store's root category."""
+        found = []
+
+        def walk(node):
+            if int(node.get("level") or 0) > ROOT_LEVELS:
+                found.append(Category(str(node["id"]), node.get("name") or ""))
+            for child in node.get("children_data") or []:
+                walk(child)
+
+        walk(self.api(shop).get("categories"))
+        return tuple(found)
+
+    def update_product(self, shop, product, changes):
+        api = self.api(shop)
+        body = {**_body(changes), "id": int(product.external_id)}
+        body.setdefault("sku", product.sku)
+        # Saved by id, not PUT products/{sku}: the API puts the address's SKU over the one sent, so a new SKU
+        # wouldn't be saved, and it refuses SKUs with a slash in the address.
+        api.post("products", json={"product": body})
+        if "sale_price" in changes and changes["sale_price"] is None:
+            # An empty special price isn't saved through the product; the price API removes it.
+            self._end_sale(api, body["sku"])
+
+    def create_product(self, shop, fields):
+        api = self.api(shop)
+        name = url_slug(fields["name"])[:40] or "produkt"
+        sku = fields.get("sku") or f"{name}-{secrets.token_hex(3)}"
+        body = {
+            "sku": sku, "attribute_set_id": DEFAULT_ATTRIBUTE_SET, "type_id": "simple", "visibility": CATALOG_AND_SEARCH,
+            "status": ENABLED, **_body(fields),
+        }
+        body["extension_attributes"] = {**body.get("extension_attributes", {}), "website_ids": [MAIN_WEBSITE]}
+        # A unique page address: the name's with the SKU, so two products may share a name.
+        body.setdefault("custom_attributes", []).append(
+            {"attribute_code": "url_key", "value": url_slug(sku) if not fields.get("sku") else f"{name}-{url_slug(sku)}"},
+        )
+        created = api.post("products", json={"product": body})
+        # Always: without the source's row the product has no stock to sell from.
+        self.set_product_stock(shop, _sku_only(sku), fields.get("stock") or 0)
+        return str(created["id"])
+
+    def delete_product(self, shop, product):
+        api = self.api(shop)
+        sku = product.sku
+        if "/" in sku:
+            # Deleted only by SKU, and the address refuses a slash in it: it is renamed first.
+            sku = f"usuwany-{int(product.external_id)}"
+            api.post("products", json={"product": {"id": int(product.external_id), "sku": sku}})
+        api.delete(f"products/{quote(sku, safe='')}")
+
+    @staticmethod
+    def _end_sale(api, sku):
+        rows = api.post("products/special-price-information", json={"skus": [sku]}) or []
+        if rows:
+            api.post("products/special-price-delete", json={"prices": rows})
 
     def set_product_stock(self, shop, product, quantity):
         self.api(shop).post("inventory/source-items", json={"sourceItems": [{
@@ -75,7 +147,7 @@ class MagentoProducts:
         items = api.get("categories/list", Criteria().where("entity_id", ",".join(ids), "in").page(
             len(ids), 1).params).get("items") or []
         names = {str(item["id"]): item.get("name") or "" for item in items}
-        return tuple(names[id] for id in ids if names.get(id))
+        return tuple(Category(id, names[id]) for id in ids if names.get(id))
 
 
 class Criteria:
@@ -144,3 +216,36 @@ def _in_dates(attributes):
     start = (attributes.get("special_from_date") or "")[:10]
     end = (attributes.get("special_to_date") or "")[:10]
     return (not start or start <= today) and (not end or today <= end)
+
+
+def _body(fields):
+    """The product's fields in the REST API for the app's; prices as entered, gross as the platform sets it."""
+    body, attributes = {}, []
+    if "name" in fields:
+        body["name"] = fields["name"]
+    if "price" in fields:
+        body["price"] = float(fields["price"])
+    if fields.get("sale_price") is not None:
+        attributes.append({"attribute_code": "special_price", "value": str(fields["sale_price"])})
+    if "sku" in fields and fields["sku"]:
+        body["sku"] = fields["sku"]
+    if "description" in fields:
+        attributes.append({"attribute_code": "description", "value": description_markup(fields["description"])})
+    if "categories" in fields:
+        body["extension_attributes"] = {"category_links": [
+            {"position": index, "category_id": str(id)} for index, id in enumerate(fields["categories"])
+        ]}
+    if "visible" in fields:
+        body["status"] = ENABLED if fields["visible"] else DISABLED
+    if attributes:
+        body["custom_attributes"] = attributes
+    return body
+
+
+
+
+class _sku_only:
+    """What set_product_stock needs of a product just made."""
+
+    def __init__(self, sku):
+        self.sku = sku

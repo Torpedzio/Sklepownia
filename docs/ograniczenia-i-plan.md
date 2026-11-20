@@ -56,8 +56,11 @@ Stan na listopad 2026. Gdy coś z tej listy zostanie zrobione, usuń to stąd w 
   i sumy pochodzą z kopii z 90 dni (starsze są tylko w panelu), sumy liczą tylko walutę sklepu, a nowe zamówienie
   pojawia się w aplikacji z opóźnieniem do 15 minut (od razu po „Odśwież”). Szczegóły zamówienia są czytane ze
   sklepu przy otwarciu, więc nie otworzą się, gdy sklep nie działa. Brakuje zestawień dłuższych niż 30 dni.
-- **Produkty w aplikacji** to na razie lista, szczegóły i stan magazynowy; cenę, opis, zdjęcia i warianty zmienia
-  się w panelu. Produkty z wariantami (i zestawy) mają stany w wariantach, więc ich stanu aplikacja nie zmienia.
+- **Produkty w aplikacji**: lista, szczegóły, stan magazynowy, edycja (nazwa, ceny, promocja, SKU, opis,
+  kategorie, widoczność), dodawanie prostych produktów i usuwanie; zdjęcia i warianty zmienia się w panelu.
+  Produkty z wariantami (i zestawy) mają ceny i stany w wariantach, więc tych aplikacja nie zmienia. Opis jest
+  zwykłym tekstem: zapisanie zmienionego opisu usuwa formatowanie ze sklepu (aplikacja o tym ostrzega). Promocja
+  nie ma dat. W PrestaShop nowy produkt nie ma grupy podatkowej, a aplikacja zmienia tylko domyślny język.
   Wyszukiwanie w WooCommerce i PrestaShop przeszukuje tylko nazwy (Magento także SKU), a filtr braków w Magento
   bierze do 1000 brakujących produktów. Ceny w WooCommerce i Magento są takie, jak wpisane w sklepie (brutto przy
   ustawieniu platformy). Lista jest czytana ze sklepu, więc nie otworzy się, gdy sklep nie działa.
@@ -108,11 +111,10 @@ się „Zakładam sklep” albo „Dołączam do zespołu” (bez cennika, z ekr
 prowadzi zespół na ekranie sklepu, a obsługa widzi tylko to, co może zrobić. Historia działań pokazuje właścicielowi,
 kto co zmienił; nowe czynności dopisują do niej swoje wpisy. Zamówienia już są: lista z filtrami, szczegóły
 czytane ze sklepu, zmiana statusu z numerem przesyłki i notatki zespołu ([backend.md](backend.md#zamówienia)).
-Produkty też mają już listę z wyszukiwaniem i filtrem braków, szczegóły i szybką zmianę stanu
-([backend.md](backend.md#produkty)).
+Produkty też mają już listę z wyszukiwaniem i filtrem braków, szczegóły, zmianę stanu, edycję, dodawanie, ukrywanie
+i usuwanie ([backend.md](backend.md#produkty)).
 
-1. **Produkty, dalej:** dodawanie i edycja (cena, promocja, opis, kategoria, SKU), ukrywanie i usuwanie, potem
-   zdjęcia z aparatu; warianty na razie w panelu.
+1. **Produkty, dalej:** zdjęcia z aparatu i z galerii; warianty na razie w panelu.
 2. **Powiadomienia według osoby** (nowe zamówienia także dla obsługi, awarie) i przypadki brzegowe zespołu
    (usunięcie konta członka, sklepu z zespołem).
 3. **Kategorie, klienci (z wnioskami RODO) i kody rabatowe.**

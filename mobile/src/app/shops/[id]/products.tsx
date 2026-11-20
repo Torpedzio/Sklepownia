@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, StyleSheet, View } from 'react-native';
 
@@ -58,8 +58,13 @@ export default function ShopProductsScreen() {
         }}
       />
       <View style={styles.header}>
-        <ThemedText type="title">Produkty</ThemedText>
-        {shop ? <ThemedText themeColor="textSecondary">{shop.name}</ThemedText> : null}
+        <View style={styles.headerText}>
+          <ThemedText type="title">Produkty</ThemedText>
+          {shop ? <ThemedText themeColor="textSecondary">{shop.name}</ThemedText> : null}
+        </View>
+        <Link href={{ pathname: '/shops/[id]/products/new', params: { id } }} asChild>
+          <Button title="Dodaj produkt" icon="plus" />
+        </Link>
       </View>
     </>
   );
@@ -135,10 +140,7 @@ export default function ShopProductsScreen() {
     } else {
       empty = {
         title: 'Sklep nie ma jeszcze produktów',
-        text:
-          shop?.role === 'staff'
-            ? 'Produkty dodaje na razie właściciel sklepu w jego panelu.'
-            : 'Produkty dodasz na razie w panelu sklepu. Pokażemy je tutaj od razu.',
+        text: 'Dodaj pierwszy produkt: wystarczy nazwa i cena. Opis, kategorie i stan magazynowy są nieobowiązkowe.',
       };
     }
   }
@@ -206,7 +208,15 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.six,
   },
   header: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+  },
+  headerText: {
     gap: Spacing.one,
+    flexShrink: 1,
   },
   filters: {
     gap: Spacing.three,

@@ -1,4 +1,14 @@
 /** "49,00 zł" for ("49.00", "PLN"), "50 zł" with `whole`. A code Intl doesn't take is written out as is. */
+/** "zł" for PLN, "€" for EUR; the code when the device doesn't know it. */
+export function currencySymbol(currency: string) {
+  try {
+    const parts = new Intl.NumberFormat('pl-PL', { style: 'currency', currency }).formatToParts(0);
+    return parts.find((part) => part.type === 'currency')?.value ?? currency;
+  } catch {
+    return currency;
+  }
+}
+
 export function formatMoney(amount: string | number, currency: string, { whole = false } = {}) {
   try {
     return new Intl.NumberFormat('pl-PL', {

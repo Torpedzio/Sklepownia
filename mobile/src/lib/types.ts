@@ -624,9 +624,31 @@ export type ShopProducts = {
   has_more: boolean;
 };
 
+export type Category = { id: string; name: string };
+
+export type ProductCategories = { categories: Category[] };
+
 export type ProductDetail = Product & {
   currency: string;
-  categories: string[];
+  categories: Category[];
   /** The product's page in the shop; empty when it has none (e.g. hidden). */
   url: string;
+  /** Plain text, paragraphs apart by a blank line. */
+  description: string;
+  /** The shop's description has formatting (lists, bold…) that saving it from the app drops. */
+  formatted_description: boolean;
+};
+
+/** What the app saves in a product; a change sends only some. Prices gross, with a dot. */
+export type ProductFields = {
+  name: string;
+  price: string;
+  /** Null ends the sale. */
+  sale_price: string | null;
+  sku: string;
+  description: string;
+  categories: string[];
+  visible: boolean;
+  /** Only when adding one; null leaves the stock uncounted. */
+  stock?: number | null;
 };

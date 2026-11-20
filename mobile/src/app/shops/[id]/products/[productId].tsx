@@ -1,5 +1,5 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
-import type { ReactNode } from 'react';
+import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
+import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Linking, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { backArrowOptions } from '@/components/back-link';
@@ -13,11 +13,13 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useNotify } from '@/context/notifications';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useTheme } from '@/hooks/use-theme';
+import { api } from '@/lib/api';
+import { confirm } from '@/lib/confirm';
 import { formatMoney } from '@/lib/format';
-import { writeQuery } from '@/lib/query-cache';
-import type { ProductDetail, ShopDetail } from '@/lib/types';
+import { readQuery, writeQuery } from '@/lib/query-cache';
+import type { ProductDetail, ShopDetail, ShopProducts } from '@/lib/types';
 
-/** One product as the shop has it now, with its stock to change. */
+/** One product as the shop has it now: its stock, editing, hiding and (for the owner) deleting it. */
 export default function ShopProductScreen() {
   const { id, productId } = useLocalSearchParams<{ id: string; productId: string }>();
   const theme = useTheme();
@@ -25,6 +27,7 @@ export default function ShopProductScreen() {
   const path = `/shops/${id}/products/${productId}/`;
   const { data: shop } = useApiQuery<ShopDetail>(`/shops/${id}/`);
   const { data: product, error, isRefreshing, refresh } = useApiQuery<ProductDetail>(path);
+  const [busy, setBusy] = useState<'visibility' | 'delete' | null>(null);
 
   const header = (
     <Stack.Screen
@@ -60,6 +63,51 @@ export default function ShopProductScreen() {
 
   const money = (amount: string) => formatMoney(amount, product.currency);
   const panel = shop?.panel_name ?? 'panel sklepu';
+  const listPath = `/shops/${id}/products/`;
+
+  async function toggleVisibility() {
+    if (!product) return;
+    setBusy('visibility');
+    try {
+      const saved = await api<ProductDetail>(path, { method: 'PATCH', body: { visible: !product.visible } });
+      writeQuery(path, saved);
+      notify.success(saved.visible ? 'Produkt jest widoczny w sklepie.' : 'Produkt jest ukryty przed klientami.');
+    } catch (e) {
+      notify.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function remove() {
+    if (!product) return;
+    const sure = await confirm(
+      'Usunąć produkt?',
+      shop?.platform === 'woocommerce'
+        ? `„${product.name}” zniknie ze sklepu i trafi do kosza w ${panel.replace(/^panel\b/, 'panelu')}, skąd przez 30 dni można go przywrócić.`
+        : `„${product.name}” zniknie ze sklepu na stałe. Złożone już zamówienia z nim zostaną.`,
+      'Usuń produkt',
+    );
+    if (!sure) return;
+    setBusy('delete');
+    try {
+      await api(path, { method: 'DELETE' });
+      notify.success(`Usunięte: „${product.name}”.`);
+      // The list on the screen before shows it until it's read again.
+      const list = readQuery(listPath).data as ShopProducts | undefined;
+      if (list) {
+        writeQuery(listPath, {
+          ...list,
+          products: list.products.filter((item) => item.external_id !== product.external_id),
+        });
+      }
+      if (router.canGoBack()) router.back();
+      else router.replace({ pathname: '/shops/[id]/products', params: { id } });
+    } catch (e) {
+      notify.error((e as Error).message);
+      setBusy(null);
+    }
+  }
 
   return (
     <Page refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} />}>
@@ -79,6 +127,20 @@ export default function ShopProductScreen() {
         </View>
       </View>
 
+      <View style={styles.actions}>
+        <Link href={{ pathname: '/shops/[id]/products/[productId]/edit', params: { id, productId } }} asChild>
+          <Button title="Edytuj" icon="edit" />
+        </Link>
+        <Button
+          title={product.visible ? 'Ukryj przed klientami' : 'Pokaż w sklepie'}
+          icon={product.visible ? 'hide' : 'show'}
+          variant="secondary"
+          loading={busy === 'visibility'}
+          disabled={busy !== null}
+          onPress={toggleVisibility}
+        />
+      </View>
+
       <Card title="Stan magazynowy">
         <StockEditor
           key={product.stock ?? 'none'}
@@ -95,7 +157,10 @@ export default function ShopProductScreen() {
         />
         {product.regular_price ? <Line label="Przed promocją" value={money(product.regular_price)} /> : null}
         <Line label="SKU" value={product.sku || 'Brak'} />
-        <Line label="Kategorie" value={product.categories.join(', ') || 'Bez kategorii'} />
+        <Line
+          label="Kategorie"
+          value={product.categories.map((category) => category.name).join(', ') || 'Bez kategorii'}
+        />
         <Line
           label="W sklepie"
           value={product.visible ? 'Widoczny dla klientów' : 'Ukryty: klienci go nie widzą'}
@@ -111,11 +176,38 @@ export default function ShopProductScreen() {
         ) : null}
       </Card>
 
+      {product.description ? (
+        <Card title="Opis">
+          <ThemedText type="small" selectable>
+            {product.description}
+          </ThemedText>
+        </Card>
+      ) : null}
+
+      {shop?.role === 'owner' ? (
+        <Card title="Usuwanie">
+          <ThemedText type="small" themeColor="textSecondary">
+            {shop.platform === 'woocommerce'
+              ? 'Usunięty produkt trafi do kosza w panelu sklepu, skąd przez 30 dni można go przywrócić.'
+              : 'Usunięcia nie da się cofnąć. Żeby tylko wstrzymać sprzedaż, ukryj produkt przed klientami.'}
+          </ThemedText>
+          <Button
+            title="Usuń produkt"
+            icon="trash"
+            variant="danger"
+            loading={busy === 'delete'}
+            disabled={busy !== null}
+            onPress={remove}
+            style={styles.start}
+          />
+        </Card>
+      ) : null}
+
       <ThemedText type="small" themeColor="textSecondary">
         Produkt odczytaliśmy ze sklepu przy otwarciu.{' '}
         {shop?.role === 'staff'
-          ? 'Cenę, opis, zdjęcia i warianty zmienia na razie właściciel sklepu w jego panelu.'
-          : `Cenę, opis, zdjęcia i warianty zmienisz na razie w ${panel.replace(/^panel\b/, 'panelu')}.`}
+          ? 'Zdjęcia i warianty zmienia na razie właściciel sklepu w jego panelu.'
+          : `Zdjęcia i warianty zmienisz na razie w ${panel.replace(/^panel\b/, 'panelu')}.`}
       </ThemedText>
     </Page>
   );
@@ -155,6 +247,11 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+    gap: Spacing.two,
+  },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.two,
   },
   badges: {

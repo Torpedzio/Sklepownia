@@ -2,15 +2,20 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import ShopProductScreen from '@/app/shops/[id]/products/[productId]';
+import EditProductScreen from '@/app/shops/[id]/products/[productId]/edit';
+import NewProductScreen from '@/app/shops/[id]/products/new';
 import ShopProductsScreen from '@/app/shops/[id]/products';
 import { NotificationsProvider } from '@/context/notifications';
 import { ApiError } from '@/lib/api';
+import { confirm } from '@/lib/confirm';
+import { clearQueryCache, readQuery, writeQuery } from '@/lib/query-cache';
 import type { Product, ProductDetail, ShopProducts } from '@/lib/types';
 import { mockApi } from '@/testing/api';
 import { shopDetail } from '@/testing/fixtures';
 
 jest.mock('expo-router', () => require('@/testing/router'));
 jest.mock('@/lib/api', () => ({ ...jest.requireActual('@/lib/api'), api: jest.fn() }));
+jest.mock('@/lib/confirm', () => ({ confirm: jest.fn(async () => true) }));
 
 function product(id: string, fields: Partial<Product> = {}): Product {
   return {
@@ -39,7 +44,10 @@ async function openList(routes: Record<string, unknown>, params: Record<string, 
   return { api };
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  clearQueryCache();
+});
 
 describe('the list', () => {
   test('shows the products with price and stock and opens one', async () => {
@@ -57,6 +65,8 @@ describe('the list', () => {
     expect(screen.getByText('Dostępny')).toBeTruthy();
     expect(screen.getByText('KAWA-40, ukryty w sklepie')).toBeTruthy();
 
+    await fireEvent.press(screen.getByRole('button', { name: 'Dodaj produkt' }));
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/shops/[id]/products/new', params: { id: '7' } });
     await fireEvent.press(screen.getByRole('button', { name: /^Kawa 41, 39,90 zł/ }));
 
     expect(router.push).toHaveBeenCalledWith({
@@ -134,8 +144,13 @@ function detail(fields: Partial<ProductDetail> = {}): ProductDetail {
   return {
     ...product('41'),
     currency: 'PLN',
-    categories: ['Kawa', 'Prezenty'],
+    categories: [
+      { id: '3', name: 'Kawa' },
+      { id: '5', name: 'Prezenty' },
+    ],
     url: 'https://palarnia.example.com/kawa-41',
+    description: 'Palona jasno.\n\nZ Etiopii.',
+    formatted_description: false,
     ...fields,
   };
 }
@@ -214,11 +229,181 @@ describe('the product', () => {
     expect(screen.getByLabelText('Sztuk w magazynie').props.value).toBe('11');
   });
 
-  test('the staff is told who changes the rest', async () => {
-    await openProduct(detail({ visible: false, url: '' }), {}, 'staff');
+  test('the staff edits and shows it, but only the owner deletes it', async () => {
+    const { api } = await openProduct(detail({ visible: false, url: '' }), {
+      'PATCH /shops/7/products/41/': detail({ visible: true }),
+    }, 'staff');
 
     expect(await screen.findByText(/zmienia na razie właściciel sklepu/)).toBeTruthy();
     expect(screen.getByText('Ukryty')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Zobacz w sklepie' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Usuń produkt' })).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Edytuj' }));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: '/shops/[id]/products/[productId]/edit',
+      params: { id: '7', productId: '41' },
+    });
+    await fireEvent.press(screen.getByRole('button', { name: 'Pokaż w sklepie' }));
+
+    expect(await screen.findByText('Produkt jest widoczny w sklepie.')).toBeTruthy();
+    expect(api.sent('PATCH /shops/7/products/41/')).toEqual([{ visible: true }]);
+    expect(screen.getByRole('button', { name: 'Ukryj przed klientami' })).toBeTruthy();
+  });
+
+  test('shows the description', async () => {
+    await openProduct(detail());
+
+    expect(await screen.findByText('Palona jasno.\n\nZ Etiopii.')).toBeTruthy();
+  });
+
+  test('the owner deletes it after confirming, and the list forgets it', async () => {
+    writeQuery('/shops/7/products/', page([product('41'), product('40')]));
+    const { api } = await openProduct(detail(), { 'DELETE /shops/7/products/41/': null });
+
+    await fireEvent.press(await screen.findByRole('button', { name: 'Usuń produkt' }));
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Usunąć produkt?',
+      expect.stringContaining('trafi do kosza'),
+      'Usuń produkt',
+    );
+    expect(await screen.findByText('Usunięte: „Kawa 41”.')).toBeTruthy();
+    expect(api.calls.map((call) => call.key)).toContain('DELETE /shops/7/products/41/');
+    expect(router.back).toHaveBeenCalled();
+    const list = readQuery('/shops/7/products/').data as ShopProducts;
+    expect(list.products.map((item) => item.external_id)).toEqual(['40']);
+  });
+
+  test('nothing is deleted without confirming', async () => {
+    (confirm as jest.Mock).mockResolvedValueOnce(false);
+    const { api } = await openProduct(detail(), {}, 'owner');
+
+    await fireEvent.press(await screen.findByRole('button', { name: 'Usuń produkt' }));
+
+    expect(api.calls.map((call) => call.key)).not.toContain('DELETE /shops/7/products/41/');
+  });
+});
+
+const CATEGORIES = {
+  categories: [
+    { id: '3', name: 'Kawa' },
+    { id: '4', name: 'Herbata' },
+    { id: '5', name: 'Prezenty' },
+  ],
+};
+
+async function openForm(screenToOpen: 'new' | 'edit', routes: Record<string, unknown>) {
+  (useLocalSearchParams as jest.Mock).mockReturnValue({ id: '7', productId: '41' });
+  const api = mockApi({
+    'GET /shops/7/': shopDetail(),
+    'GET /shops/7/products/': page([]),
+    'GET /shops/7/products/categories/': CATEGORIES,
+    ...routes,
+  });
+  await render(screenToOpen === 'new' ? <NewProductScreen /> : <EditProductScreen />, {
+    wrapper: NotificationsProvider,
+  });
+  return { api };
+}
+
+describe('the product form', () => {
+  test('adds a product with a price typed with a comma and opens it', async () => {
+    const { api } = await openForm('new', { 'POST /shops/7/products/': detail({ external_id: '42', name: 'Kubek' }) });
+
+    await fireEvent.changeText(await screen.findByLabelText('Nazwa'), ' Kubek ');
+    await fireEvent.changeText(screen.getByLabelText('Cena brutto (zł)'), '49,9');
+    await fireEvent.changeText(screen.getByLabelText('Sztuk w magazynie'), '5');
+    await fireEvent.changeText(screen.getByLabelText('Opis produktu'), 'Duży.\n\nNa kawę.');
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Herbata' }));
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Kawa' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Dodaj produkt' }));
+
+    expect(await screen.findByText('Dodane: „Kubek”.')).toBeTruthy();
+    expect(api.sent('POST /shops/7/products/')).toEqual([
+      {
+        name: 'Kubek',
+        price: '49.9',
+        sale_price: null,
+        sku: '',
+        description: 'Duży.\n\nNa kawę.',
+        categories: ['4', '3'],
+        visible: true,
+        stock: 5,
+      },
+    ]);
+    expect(router.replace).toHaveBeenCalledWith({
+      pathname: '/shops/[id]/products/[productId]',
+      params: { id: '7', productId: '42' },
+    });
+    expect((readQuery('/shops/7/products/42/').data as ProductDetail).name).toBe('Kubek');
+  });
+
+  test('checks the name, the prices and the sale before sending', async () => {
+    const { api } = await openForm('new', {});
+
+    await fireEvent.press(await screen.findByRole('button', { name: 'Dodaj produkt' }));
+    expect(screen.getByText('Podaj nazwę produktu.')).toBeTruthy();
+    expect(screen.getByText('Wpisz cenę, np. 49,99.')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('Nazwa'), 'Kubek');
+    await fireEvent.changeText(screen.getByLabelText('Cena brutto (zł)'), '20');
+    await fireEvent.changeText(screen.getByLabelText('Cena promocyjna (zł)'), '25');
+    await fireEvent.press(screen.getByRole('button', { name: 'Dodaj produkt' }));
+
+    expect(screen.getByText('Cena promocyjna musi być niższa od ceny.')).toBeTruthy();
+    expect(api.calls.map((call) => call.key)).not.toContain('POST /shops/7/products/');
+  });
+
+  test('an edit sends only what changed and goes back', async () => {
+    const { api } = await openForm('edit', {
+      'GET /shops/7/products/41/': detail({ price: '29.90', regular_price: '39.90' }),
+      'PATCH /shops/7/products/41/': detail({ name: 'Kawa z Kenii' }),
+    });
+
+    expect((await screen.findByLabelText('Cena brutto (zł)')).props.value).toBe('39,90');
+    expect(screen.getByLabelText('Cena promocyjna (zł)').props.value).toBe('29,90');
+    expect(screen.getByText('Główna: Kawa (wybrana jako pierwsza).')).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: 'Kawa' })).toHaveProp('accessibilityState', { checked: true });
+    expect(screen.queryByLabelText('Sztuk w magazynie')).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('Nazwa'), 'Kawa z Kenii');
+    await fireEvent.changeText(screen.getByLabelText('Cena brutto (zł)'), '39,9');
+    await fireEvent.changeText(screen.getByLabelText('Cena promocyjna (zł)'), '');
+    await fireEvent.press(screen.getByRole('button', { name: 'Zapisz zmiany' }));
+
+    expect(await screen.findByText('Zapisane w sklepie.')).toBeTruthy();
+    expect(api.sent('PATCH /shops/7/products/41/')).toEqual([{ name: 'Kawa z Kenii', sale_price: null }]);
+    expect(router.back).toHaveBeenCalled();
+    expect((readQuery('/shops/7/products/41/').data as ProductDetail).name).toBe('Kawa z Kenii');
+  });
+
+  test('variants keep their prices, and a formatted description is explained', async () => {
+    const { api } = await openForm('edit', {
+      'GET /shops/7/products/41/': detail({ has_variants: true, formatted_description: true }),
+      'PATCH /shops/7/products/41/': detail({ visible: false }),
+    });
+
+    expect(await screen.findByText(/warianty z własnymi cenami/)).toBeTruthy();
+    expect(screen.queryByLabelText('Cena brutto (zł)')).toBeNull();
+    expect(screen.getByText(/formatowanie zostanie/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('switch', { name: 'Widoczny w sklepie' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Zapisz zmiany' }));
+
+    expect(await screen.findByText('Zapisane w sklepie.')).toBeTruthy();
+    expect(api.sent('PATCH /shops/7/products/41/')).toEqual([{ visible: false }]);
+  });
+
+  test("the shop's refusal is shown under the field and the form stays", async () => {
+    await openForm('edit', {
+      'GET /shops/7/products/41/': detail({ price: '29.90', regular_price: '39.90' }),
+      'PATCH /shops/7/products/41/': new ApiError(400, { sale_price: ['Cena promocyjna musi być niższa od ceny.'] }),
+    });
+
+    await fireEvent.changeText(await screen.findByLabelText('Cena promocyjna (zł)'), '35');
+    await fireEvent.press(screen.getByRole('button', { name: 'Zapisz zmiany' }));
+
+    expect((await screen.findAllByText('Cena promocyjna musi być niższa od ceny.')).length).toBeGreaterThan(0);
+    expect(router.back).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Cena promocyjna (zł)').props.value).toBe('35');
   });
 });

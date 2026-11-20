@@ -604,10 +604,23 @@ class ShopProductsSerializer(serializers.Serializer):
     has_more = serializers.BooleanField(help_text="Kolejne są pod ?page= o jeden większym.")
 
 
+class CategorySerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+
+
+class ShopCategoriesSerializer(serializers.Serializer):
+    categories = CategorySerializer(many=True, help_text="W kolejności sklepu, bez kategorii głównej.")
+
+
 class ShopProductDetailSerializer(ProductSerializer):
     currency = serializers.SerializerMethodField()
-    categories = serializers.ListField(child=serializers.CharField())
+    categories = CategorySerializer(many=True)
     url = serializers.CharField(help_text="Strona produktu w sklepie; pusta, gdy jej nie ma (np. produkt ukryty).")
+    description = serializers.CharField(help_text="Zwykły tekst; akapity oddziela pusta linia.")
+    formatted_description = serializers.BooleanField(
+        help_text="Opis w sklepie ma formatowanie (listy, pogrubienia…), które zapis z aplikacji usunie.",
+    )
 
     @extend_schema_field(str)
     def get_currency(self, product):
@@ -616,3 +629,43 @@ class ShopProductDetailSerializer(ProductSerializer):
 
 class ProductStockSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(min_value=0, max_value=999_999, help_text="Sztuki w magazynie.")
+
+
+class ProductWriteSerializer(serializers.Serializer):
+    """A product's fields from the app's form; for a change, only the fields sent are saved."""
+
+    name = serializers.CharField(max_length=200, error_messages={"blank": "Podaj nazwę produktu."})
+    price = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0, help_text="Brutto.")
+    sale_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=0, allow_null=True, required=False,
+        help_text="Brutto, niższa od ceny; null kończy promocję.",
+    )
+    sku = serializers.CharField(max_length=64, allow_blank=True, required=False)
+    description = serializers.CharField(
+        max_length=20000, allow_blank=True, required=False, trim_whitespace=False,
+        help_text="Zwykły tekst; pusta linia zaczyna nowy akapit.",
+    )
+    categories = serializers.ListField(
+        child=serializers.RegexField(r"^[0-9]{1,20}$", error_messages={"invalid": "Nieznana kategoria."}),
+        max_length=30, required=False, help_text="id kategorii.",
+    )
+    visible = serializers.BooleanField(required=False, help_text="false ukrywa produkt przed klientami.")
+
+    def validate_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Podaj nazwę produktu.")
+        return value
+
+    def validate_sku(self, value):
+        return value.strip()
+
+    def validate_description(self, value):
+        return value.strip()
+
+
+class ProductCreateSerializer(ProductWriteSerializer):
+    stock = serializers.IntegerField(
+        min_value=0, max_value=999_999, allow_null=True, required=False,
+        help_text="Sztuki w magazynie; bez niej sklep nie liczy sztuk.",
+    )

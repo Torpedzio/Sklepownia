@@ -59,6 +59,10 @@ def detail(event):
         before, after = event.data.get("before"), event.data.get("after")
         count = f"{'bez liczenia' if before is None else before} → {after} szt."
         return f"{event.data.get('name', '')}: {count}"
+    if event.kind == Kind.PRODUCT_UPDATED:
+        return ": ".join(filter(None, [event.data.get("name", ""), ", ".join(event.data.get("fields", []))]))
+    if event.kind in (Kind.PRODUCT_CREATED, Kind.PRODUCT_DELETED):
+        return event.data.get("name", "")
     if event.kind == Kind.MEMBER_REMOVED:
         return event.data.get("name") or event.data.get("email", "")
     return event.data.get("email", "")

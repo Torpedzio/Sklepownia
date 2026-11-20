@@ -318,6 +318,10 @@ class ShopEvent(models.Model):
         ORDER_CANCELLED = "order_cancelled", "Anulowanie zamówienia"
         # data: {"name", "before", "after"}; a count is null when the shop didn't count the pieces.
         PRODUCT_STOCK = "product_stock", "Zmiana stanu produktu"
+        # data: {"name"}, and {"fields"} (the changed fields' names) when edited.
+        PRODUCT_CREATED = "product_created", "Dodanie produktu"
+        PRODUCT_UPDATED = "product_updated", "Zmiana produktu"
+        PRODUCT_DELETED = "product_deleted", "Usunięcie produktu"
 
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="events")
     kind = models.CharField(max_length=30, choices=Kind.choices)

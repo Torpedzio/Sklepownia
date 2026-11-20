@@ -171,6 +171,25 @@ class BaseProvisioner:
         """
         raise NotImplementedError
 
+    def read_categories(self, shop):
+        """shops.products.Category of the products, in the shop's order, without the root ones. Read-only."""
+        raise NotImplementedError
+
+    def update_product(self, shop, product, changes):
+        """
+        Saves `changes` ({shops.products.FIELDS name: value}, only what changed) to `product`, a ProductDetail:
+        prices gross (`sale_price` None ends the sale; never for variants), `description` as plain text,
+        `categories` as Category ids. Raises shops.remote.ShopApiError.
+        """
+        raise NotImplementedError
+
+    def create_product(self, shop, fields):
+        """A simple product from `fields` (as in update_product, plus `stock`: pieces or None); returns its id."""
+        raise NotImplementedError
+
+    def delete_product(self, shop, product):
+        raise NotImplementedError
+
     # --- backups (see shops/backups.py) ---
 
     def can_back_up(self):

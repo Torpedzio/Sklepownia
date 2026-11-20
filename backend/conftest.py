@@ -43,7 +43,7 @@ def _test_settings(settings, tmp_path, monkeypatch):
 
     monkeypatch.setattr(FakeProvisioner, "snapshots", {})
     monkeypatch.setattr(FakeProvisioner, "restored", [])
-    fresh = {"containers": {}, "pages": {}, "services": {}, "disk": None, "repairs": [], "parcels": {}, "stocks": {}}
+    fresh = {"containers": {}, "pages": {}, "services": {}, "disk": None, "repairs": [], "parcels": {}, "stocks": {}, "product_edits": {}}
     for name, value in fresh.items():
         monkeypatch.setattr(FakeProvisioner, name, value)
     monkeypatch.setattr(FakeProvisioner, "repairs_help", True)
